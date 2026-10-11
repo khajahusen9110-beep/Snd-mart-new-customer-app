@@ -22,7 +22,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.City
 import com.example.data.repository.SndmartRepository
+import com.example.SndmartApp
 import com.example.data.session.UserSessionManager
+import com.example.service.PushTokenManager
 import com.example.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -281,6 +283,7 @@ fun ProfileScreen(
                                 repository.signOut()
                             }
                             repository.resetInMemoryCart()
+                            PushTokenManager.forgetRegistration(SndmartApp.instance)
                             sessionManager.logout()
                             isLoggingOut = false
                             showLogoutDialog = false

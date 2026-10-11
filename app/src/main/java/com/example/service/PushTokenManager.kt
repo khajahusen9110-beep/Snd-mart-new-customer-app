@@ -46,6 +46,19 @@ object PushTokenManager {
     }
 
     /**
+     * Called on logout, after the device_tokens row was marked inactive. Forgets the last
+     * registration so the next login registers (re-activates) the token instead of skipping it
+     * as "already registered within 24h". A pending token is kept.
+     */
+    fun forgetRegistration(context: Context) {
+        prefs(context).edit()
+            .remove(KEY_LAST_TOKEN)
+            .remove(KEY_LAST_USER_ID)
+            .remove(KEY_LAST_REGISTERED_AT_MS)
+            .apply()
+    }
+
+    /**
      * Registers the current FCM token for the logged-in customer, unless the same token was
      * already registered for this same user within the last 24 hours.
      *
