@@ -38,7 +38,8 @@ fun NotificationsScreen(
     repository: SndmartRepository,
     sessionManager: UserSessionManager,
     onNavigateToOrder: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigateToWallet: () -> Unit = {}
 ) {
     val PAGE_SIZE = 20
     val coroutineScope = rememberCoroutineScope()
@@ -217,9 +218,11 @@ fun NotificationsScreen(
                                             if (it.id == item.id) it.copy(isRead = true) else it
                                         }
                                     }
-                                    // Deep link to order if present
+                                    // Wallet cashback credited: open the wallet; otherwise the order if present
                                     val orderId = item.resolvedOrderId
-                                    if (!orderId.isNullOrBlank()) {
+                                    if (item.isWalletCashback) {
+                                        onNavigateToWallet()
+                                    } else if (!orderId.isNullOrBlank()) {
                                         onNavigateToOrder(orderId)
                                     }
                                 }

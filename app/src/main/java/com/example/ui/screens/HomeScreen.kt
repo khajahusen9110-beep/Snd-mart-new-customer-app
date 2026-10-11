@@ -74,12 +74,33 @@ fun HomeScreen(
     onNavigateToHotelMenu: (vendorId: String, vendorName: String) -> Unit,
     onOpenSettings: (() -> Unit)? = null,
     onNavigateToNotifications: (() -> Unit)? = null,
-    onProceedToCheckout: (isHotel: Boolean) -> Unit = {}
+    onProceedToCheckout: (isHotel: Boolean) -> Unit = {},
+    onNavigateToWallet: (() -> Unit)? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val unreadNotificationCount by repository.sessionManager.unreadNotificationCount.collectAsState()
 
     var browsingMode by rememberSaveable { mutableStateOf(BrowsingMode.GROCERY) }
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+
+    // Sndmart Wallet balance for the top-bar chip (cached for a minute in the repository).
+    var walletBalance by remember { mutableStateOf<Double?>(null) }
+    LaunchedEffect(Unit) {
+        if (!repository.sessionManager.getUserId().isNullOrBlank()) {
+            walletBalance = repository.getMyWallet().getOrNull()?.balance
+        }
+    }
+
+    // Super-Admin promo banners for the tab being shown (last loaded ones appear at once).
+    val bannerPlacement = if (browsingMode == BrowsingMode.HOTELS) "food" else "grocery"
+    var promoBanners by remember(selectedCity?.id, bannerPlacement) {
+        mutableStateOf(repository.getCachedPromoBanners(selectedCity?.id, bannerPlacement) ?: emptyList())
+    }
+    var bannerRefreshTick by remember { mutableStateOf(0) }
+    LaunchedEffect(selectedCity?.id, bannerPlacement, bannerRefreshTick) {
+        val cid = selectedCity?.id ?: return@LaunchedEffect
+        promoBanners = repository.getPromoBanners(cid, bannerPlacement, force = bannerRefreshTick > 0)
+    }
     var searchQuery by remember { mutableStateOf("") }
 
     // Intercept back navigation when on the Hotels tab to return to the Home screen (Grocery view)
@@ -636,6 +657,20 @@ fun HomeScreen(
         )
     }
 
+    // Banner tap: opens a grocery category, a hotel menu or an https link.
+    fun openPromoBanner(b: PromoBanner) {
+        val target = b.linkValue ?: return
+        when (b.linkType) {
+            "category" -> {
+                searchQuery = ""
+                browsingMode = BrowsingMode.GROCERY
+                selectedCategoryId = target
+            }
+            "hotel" -> onNavigateToHotelMenu(target, b.title ?: "Hotel")
+            "url" -> if (target.startsWith("https://")) runCatching { uriHandler.openUri(target) }
+        }
+    }
+
     Scaffold(
         topBar = {
             SndmartTopBar(
@@ -660,8 +695,11 @@ fun HomeScreen(
                 onCartClick = onNavigateToCart,
                 onNotificationsClick = onNavigateToNotifications,
                 onSettingsClick = onOpenSettings,
+                walletBalance = walletBalance,
+                onWalletClick = onNavigateToWallet,
                 onRefresh = {
                     val cityId = selectedCity?.id
+                    bannerRefreshTick += 1
                     if (cityId != null) {
                         if (browsingMode == BrowsingMode.GROCERY) {
                             loadGroceryCategories(forceRefresh = true)
@@ -850,11 +888,19 @@ fun HomeScreen(
                         }
 
                         if (searchQuery.isBlank()) {
-                            // Featured Deals Banner
+                            // Super-Admin banners, else the default banner
                             item(span = { GridItemSpan(2) }) {
-                                NaturalFeaturedDealsBanner(
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
+                                if (promoBanners.isNotEmpty()) {
+                                    PromoBannerCarousel(
+                                        banners = promoBanners,
+                                        onOpen = { b -> openPromoBanner(b) },
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+                                } else {
+                                    NaturalFeaturedDealsBanner(
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+                                }
                             }
 
                             // Horizontal scroll of grocery category image cards (image_url + name)
@@ -988,6 +1034,15 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
+                            if (searchQuery.isBlank() && promoBanners.isNotEmpty()) {
+                                item(key = "food_promo_banners") {
+                                    PromoBannerCarousel(
+                                        banners = promoBanners,
+                                        onOpen = { b -> openPromoBanner(b) }
+                                    )
+                                }
+                            }
+
                             if (searchQuery.isBlank() && displayedFoodCategories.isNotEmpty()) {
                                 item {
                                     FoodCategoryGrid(
@@ -1113,7 +1168,7 @@ fun NaturalFeaturedDealsBanner(
             ) {
                 Column {
                     Text(
-                        text = "UP TO 40% OFF",
+                        text = "FARM FRESH DAILY",
                         color = Color.White.copy(alpha = 0.85f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -1915,7 +1970,7 @@ fun CouponPopup(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = discountSummaryText(coupon),
+                    text = com.example.util.couponTerms(coupon),
                     fontSize = 14.sp,
                     color = TextSecondary,
                     textAlign = TextAlign.Center

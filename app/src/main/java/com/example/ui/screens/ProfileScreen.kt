@@ -52,6 +52,12 @@ fun ProfileScreen(
     val currentCity by sessionManager.selectedCity.collectAsState()
     val unreadNotifications by sessionManager.unreadNotificationCount.collectAsState()
 
+    // Wallet balance for the menu row (cached for a minute in the repository).
+    var walletBalance by remember { mutableStateOf<Double?>(null) }
+    LaunchedEffect(isLoggedIn) {
+        walletBalance = if (isLoggedIn) repository.getMyWallet().getOrNull()?.balance else null
+    }
+
     var showLogoutDialog by remember { mutableStateOf(false) }
     var isLoggingOut by remember { mutableStateOf(false) }
 
@@ -204,7 +210,8 @@ fun ProfileScreen(
                         ProfileMenuItem(
                             icon = Icons.Outlined.AccountBalanceWallet,
                             title = "Sndmart Wallet",
-                            subtitle = "View balance & automatic order refunds",
+                            subtitle = walletBalance?.let { "Balance ${com.example.util.rupees(it)} · cashback & history" }
+                                ?: "Cashback balance & history",
                             onClick = {
                                 if (isLoggedIn) onNavigateToWallet()
                                 else onRequireLogin()

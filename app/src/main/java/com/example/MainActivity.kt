@@ -719,7 +719,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                     onNavigateToNotifications = { navController.navigate(Screen.Notifications.route) },
                                     onProceedToCheckout = { isHotel ->
                                         navController.navigate(Screen.Checkout.createRoute(isHotel, null))
-                                    }
+                                    },
+                                    onNavigateToWallet = { navController.navigate(Screen.Wallet.route) }
                                 )
                             }
 
@@ -851,7 +852,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                     onNavigateToOrder = { orderId ->
                                         navController.navigate(Screen.OrderDetail.createRoute(orderId))
                                     },
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    onNavigateToWallet = { navController.navigate(Screen.Wallet.route) }
                                 )
                             }
 
@@ -859,7 +861,10 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                 WalletScreen(
                                     repository = repository,
                                     sessionManager = sessionManager,
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    onOpenOrder = { orderId ->
+                                        navController.navigate(Screen.OrderDetail.createRoute(orderId))
+                                    }
                                 )
                             }
 

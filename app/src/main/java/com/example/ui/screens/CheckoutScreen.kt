@@ -37,8 +37,18 @@ import com.example.ui.components.ErrorCard
 import com.example.ui.theme.*
 import com.example.util.RazorpayPaymentManager
 import com.example.util.RazorpayPaymentResult
+import com.example.util.CASHBACK_NOTE_KANNADA
+import com.example.util.rupees
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+
+/** "Use wallet balance" is remembered while the app is open (default: unchecked). */
+private object CheckoutWalletChoice {
+    var useWallet = false
+}
+
+private val CashbackTeal = Color(0xFF00796B)
 
 private fun Context.findActivity(): Activity? {
     var ctx = this
@@ -100,6 +110,15 @@ fun CheckoutScreen(
     var authoritativeDiscount by remember { mutableStateOf(0.0) }
     var isValidatingCoupon by remember { mutableStateOf(false) }
     var couponErrorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Cashback coupon (credited to the wallet after delivery) and wallet use, from the server preview.
+    // The server calculates everything; these only drive what the bill shows.
+    var appliedCashback by remember { mutableStateOf(0.0) }
+    var appliedCashbackDays by remember { mutableStateOf<Int?>(null) }
+    var walletInfo by remember { mutableStateOf<WalletUsable?>(null) }
+    var useWallet by remember { mutableStateOf(CheckoutWalletChoice.useWallet) }
+    // Server total differed from the estimate: shown before Razorpay opens.
+    var confirmPayOrder by remember { mutableStateOf<Order?>(null) }
 
     // Payment methods
     val paymentMethods = listOf(
@@ -262,29 +281,48 @@ fun CheckoutScreen(
         fetchFreshCart()
     }
 
-    // Coupon validation function
+    fun clearCoupon() {
+        appliedCoupon = null
+        authoritativeDiscount = 0.0
+        appliedCashback = 0.0
+        appliedCashbackDays = null
+    }
+
+    // Uses one server preview result for the coupon (instant discount or wallet cashback).
+    fun applyCouponPreview(requestedCode: String, c: CouponPreview?) {
+        if (c != null && c.valid) {
+            appliedCoupon = Coupon(
+                code = c.code.ifBlank { requestedCode.trim().uppercase() },
+                rewardType = c.rewardType,
+                cashbackValidDays = c.cashbackValidDays
+            )
+            authoritativeDiscount = if (c.isCashback) 0.0 else c.discount
+            appliedCashback = if (c.isCashback) c.cashback else 0.0
+            appliedCashbackDays = if (c.isCashback) c.cashbackValidDays else null
+            couponErrorMessage = null
+        } else {
+            clearCoupon()
+            couponErrorMessage = c?.error ?: "Coupon is not valid for this order"
+        }
+    }
+
+    // Coupon check through the server preview (same rules as checkout)
     fun applyCouponCode(code: String) {
-        val cid = effectiveCityId ?: return
+        if (effectiveCityId.isNullOrBlank()) return
         if (code.isBlank()) return
 
         coroutineScope.launch {
             isValidatingCoupon = true
             couponErrorMessage = null
-            val res = repository.validateAndApplyCoupon(code, cid, subtotal, userId)
+            val payable = ((subtotal - authoritativeDiscount).coerceAtLeast(0.0) + (calculatedDeliveryFee ?: 0.0) + handlingFee)
+                .coerceAtLeast(0.0)
+            val res = repository.previewCheckoutRewards(subtotal, code, payable)
             if (res.isSuccess) {
-                val validation = res.getOrNull()
-                if (validation != null && validation.isValid) {
-                    appliedCoupon = validation.coupon ?: Coupon(code = code.trim().uppercase(), discountValue = validation.discountAmount)
-                    authoritativeDiscount = validation.discountAmount
-                    couponErrorMessage = null
-                } else {
-                    appliedCoupon = null
-                    authoritativeDiscount = 0.0
-                    couponErrorMessage = validation?.errorMessage ?: "Coupon is not valid for this order"
-                }
+                val preview = res.getOrNull()!!
+                walletInfo = preview.wallet
+                applyCouponPreview(code, preview.coupon)
             } else {
-                appliedCoupon = null
-                authoritativeDiscount = 0.0
+                clearCoupon()
                 couponErrorMessage = res.exceptionOrNull()?.message ?: "Coupon validation failed"
             }
             isValidatingCoupon = false
@@ -371,9 +409,73 @@ fun CheckoutScreen(
         }
     }
 
+    // Items - instant discount + delivery + handling, before the wallet.
+    val payableBeforeWallet = (subtotalAfterDiscount + (calculatedDeliveryFee ?: 0.0) + handlingFee).coerceAtLeast(0.0)
+    val wallet = walletInfo
+    val showWalletRow = wallet != null && wallet.enabled && wallet.balance > 0.0
+    val walletApplied = if (wallet != null && showWalletRow && useWallet) minOf(wallet.usable, payableBeforeWallet) else 0.0
+
+    // Estimate only: after placing, the server's order.totalAmount is what is charged.
     val totalAmount = if (calculatedDeliveryFee != null && isDeliveryAvailable) {
-        (subtotalAfterDiscount + calculatedDeliveryFee!! + handlingFee).coerceAtLeast(0.0)
+        (subtotalAfterDiscount + calculatedDeliveryFee!! + handlingFee - walletApplied).coerceAtLeast(0.0)
     } else null
+
+    // Refresh the coupon/wallet preview when the cart, coupon or bill changes (debounced 400 ms).
+    LaunchedEffect(subtotal, appliedCoupon?.code, payableBeforeWallet, effectiveCityId) {
+        if (subtotal <= 0.0 || effectiveCityId.isNullOrBlank()) return@LaunchedEffect
+        delay(400)
+        val code = appliedCoupon?.code
+        val preview = repository.previewCheckoutRewards(subtotal, code, payableBeforeWallet).getOrNull()
+            ?: return@LaunchedEffect
+        walletInfo = preview.wallet
+        if (code != null && appliedCoupon?.code == code && preview.coupon != null) {
+            applyCouponPreview(code, preview.coupon)
+        }
+    }
+
+    // Opens Razorpay (UPI only) for an order that is already placed (never creates a new order).
+    suspend fun startUpiPayment(order: Order) {
+        placingOrderMessage = "Initiating UPI payment..."
+        val rpRes = repository.createRazorpayOrder(order.id ?: "")
+        val rpData = rpRes.getOrNull()
+        if (rpRes.isFailure || rpData == null) {
+            isPlacingOrder = false
+            val err = "Could not start payment. Please try again."
+            placementError = err
+            snackbarHostState.showSnackbar(err)
+            return
+        }
+
+        val activity = context.findActivity()
+        if (activity == null) {
+            isPlacingOrder = false
+            snackbarHostState.showSnackbar("Unable to open payment screen. Please try again.")
+            return
+        }
+
+        activePaymentOrder = order
+        activePaymentRpData = rpData
+
+        val openRes = RazorpayPaymentManager.startUpiCheckout(
+            activity = activity,
+            keyId = rpData.keyId,
+            amountInPaise = rpData.amountInPaise,
+            currency = rpData.currency,
+            razorpayOrderId = rpData.razorpayOrderId,
+            orderNumber = order.orderNumber.ifBlank { order.id ?: "" },
+            userPhone = sessionManager.userPhone.value,
+            userEmail = sessionManager.userEmail.value
+        )
+
+        if (openRes.isFailure) {
+            isPlacingOrder = false
+            activePaymentOrder = null
+            activePaymentRpData = null
+            val err = "Could not start payment. Please try again."
+            placementError = err
+            snackbarHostState.showSnackbar(err)
+        }
+    }
 
     val isCheckoutDisabled = isPlacingOrder ||
             isLoadingDeliveryFee ||
@@ -502,7 +604,8 @@ fun CheckoutScreen(
                                     cityId = effectiveCityId!!,
                                     addressId = selectedAddressId!!,
                                     paymentMethod = selectedPaymentMethod,
-                                    coupon = appliedCoupon
+                                    coupon = appliedCoupon,
+                                    useWallet = walletApplied > 0.0
                                 )
 
                                 if (res.isSuccess) {
@@ -514,49 +617,17 @@ fun CheckoutScreen(
                                         snackbarHostState.showSnackbar(err)
                                         return@launch
                                     }
-                                    if (selectedPaymentMethod == "upi") {
-                                        // Step 2 — Create the Razorpay order for this Sndmart order
-                                        placingOrderMessage = "Initiating UPI payment..."
-                                        val rpRes = repository.createRazorpayOrder(order.id ?: "")
-                                        val rpData = rpRes.getOrNull()
-                                        if (rpRes.isFailure || rpData == null) {
-                                            isPlacingOrder = false
-                                            val err = "Could not start payment. Please try again."
-                                            placementError = err
-                                            snackbarHostState.showSnackbar(err)
-                                            return@launch
-                                        }
-
-                                        val activity = context.findActivity()
-                                        if (activity == null) {
-                                            isPlacingOrder = false
-                                            snackbarHostState.showSnackbar("Unable to open payment screen. Please try again.")
-                                            return@launch
-                                        }
-
-                                        activePaymentOrder = order
-                                        activePaymentRpData = rpData
-
-                                        // Step 3 — Open Razorpay Checkout, restricted to UPI only
-                                        val openRes = RazorpayPaymentManager.startUpiCheckout(
-                                            activity = activity,
-                                            keyId = rpData.keyId,
-                                            amountInPaise = rpData.amountInPaise,
-                                            currency = rpData.currency,
-                                            razorpayOrderId = rpData.razorpayOrderId,
-                                            orderNumber = order.orderNumber.ifBlank { order.id ?: "" },
-                                            userPhone = sessionManager.userPhone.value,
-                                            userEmail = sessionManager.userEmail.value
-                                        )
-
-                                        if (openRes.isFailure) {
-                                            isPlacingOrder = false
-                                            activePaymentOrder = null
-                                            activePaymentRpData = null
-                                            val err = "Could not start payment. Please try again."
-                                            placementError = err
-                                            snackbarHostState.showSnackbar(err)
-                                        }
+                                    // The server's total is the truth; if it differs from the estimate,
+                                    // show it before opening Razorpay.
+                                    val estimate = totalAmount
+                                    val differs = estimate != null && order.totalAmount > 0.0 &&
+                                        kotlin.math.abs(order.totalAmount - estimate) > 1.0
+                                    if (selectedPaymentMethod == "upi" && differs) {
+                                        isPlacingOrder = false
+                                        confirmPayOrder = order
+                                    } else if (selectedPaymentMethod == "upi") {
+                                        // Step 2/3 — Create the Razorpay order for this Sndmart order and open UPI
+                                        startUpiPayment(order)
                                     } else {
                                         isPlacingOrder = false
                                         onOrderPlacedSuccess(order.id ?: "")
@@ -565,8 +636,7 @@ fun CheckoutScreen(
                                     isPlacingOrder = false
                                     val err = res.exceptionOrNull()?.message ?: "Failed to place order"
                                     if (err.contains("coupon", ignoreCase = true) || err.contains("minimum order amount", ignoreCase = true)) {
-                                        appliedCoupon = null
-                                        authoritativeDiscount = 0.0
+                                        clearCoupon()
                                         couponErrorMessage = err
                                     }
                                     // An item changed in the last few seconds (RPC re-validates server-side
@@ -1099,24 +1169,45 @@ fun CheckoutScreen(
                                                 color = NaturalOnPrimaryContainer,
                                                 style = MaterialTheme.typography.bodyMedium
                                             )
-                                            Text(
-                                                "You save ₹${"%.0f".format(authoritativeDiscount)}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = NaturalPrimary
-                                            )
+                                            if (appliedCoupon!!.isCashback) {
+                                                Text(
+                                                    "🎁 ${rupees(appliedCashback)} cashback after delivery" +
+                                                        (appliedCashbackDays?.let { " (valid $it days)" } ?: ""),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = CashbackTeal
+                                                )
+                                            } else {
+                                                Text(
+                                                    "You save ${rupees(authoritativeDiscount)}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = NaturalPrimary
+                                                )
+                                            }
                                         }
                                     }
                                     TextButton(
                                         onClick = {
-                                            appliedCoupon = null
-                                            authoritativeDiscount = 0.0
+                                            clearCoupon()
                                             couponInput = ""
+                                            couponErrorMessage = null
                                         },
                                         modifier = Modifier.testTag("remove_coupon_button")
                                     ) {
                                         Text("Remove", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                                     }
                                 }
+                            }
+                            if (appliedCoupon!!.isCashback) {
+                                // Kannada note: the bill is not reduced now; cashback comes after delivery.
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = CASHBACK_NOTE_KANNADA,
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    lineHeight = 21.sp,
+                                    modifier = Modifier.testTag("cashback_kannada_note")
+                                )
                             }
                         } else {
                             Row(
@@ -1126,7 +1217,10 @@ fun CheckoutScreen(
                             ) {
                                 OutlinedTextField(
                                     value = couponInput,
-                                    onValueChange = { couponInput = it.uppercase() },
+                                    onValueChange = {
+                                        couponInput = it.uppercase()
+                                        couponErrorMessage = null
+                                    },
                                     placeholder = { Text("Enter Coupon Code") },
                                     modifier = Modifier
                                         .weight(1f)
@@ -1203,6 +1297,67 @@ fun CheckoutScreen(
                 }
             }
 
+            // Use Wallet Balance (only when the wallet is on and has money)
+            if (showWalletRow && wallet != null) {
+                item {
+                    val canUse = wallet.usable > 0.0
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = canUse) {
+                                    useWallet = !useWallet
+                                    CheckoutWalletChoice.useWallet = useWallet
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Checkbox(
+                                checked = useWallet && canUse,
+                                onCheckedChange = {
+                                    useWallet = it
+                                    CheckoutWalletChoice.useWallet = it
+                                },
+                                enabled = canUse,
+                                colors = CheckboxDefaults.colors(checkedColor = NaturalPrimary),
+                                modifier = Modifier.testTag("use_wallet_checkbox")
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Column(modifier = Modifier.weight(1f).padding(top = 10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Outlined.AccountBalanceWallet,
+                                        contentDescription = null,
+                                        tint = NaturalPrimary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Use Wallet Balance", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                                }
+                                Text(
+                                    if (canUse) "Use ${rupees(wallet.usable)} from wallet (Balance ${rupees(wallet.balance)})"
+                                    else "Balance ${rupees(wallet.balance)}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                if (!canUse && !wallet.reason.isNullOrBlank()) {
+                                    Text(wallet.reason, style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                                }
+                                Text(
+                                    "Up to ${wallet.maxUsePercent.toInt()}% of item total per order",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Bill Summary
             item {
                 Card(
@@ -1223,7 +1378,7 @@ fun CheckoutScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Items Subtotal", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                            Text("Item total", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
                             Text("₹${"%.0f".format(subtotal)}", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                         }
 
@@ -1233,7 +1388,7 @@ fun CheckoutScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Coupon Discount", color = NaturalPrimary, style = MaterialTheme.typography.bodyMedium)
+                                Text("Coupon discount (${appliedCoupon?.code ?: ""})", color = NaturalPrimary, style = MaterialTheme.typography.bodyMedium)
                                 Text("-₹${"%.0f".format(authoritativeDiscount)}", color = NaturalPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                             }
                         }
@@ -1273,6 +1428,17 @@ fun CheckoutScreen(
                             Text("₹${"%.0f".format(handlingFee)}", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                         }
 
+                        if (walletApplied > 0.0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Wallet", color = NaturalPrimary, style = MaterialTheme.typography.bodyMedium)
+                                Text("−${rupees(walletApplied)}", color = NaturalPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
                         Row(
@@ -1292,10 +1458,56 @@ fun CheckoutScreen(
                                 Text("--", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             }
                         }
+
+                        if (appliedCashback > 0.0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "🎁 ${rupees(appliedCashback)} cashback after delivery",
+                                color = CashbackTeal,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+
+    // Final amount from the server differs from the estimate: confirm before opening UPI.
+    confirmPayOrder?.let { pending ->
+        AlertDialog(
+            onDismissRequest = {
+                confirmPayOrder = null
+                onOrderPlacedSuccess(pending.id ?: "")
+            },
+            title = { Text("Amount to pay") },
+            text = {
+                Text("Your order ${pending.orderNumber} is placed. The final amount to pay is ${rupees(pending.totalAmount)}.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        confirmPayOrder = null
+                        coroutineScope.launch {
+                            isPlacingOrder = true
+                            startUpiPayment(pending)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary)
+                ) {
+                    Text("Pay ${rupees(pending.totalAmount)} via UPI")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    confirmPayOrder = null
+                    onOrderPlacedSuccess(pending.id ?: "")
+                }) {
+                    Text("Later")
+                }
+            }
+        )
     }
 
     // Add Address Dialog with Google Maps and Places Autocomplete

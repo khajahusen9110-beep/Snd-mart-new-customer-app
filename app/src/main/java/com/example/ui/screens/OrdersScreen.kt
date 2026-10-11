@@ -431,6 +431,14 @@ fun OrderCardItem(
                         fontWeight = FontWeight.ExtraBold,
                         color = NaturalPrimary
                     )
+                    if ((order.walletUsedAmount ?: 0.0) > 0.0) {
+                        Text(
+                            text = "Wallet used −${com.example.util.rupees(order.walletUsedAmount ?: 0.0)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary
+                        )
+                    }
+                    com.example.ui.components.CashbackNote(order)
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {

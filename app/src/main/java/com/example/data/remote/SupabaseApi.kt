@@ -338,15 +338,45 @@ interface SupabaseApi {
     // Do NOT manually insert into orders or order_items. These atomic RPC functions
     // calculate authoritative pricing and prevent price tampering/concurrency conflicts.
 
-    @POST("rest/v1/rpc/checkout_grocery_order")
+    // v2 = the same checkout plus cashback coupons and paying part of the order from the wallet
+    // (extra parameter p_use_wallet).
+    @POST("rest/v1/rpc/checkout_grocery_order_v2")
     suspend fun checkoutGroceryOrder(
         @Body body: RequestBody
     ): Response<ResponseBody>
 
-    @POST("rest/v1/rpc/checkout_food_order")
+    @POST("rest/v1/rpc/checkout_food_order_v2")
     suspend fun checkoutFoodOrder(
         @Body body: RequestBody
     ): Response<ResponseBody>
+
+    // --- SNDMART WALLET & CASHBACK ---
+
+    @POST("rest/v1/rpc/preview_checkout_rewards")
+    suspend fun previewCheckoutRewards(
+        @Body body: RequestBody
+    ): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/get_my_wallet")
+    suspend fun getMyWallet(
+        @Body body: RequestBody
+    ): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/get_my_wallet_history")
+    suspend fun getMyWalletHistory(
+        @Body body: RequestBody
+    ): Response<ResponseBody>
+
+    // --- PROMO BANNERS (Super Admin) ---
+
+    @GET("rest/v1/promo_banners")
+    suspend fun getPromoBanners(
+        @Query("placement") placementIn: String,
+        @Query("or") cityFilter: String,
+        @Query("select") select: String = "id,city_id,placement,image_url,title,subtitle,cta_text,show_text,link_type,link_value,sort_order,starts_at,ends_at",
+        @Query("order") order: String = "sort_order.asc",
+        @Query("limit") limit: Int = 5
+    ): Response<List<PromoBanner>>
 
     // --- DELIVERY ASSIGNMENTS & PARTNER ---
 

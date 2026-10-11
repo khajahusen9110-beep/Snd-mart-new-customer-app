@@ -44,7 +44,10 @@ fun SndmartTopBar(
     onCartClick: () -> Unit,
     onNotificationsClick: (() -> Unit)? = null,
     onSettingsClick: (() -> Unit)? = null,
-    onRefresh: (() -> Unit)? = null
+    onRefresh: (() -> Unit)? = null,
+    // Sndmart Wallet chip (shown only when there is a balance)
+    walletBalance: Double? = null,
+    onWalletClick: (() -> Unit)? = null
 ) {
     val displayDeliverTo = remember(currentCity, deliveryAddressLabel) {
         val cityName = currentCity?.name ?: "Select City"
@@ -112,6 +115,37 @@ fun SndmartTopBar(
             }
         },
         actions = {
+            if (walletBalance != null && walletBalance > 0.0 && onWalletClick != null) {
+                Surface(
+                    shape = RoundedCornerShape(17.dp),
+                    color = PastelMint,
+                    modifier = Modifier
+                        .padding(end = 2.dp)
+                        .clip(RoundedCornerShape(17.dp))
+                        .clickable { onWalletClick() }
+                        .testTag("topbar_wallet_chip")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AccountBalanceWallet,
+                            contentDescription = "Sndmart Wallet",
+                            tint = DarkGreenText,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = com.example.util.rupees(walletBalance),
+                            color = DarkGreenText,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
             if (onRefresh != null) {
                 IconButton(
                     onClick = onRefresh,

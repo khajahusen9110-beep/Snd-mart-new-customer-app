@@ -347,8 +347,15 @@ data class Coupon(
     @Json(name = "starts_at") val startsAt: String? = null,
     @Json(name = "expires_at") val expiresAt: String? = null,
     @Json(name = "is_active") val isActive: Boolean = true,
-    @Json(name = "city_id") val cityId: String? = null
-)
+    @Json(name = "city_id") val cityId: String? = null,
+    // "instant" (bill reduced now) or "cashback" (credited to the Sndmart Wallet after delivery)
+    @Json(name = "reward_type") val rewardType: String? = null,
+    @Json(name = "per_user_limit") val perUserLimit: Int? = null,
+    @Json(name = "cashback_valid_days") val cashbackValidDays: Int? = null
+) {
+    val isCashback: Boolean
+        get() = rewardType.equals("cashback", ignoreCase = true)
+}
 
 @JsonClass(generateAdapter = true)
 data class CouponUsage(
@@ -375,6 +382,10 @@ data class Order(
     @Json(name = "delivery_fee") val deliveryFee: Double = 0.0,
     @Json(name = "handling_fee") val handlingFee: Double = 0.0,
     @Json(name = "total_amount") val totalAmount: Double = 0.0,
+    // Paid from the Sndmart Wallet (already taken off total_amount)
+    @Json(name = "wallet_used_amount") val walletUsedAmount: Double? = 0.0,
+    // Cashback credited to the wallet when the order is delivered
+    @Json(name = "cashback_amount") val cashbackAmount: Double? = 0.0,
     @Json(name = "city_id") val cityId: String? = null,
     @Json(name = "delivery_type") val deliveryType: String? = null,
     @Json(name = "delivery_distance_km") val deliveryDistanceKm: Double? = null,
@@ -490,8 +501,13 @@ data class CustomerNotification(
     val body: String? = null,
     @Json(name = "order_id") val orderId: String? = null,
     @Json(name = "is_read") val isRead: Boolean = false,
-    @Json(name = "created_at") val createdAt: String? = null
+    @Json(name = "created_at") val createdAt: String? = null,
+    val data: Map<String, @JvmSuppressWildcards Any?>? = null
 ) {
+    /** Cashback credited to the wallet: tapping opens the Wallet screen. */
+    val isWalletCashback: Boolean
+        get() = data?.get("type")?.toString() == "wallet_cashback"
+
     val displayTitle: String
         get() = title?.takeIf { it.isNotBlank() } ?: "Order Update"
 
@@ -611,3 +627,91 @@ data class OrderCancellation(
     @Json(name = "created_at") val createdAt: String? = null
 )
 
+
+
+// --- SNDMART WALLET & CASHBACK (server-calculated; the app never writes wallet tables) ---
+
+/** preview_checkout_rewards: what a coupon and the wallet would do for this cart. */
+data class CouponPreview(
+    val valid: Boolean,
+    val code: String,
+    val rewardType: String? = null,
+    val discount: Double = 0.0,
+    val cashback: Double = 0.0,
+    val cashbackValidDays: Int? = null,
+    val message: String? = null,
+    val error: String? = null
+) {
+    val isCashback: Boolean
+        get() = rewardType.equals("cashback", ignoreCase = true)
+}
+
+data class WalletUsable(
+    val enabled: Boolean = false,
+    val balance: Double = 0.0,
+    val usable: Double = 0.0,
+    val maxUsePercent: Double = 0.0,
+    val minOrder: Double = 0.0,
+    val reason: String? = null
+)
+
+data class RewardsPreview(
+    val coupon: CouponPreview? = null,
+    val wallet: WalletUsable = WalletUsable()
+)
+
+data class WalletLot(val amount: Double, val expiresAt: String?)
+
+data class WalletPendingCashback(
+    val amount: Double,
+    val orderId: String?,
+    val orderNumber: String?,
+    val createdAt: String?
+)
+
+/** get_my_wallet */
+data class MyWallet(
+    val enabled: Boolean = false,
+    val balance: Double = 0.0,
+    val pendingCashback: Double = 0.0,
+    val totalCashbackEarned: Double = 0.0,
+    val totalUsed: Double = 0.0,
+    val maxUsePercent: Double = 0.0,
+    val minOrder: Double = 0.0,
+    val expiringSoonAmount: Double = 0.0,
+    val expiringSoonFirstExpiry: String? = null,
+    val lots: List<WalletLot> = emptyList(),
+    val pending: List<WalletPendingCashback> = emptyList()
+)
+
+/** get_my_wallet_history row */
+data class WalletLedgerEntry(
+    val id: String,
+    val entryType: String,
+    val amount: Double,
+    val note: String?,
+    val orderId: String?,
+    val orderNumber: String?,
+    val createdAt: String
+)
+
+/** Home-screen promo banner set by the Super Admin (table promo_banners). */
+@JsonClass(generateAdapter = true)
+data class PromoBanner(
+    val id: String = "",
+    @Json(name = "city_id") val cityId: String? = null,
+    val placement: String = "grocery", // grocery / food / both
+    @Json(name = "image_url") val imageUrl: String = "",
+    val title: String? = null,
+    val subtitle: String? = null,
+    @Json(name = "cta_text") val ctaText: String? = null,
+    @Json(name = "show_text") val showText: Boolean = true,
+    @Json(name = "link_type") val linkType: String = "none", // none / category / hotel / url
+    @Json(name = "link_value") val linkValue: String? = null,
+    @Json(name = "sort_order") val sortOrder: Int = 0,
+    @Json(name = "starts_at") val startsAt: String? = null,
+    @Json(name = "ends_at") val endsAt: String? = null
+) {
+    val isClickable: Boolean
+        get() = linkType != "none" && !linkValue.isNullOrBlank()
+}

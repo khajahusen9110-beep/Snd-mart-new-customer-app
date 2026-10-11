@@ -906,8 +906,12 @@ fun OrderDetailScreen(
                                 }
                                 BillRow("Delivery Fee", "₹${"%.2f".format(currentOrder.deliveryFee)}")
                                 BillRow("Handling Fee", "₹${"%.2f".format(currentOrder.handlingFee)}")
+                                if ((currentOrder.walletUsedAmount ?: 0.0) > 0.0) {
+                                    BillRow("Wallet used", "−₹${"%.2f".format(currentOrder.walletUsedAmount ?: 0.0)}", color = SuccessGreen)
+                                }
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                                 BillRow("Total Paid / Due", "₹${"%.2f".format(currentOrder.totalAmount)}", isBold = true, fontSize = 16.sp, color = NaturalPrimary)
+                                com.example.ui.components.CashbackNote(currentOrder)
 
                                 if (currentOrder.paymentMethod.lowercase() == "upi" &&
                                     currentOrder.paymentStatus.lowercase() != "paid" &&

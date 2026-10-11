@@ -2389,7 +2389,9 @@ class SndmartRepository(
         cityId: String,
         addressId: String,
         paymentMethod: String,
-        coupon: Coupon? = null
+        coupon: Coupon? = null,
+        // Pay part of the order from the Sndmart Wallet (the server decides how much).
+        useWallet: Boolean = false
     ): Result<Order> {
         return try {
             val rawCart = (if (isHotel) _hotelCart.value else _groceryCart.value).filter { it.quantity > 0 }
@@ -2456,6 +2458,7 @@ class SndmartRepository(
                 } else {
                     put("p_coupon_code", JSONObject.NULL)
                 }
+                put("p_use_wallet", useWallet)
             }
 
             val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
@@ -2466,6 +2469,7 @@ class SndmartRepository(
                 val placedOrder = rpcResult.getOrNull()!!
                 // Clear the checked-out cart_items rows directly from backend & memory
                 clearCartDirectly(isHotel)
+                cachedWallet = null // wallet used / cashback pending changed
                 Result.success(placedOrder)
             } else {
                 Result.failure(rpcResult.exceptionOrNull() ?: Exception("Failed to place order"))
@@ -2577,6 +2581,8 @@ class SndmartRepository(
                     deliveryFee = obj.optDouble("delivery_fee", 0.0),
                     handlingFee = obj.optDouble("handling_fee", 0.0),
                     totalAmount = obj.optDouble("total_amount", 0.0),
+                    walletUsedAmount = obj.optDouble("wallet_used_amount", 0.0),
+                    cashbackAmount = obj.optDouble("cashback_amount", 0.0),
                     placedAt = if (obj.has("placed_at") && !obj.isNull("placed_at")) obj.optString("placed_at") else null
                 )
             } else {
@@ -3036,6 +3042,205 @@ class SndmartRepository(
             Result.success(ids)
         } catch (e: Exception) {
             Result.success(emptySet())
+        }
+    }
+
+    // --- SNDMART WALLET & CASHBACK (server-calculated, read-only for the app) ---
+
+    private fun jsonBody(obj: JSONObject) =
+        obj.toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+
+    private fun JSONObject.doubleOr(key: String, def: Double = 0.0): Double =
+        if (has(key) && !isNull(key)) optDouble(key, def) else def
+
+    private fun JSONObject.stringOrNull(key: String): String? =
+        if (has(key) && !isNull(key)) optString(key).takeIf { it.isNotBlank() && it != "null" } else null
+
+    /** Coupon + wallet preview for the checkout bill (call debounced). */
+    suspend fun previewCheckoutRewards(
+        subtotal: Double,
+        couponCode: String?,
+        payableBeforeWallet: Double
+    ): Result<RewardsPreview> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.failure(Exception("Service not configured"))
+        return try {
+            val body = JSONObject().apply {
+                put("p_subtotal", Math.round(subtotal.coerceAtLeast(0.0) * 100) / 100.0)
+                val code = couponCode?.trim()?.uppercase()
+                put("p_coupon_code", if (code.isNullOrBlank()) JSONObject.NULL else code)
+                put("p_payable_before_wallet", Math.round(payableBeforeWallet.coerceAtLeast(0.0) * 100) / 100.0)
+            }
+            val res = api.previewCheckoutRewards(jsonBody(body))
+            if (!res.isSuccessful || res.body() == null) {
+                return Result.failure(Exception(SupabaseClient.parseErrorMessage(res)))
+            }
+            val obj = JSONObject(res.body()!!.string())
+            val c = obj.optJSONObject("coupon")
+            val w = obj.optJSONObject("wallet") ?: JSONObject()
+            val coupon = c?.let {
+                CouponPreview(
+                    valid = it.optBoolean("valid", false),
+                    code = it.optString("code", ""),
+                    rewardType = it.stringOrNull("reward_type"),
+                    discount = it.doubleOr("discount"),
+                    cashback = it.doubleOr("cashback"),
+                    cashbackValidDays = if (it.has("cashback_valid_days") && !it.isNull("cashback_valid_days")) it.optInt("cashback_valid_days") else null,
+                    message = it.stringOrNull("message"),
+                    error = it.stringOrNull("error")
+                )
+            }
+            Result.success(
+                RewardsPreview(
+                    coupon = coupon,
+                    wallet = WalletUsable(
+                        enabled = w.optBoolean("enabled", false),
+                        balance = w.doubleOr("balance"),
+                        usable = w.doubleOr("usable"),
+                        maxUsePercent = w.doubleOr("max_use_percent"),
+                        minOrder = w.doubleOr("min_order"),
+                        reason = w.stringOrNull("reason")
+                    )
+                )
+            )
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
+    @Volatile private var cachedWallet: Pair<Long, MyWallet>? = null
+
+    /** The customer's wallet summary (cached for a minute; force = true on the Wallet screen). */
+    suspend fun getMyWallet(force: Boolean = false): Result<MyWallet> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.failure(Exception("Service not configured"))
+        val hit = cachedWallet
+        if (!force && hit != null && System.currentTimeMillis() - hit.first < 60_000L) return Result.success(hit.second)
+        return try {
+            val res = api.getMyWallet(jsonBody(JSONObject()))
+            if (!res.isSuccessful || res.body() == null) {
+                return Result.failure(Exception(SupabaseClient.parseErrorMessage(res)))
+            }
+            val w = JSONObject(res.body()!!.string())
+            val soon = w.optJSONObject("expiring_soon")
+            val lots = mutableListOf<WalletLot>()
+            w.optJSONArray("lots")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    val l = arr.optJSONObject(i) ?: continue
+                    lots.add(WalletLot(amount = l.doubleOr("amount"), expiresAt = l.stringOrNull("expires_at")))
+                }
+            }
+            val pending = mutableListOf<WalletPendingCashback>()
+            w.optJSONArray("pending")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    val p = arr.optJSONObject(i) ?: continue
+                    pending.add(
+                        WalletPendingCashback(
+                            amount = p.doubleOr("amount"),
+                            orderId = p.stringOrNull("order_id"),
+                            orderNumber = p.stringOrNull("order_number"),
+                            createdAt = p.stringOrNull("created_at")
+                        )
+                    )
+                }
+            }
+            val wallet = MyWallet(
+                enabled = w.optBoolean("enabled", false),
+                balance = w.doubleOr("balance"),
+                pendingCashback = w.doubleOr("pending_cashback"),
+                totalCashbackEarned = w.doubleOr("total_cashback_earned"),
+                totalUsed = w.doubleOr("total_used"),
+                maxUsePercent = w.doubleOr("max_use_percent"),
+                minOrder = w.doubleOr("min_order"),
+                expiringSoonAmount = soon?.doubleOr("amount") ?: 0.0,
+                expiringSoonFirstExpiry = soon?.stringOrNull("first_expiry"),
+                lots = lots,
+                pending = pending
+            )
+            cachedWallet = System.currentTimeMillis() to wallet
+            Result.success(wallet)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
+    /** Wallet history, newest first; pass the last row's createdAt for the next page. */
+    suspend fun getMyWalletHistory(limit: Int = 30, before: String? = null): Result<List<WalletLedgerEntry>> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.failure(Exception("Service not configured"))
+        return try {
+            val body = JSONObject().apply {
+                put("p_limit", limit)
+                put("p_before", before ?: JSONObject.NULL)
+            }
+            val res = api.getMyWalletHistory(jsonBody(body))
+            if (!res.isSuccessful || res.body() == null) {
+                return Result.failure(Exception(SupabaseClient.parseErrorMessage(res)))
+            }
+            val arr = JSONArray(res.body()!!.string())
+            val out = mutableListOf<WalletLedgerEntry>()
+            for (i in 0 until arr.length()) {
+                val e = arr.optJSONObject(i) ?: continue
+                out.add(
+                    WalletLedgerEntry(
+                        id = e.optString("id", "$i"),
+                        entryType = e.optString("entry_type", ""),
+                        amount = e.doubleOr("amount"),
+                        note = e.stringOrNull("note"),
+                        orderId = e.stringOrNull("order_id"),
+                        orderNumber = e.stringOrNull("order_number"),
+                        createdAt = e.optString("created_at", "")
+                    )
+                )
+            }
+            Result.success(out)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
+    // --- PROMO BANNERS (set by the Super Admin) ---
+
+    private val bannerCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<PromoBanner>>>()
+
+    /** Last loaded banners for this city/tab (shown at once while fresh ones load). */
+    fun getCachedPromoBanners(cityId: String?, placement: String): List<PromoBanner>? =
+        cityId?.let { bannerCache["$it:$placement"]?.second?.let(::liveBanners) }
+
+    private fun liveBanners(list: List<PromoBanner>): List<PromoBanner> {
+        val now = System.currentTimeMillis()
+        return list.filter { b ->
+            val starts = parseIsoTime(b.startsAt)
+            val ends = parseIsoTime(b.endsAt)
+            (starts == null || starts <= now) && (ends == null || ends > now) && b.imageUrl.startsWith("https://")
+        }
+    }
+
+    /**
+     * Banners for this city (or all cities) on the grocery home ("grocery") or food tab ("food").
+     * The database only returns banners that are switched on and inside their time window.
+     * Cached for 5 minutes. Any error (e.g. no banners table yet) = no banners.
+     */
+    suspend fun getPromoBanners(cityId: String, placement: String, force: Boolean = false): List<PromoBanner> {
+        val key = "$cityId:$placement"
+        val hit = bannerCache[key]
+        if (!force && hit != null && System.currentTimeMillis() - hit.first < 5 * 60_000L) return liveBanners(hit.second)
+        if (!SupabaseClient.isKeyConfigured()) return emptyList()
+        return try {
+            val res = api.getPromoBanners(
+                placementIn = "in.($placement,both)",
+                cityFilter = "(city_id.is.null,city_id.eq.$cityId)"
+            )
+            if (res.isSuccessful && res.body() != null) {
+                val list = res.body()!!
+                bannerCache[key] = System.currentTimeMillis() to list
+                liveBanners(list)
+            } else {
+                hit?.second?.let(::liveBanners) ?: emptyList()
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            hit?.second?.let(::liveBanners) ?: emptyList()
         }
     }
 
