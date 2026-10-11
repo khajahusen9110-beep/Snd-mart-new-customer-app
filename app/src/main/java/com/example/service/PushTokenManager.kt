@@ -109,6 +109,9 @@ object PushTokenManager {
 
                 val httpCode = (result.exceptionOrNull() as? ApiException)?.code
                 logDebug("Push token registration failed on attempt $attempt (httpCode=$httpCode)")
+                if (attempt == MAX_ATTEMPTS) {
+                    reportNonFatal("device_tokens registration failed (httpCode=$httpCode)", result.exceptionOrNull())
+                }
 
                 if (httpCode == 401 && !usedSessionRefresh) {
                     usedSessionRefresh = true
@@ -126,14 +129,29 @@ object PushTokenManager {
     private suspend fun getFcmTokenOrNull(): String? = suspendCancellableCoroutine { cont ->
         try {
             FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                if (!task.isSuccessful) {
+                    reportNonFatal("FCM getToken failed", task.exception)
+                }
                 if (cont.isActive) {
                     cont.resumeWith(Result.success(if (task.isSuccessful) task.result else null))
                 }
             }
         } catch (e: Throwable) {
+            reportNonFatal("FirebaseMessaging unavailable", e)
             if (cont.isActive) {
                 cont.resumeWith(Result.success(null))
             }
+        }
+    }
+
+    /** Release builds log nothing, so push failures go to Crashlytics as non-fatals. */
+    private fun reportNonFatal(message: String, cause: Throwable?) {
+        Log.w(TAG, message, cause)
+        try {
+            com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance()
+                .recordException(IllegalStateException(message, cause))
+        } catch (_: Throwable) {
+            // Crashlytics not initialized (no google-services.json)
         }
     }
 
