@@ -43,6 +43,34 @@ jobs:
           echo "GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}" >> .env
           echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
 
+      # Firebase config (push notifications, Crashlytics). Without this file the
+      # google-services plugin only WARNs and the app ships with NO Firebase at all,
+      # so FCM tokens are never created and customers never get notifications.
+      - name: Write google-services.json from secret
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "::error::GOOGLE_SERVICES_JSON secret is empty or missing"
+            exit 1
+          fi
+          # Accept the raw JSON or a base64-encoded copy
+          if printf '%s' "$GOOGLE_SERVICES_JSON" | head -c 200 | grep -q '{'; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          else
+            printf '%s' "$GOOGLE_SERVICES_JSON" | base64 -d > app/google-services.json
+          fi
+          if ! jq -e . app/google-services.json > /dev/null; then
+            echo "::error::GOOGLE_SERVICES_JSON is not valid JSON"
+            exit 1
+          fi
+          PROJECT_ID=$(jq -r '.project_info.project_id' app/google-services.json)
+          echo "Firebase project: $PROJECT_ID"
+          if ! jq -e '[.client[].client_info.android_client_info.package_name] | index("in.sndmart.app")' app/google-services.json > /dev/null; then
+            echo "::error::google-services.json has no Android app with package in.sndmart.app (project $PROJECT_ID)"
+            exit 1
+          fi
+
       - name: Build Signed Android App Bundle (AAB) and APK
         run: gradle :app:bundleRelease :app:assembleRelease --no-daemon
         env:

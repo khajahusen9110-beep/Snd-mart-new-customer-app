@@ -22,3 +22,6 @@ debug.keystore
 signing.keystore
 app/signing.keystore
 debug.keystore.base64
+
+# Firebase config is written by CI from the GOOGLE_SERVICES_JSON secret
+app/google-services.json
