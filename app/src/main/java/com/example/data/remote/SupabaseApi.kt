@@ -457,6 +457,10 @@ interface SupabaseApi {
     ): Response<ResponseBody>
 
     @Headers("Prefer: return=minimal")
+    @POST("rest/v1/push_registration_errors")
+    suspend fun reportPushRegistrationError(@Body body: Map<String, String>): Response<ResponseBody>
+
+    @Headers("Prefer: return=minimal")
     @PATCH("rest/v1/device_tokens")
     suspend fun deactivateDeviceToken(
         @Query("user_id") userIdQuery: String,

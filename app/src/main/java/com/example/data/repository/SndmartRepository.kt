@@ -3313,6 +3313,24 @@ class SndmartRepository(
         }
     }
 
+    /** Reports why push registration failed on this device (best effort, never throws). */
+    suspend fun reportPushRegistrationError(stage: String, message: String) {
+        try {
+            val res = api.reportPushRegistrationError(
+                mapOf(
+                    "stage" to stage.take(100),
+                    "message" to message.take(2000),
+                    "app_version" to com.example.BuildConfig.VERSION_NAME,
+                    "device" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} Android ${android.os.Build.VERSION.RELEASE}".take(200)
+                )
+            )
+            if (!res.isSuccessful) Log.w(TAG, "push error report returned ${res.code()}")
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.w(TAG, "push error report failed: ${e.message}")
+        }
+    }
+
     /** Marks this customer's device_tokens row inactive so no more pushes go to it. Call this
      * BEFORE clearing the session on logout - it needs the user id to target the row. */
     suspend fun deactivateDeviceToken(userId: String): Result<Unit> {

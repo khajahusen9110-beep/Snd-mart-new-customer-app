@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Makes sure a logged-in customer's FCM token is registered in `device_tokens`. Centralizes the
@@ -29,8 +30,16 @@ object PushTokenManager {
     private const val DEDUPE_WINDOW_MS = 24 * 60 * 60 * 1000L
     private const val RETRY_DELAY_MS = 30_000L
     private const val MAX_ATTEMPTS = 3
+    private const val GET_TOKEN_TIMEOUT_MS = 20_000L
 
     private val mutex = Mutex()
+
+    /** Why the last FCM getToken call returned no token (null when it worked). */
+    @Volatile
+    private var lastTokenError: String? = null
+
+    /** Stages already reported to push_registration_errors in this process (no repeats). */
+    private val reportedStages = mutableSetOf<String>()
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -79,6 +88,7 @@ object PushTokenManager {
             val token = pending ?: getFcmTokenOrNull()
             if (token.isNullOrBlank()) {
                 logDebug("No FCM token available, skipping registration")
+                reportToBackend(repository, "get_token", lastTokenError ?: "FCM returned an empty token")
                 return
             }
 
@@ -111,6 +121,7 @@ object PushTokenManager {
                 logDebug("Push token registration failed on attempt $attempt (httpCode=$httpCode)")
                 if (attempt == MAX_ATTEMPTS) {
                     reportNonFatal("device_tokens registration failed (httpCode=$httpCode)", result.exceptionOrNull())
+                    reportToBackend(repository, "register", "httpCode=$httpCode ${describe(result.exceptionOrNull())}")
                 }
 
                 if (httpCode == 401 && !usedSessionRefresh) {
@@ -126,10 +137,20 @@ object PushTokenManager {
         }
     }
 
-    private suspend fun getFcmTokenOrNull(): String? = suspendCancellableCoroutine { cont ->
+    private suspend fun getFcmTokenOrNull(): String? {
+        lastTokenError = null
+        val token = withTimeoutOrNull(GET_TOKEN_TIMEOUT_MS) { requestFcmToken() }
+        if (token == null && lastTokenError == null) {
+            lastTokenError = "FCM getToken did not answer within ${GET_TOKEN_TIMEOUT_MS / 1000}s"
+        }
+        return token
+    }
+
+    private suspend fun requestFcmToken(): String? = suspendCancellableCoroutine { cont ->
         try {
             FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                 if (!task.isSuccessful) {
+                    lastTokenError = "FCM getToken failed: ${describe(task.exception)}"
                     reportNonFatal("FCM getToken failed", task.exception)
                 }
                 if (cont.isActive) {
@@ -137,11 +158,27 @@ object PushTokenManager {
                 }
             }
         } catch (e: Throwable) {
+            lastTokenError = "FirebaseMessaging unavailable: ${describe(e)}"
             reportNonFatal("FirebaseMessaging unavailable", e)
             if (cont.isActive) {
                 cont.resumeWith(Result.success(null))
             }
         }
+    }
+
+    private fun describe(e: Throwable?): String {
+        if (e == null) return "no exception"
+        val parts = generateSequence(e) { it.cause }.take(3)
+            .map { "${it.javaClass.simpleName}: ${it.message}" }
+        return parts.joinToString(" <- ")
+    }
+
+    /** Writes the failure to push_registration_errors (once per stage per app run). */
+    private suspend fun reportToBackend(repository: SndmartRepository, stage: String, message: String) {
+        synchronized(reportedStages) {
+            if (!reportedStages.add(stage)) return
+        }
+        repository.reportPushRegistrationError(stage, message)
     }
 
     /** Release builds log nothing, so push failures go to Crashlytics as non-fatals. */
