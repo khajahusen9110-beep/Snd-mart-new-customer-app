@@ -702,13 +702,13 @@ fun MenuItemCard(
             .fillMaxWidth()
             .alpha(if (isAvailable) 1f else 0.65f)
             .testTag("menu_item_${product.id}"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isAvailable) MaterialTheme.colorScheme.surface
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Row(
             modifier = Modifier
@@ -718,8 +718,8 @@ fun MenuItemCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(90.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(92.dp)
+                    .clip(RoundedCornerShape(16.dp))
             ) {
                 ProductImage(
                     url = product.imageUrl,

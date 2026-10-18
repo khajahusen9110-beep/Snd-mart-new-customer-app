@@ -367,15 +367,20 @@ fun PriceDisplay(
                 color = TextMuted
             )
             Spacer(modifier = Modifier.width(6.dp))
-            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFE11D48).copy(alpha = 0.12f)) {
-                Text(
-                    text = "$pct% OFF",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFE11D48),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                )
-            }
+            Text(
+                text = "$pct% OFF",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.linearGradient(
+                            listOf(Color(0xFFF43F5E), Color(0xFFE11D48))
+                        )
+                    )
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            )
             if (!unit.isNullOrBlank()) {
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(

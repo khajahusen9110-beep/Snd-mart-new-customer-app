@@ -1231,20 +1231,20 @@ fun GroceryProductCard(
             .fillMaxWidth()
             .alpha(if (isInStockAndActive) 1f else 0.65f)
             .testTag("product_card_${product.id}"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isInStockAndActive) MaterialTheme.colorScheme.surface
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(115.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .height(118.dp)
+                    .clip(RoundedCornerShape(16.dp))
             ) {
                 ProductImage(
                     url = product.imageUrl,
@@ -1693,13 +1693,13 @@ fun HotelCard(
             .alpha(if (isOpen) 1f else 0.75f)
             .clickable { onClick() }
             .testTag("hotel_card_${vendor.id}"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isOpen) MaterialTheme.colorScheme.surface
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
         ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column {
             Box(
