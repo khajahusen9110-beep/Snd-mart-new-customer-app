@@ -342,8 +342,52 @@ fun PriceDisplay(
     price: Double,
     mrp: Double?,
     unit: String? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    kind: PromoKind? = null
 ) {
+    // When a promotional offer is running for this section, the customer sees the discounted price
+    // with the normal price struck through and a "X% OFF" badge. When no offer is active (kind null
+    // or no promo), this is identical to the original price display — existing rates are unchanged.
+    val promo = if (kind != null) promoFor(kind) else null
+    if (promo != null && promo.percent > 0) {
+        val discounted = offerPrice(price, promo.percent)
+        val pct = Math.round(promo.percent).toInt()
+        Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "₹${"%.0f".format(discounted)}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = PriceGreen
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "₹${"%.0f".format(price)}",
+                style = MaterialTheme.typography.bodySmall,
+                textDecoration = TextDecoration.LineThrough,
+                color = TextMuted
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFE11D48).copy(alpha = 0.12f)) {
+                Text(
+                    text = "$pct% OFF",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFFE11D48),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
+            if (!unit.isNullOrBlank()) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "/ $unit",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
+                )
+            }
+        }
+        return
+    }
+
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically

@@ -357,6 +357,20 @@ data class Coupon(
         get() = rewardType.equals("cashback", ignoreCase = true)
 }
 
+// Promotional offer row returned by public.get_active_promo(p_city_id, p_type).
+// The discount % lives ONLY in the backend promo_campaigns table — one change there drives the
+// banner, every item's strikethrough price, the badges and the checkout together. When no offer
+// is active the RPC returns an empty list, so nothing is shown and existing rates stay unchanged.
+@JsonClass(generateAdapter = true)
+data class ActivePromoRow(
+    val percent: Double = 0.0,
+    @Json(name = "max_discount_per_order") val maxDiscountPerOrder: Double? = null,
+    @Json(name = "min_order_amount") val minOrderAmount: Double = 0.0,
+    @Json(name = "starts_at") val startsAt: String? = null,
+    @Json(name = "ends_at") val endsAt: String? = null,
+    @Json(name = "banner_note") val bannerNote: String? = null
+)
+
 @JsonClass(generateAdapter = true)
 data class CouponUsage(
     val id: String? = null,

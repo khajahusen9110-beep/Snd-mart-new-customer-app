@@ -34,6 +34,9 @@ import com.example.data.repository.SndmartRepository
 import com.example.data.session.UserSessionManager
 import com.example.ui.components.AddressPickerDialog
 import com.example.ui.components.ErrorCard
+import com.example.ui.components.PromoKind
+import com.example.ui.components.cartPromoDiscount
+import com.example.ui.components.promoFor
 import com.example.ui.theme.*
 import com.example.util.RazorpayPaymentManager
 import com.example.util.RazorpayPaymentResult
@@ -345,7 +348,12 @@ fun CheckoutScreen(
     val distanceKm = addressDistanceKm ?: 0.0
     val expressMinutes = cityDeliverySettings?.expressDeliveryMinutes ?: 30
     val freeDeliveryMinOrder = cityDeliverySettings?.effectiveFreeDeliveryMinOrder ?: 99.0
-    val subtotalAfterDiscount = (subtotal - authoritativeDiscount).coerceAtLeast(0.0)
+    // Promotional offer (backend-driven) — mirrors the server: computed on the raw subtotal, then
+    // subtracted along with any coupon before delivery/handling. The server stays authoritative;
+    // after placing, order.totalAmount is what is charged (the differs-check below guards it).
+    val checkoutPromo = promoFor(if (isHotel) PromoKind.FOOD else PromoKind.GROCERY)
+    val promoDiscount = cartPromoDiscount(subtotal, checkoutPromo)
+    val subtotalAfterDiscount = (subtotal - authoritativeDiscount - promoDiscount).coerceAtLeast(0.0)
 
     fun calculateFees() {
         val cid = effectiveCityId ?: return
@@ -1390,6 +1398,17 @@ fun CheckoutScreen(
                             ) {
                                 Text("Coupon discount (${appliedCoupon?.code ?: ""})", color = NaturalPrimary, style = MaterialTheme.typography.bodyMedium)
                                 Text("-₹${"%.0f".format(authoritativeDiscount)}", color = NaturalPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+
+                        if (promoDiscount > 0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Offer ${Math.round(checkoutPromo?.percent ?: 0.0).toInt()}% OFF", color = SuccessGreen, style = MaterialTheme.typography.bodyMedium)
+                                Text("−₹${"%.0f".format(promoDiscount)}", color = SuccessGreen, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                             }
                         }
 

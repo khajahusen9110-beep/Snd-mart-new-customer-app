@@ -40,8 +40,11 @@ import com.example.service.InAppNotification
 import com.example.service.PushTokenManager
 import com.example.service.SndmartMessagingService
 import com.example.ui.components.InAppNotificationBanner
+import com.example.ui.components.LocalActivePromo
 import com.example.ui.components.LocationDetectionState
 import com.example.ui.components.LocationRequirementDialog
+import com.example.ui.components.OfferRibbon
+import com.example.ui.components.PromoState
 import com.example.ui.screens.*
 import com.example.ui.theme.*
 import androidx.lifecycle.Lifecycle
@@ -109,6 +112,18 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
                 val selectedCity by sessionManager.selectedCity.collectAsState()
                 val userId by sessionManager.userId.collectAsState()
+
+                // Promotional offer state (backend-driven). Refreshed on city change + every minute so
+                // an admin change / expiry reflects within ~60s. Empty when no offer is active.
+                val foodPromo by repository.foodPromo.collectAsState()
+                val groceryPromo by repository.groceryPromo.collectAsState()
+                val promoState = remember(foodPromo, groceryPromo) { PromoState(food = foodPromo, grocery = groceryPromo) }
+                LaunchedEffect(selectedCity?.id) {
+                    while (true) {
+                        repository.refreshPromos(selectedCity?.id)
+                        delay(60_000)
+                    }
+                }
                 var showCityPicker by remember { mutableStateOf(false) }
                 var showSupabaseSettings by remember { mutableStateOf(false) }
 
@@ -700,9 +715,13 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                     Screen.LocationOnboarding.route
                                 }
                             }
+                            CompositionLocalProvider(LocalActivePromo provides promoState) {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                            OfferRibbon()
                             NavHost(
                                 navController = navController,
-                                startDestination = startDestination
+                                startDestination = startDestination,
+                                modifier = Modifier.weight(1f)
                             ) {
                             composable(Screen.Home.route) {
                                 val defaultAddressLabel by sessionManager.defaultAddressLabel.collectAsState()
@@ -926,6 +945,9 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                 )
                             }
                         }
+
+                            }
+                            }
 
                         LaunchedEffect(Unit) { isNavGraphReady = true }
                         DisposableEffect(Unit) { onDispose { isNavGraphReady = false } }

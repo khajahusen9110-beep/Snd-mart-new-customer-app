@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -881,6 +882,12 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        if (searchQuery.isBlank()) {
+                            item(span = { GridItemSpan(2) }) {
+                                OfferBanner(kind = PromoKind.GROCERY, modifier = Modifier.padding(top = 6.dp))
+                            }
+                        }
+
                         freeDeliveryThreshold?.let { threshold ->
                             item(span = { GridItemSpan(2) }) {
                                 FreeDeliveryBanner(threshold = threshold)
@@ -1034,6 +1041,12 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
+                            if (searchQuery.isBlank()) {
+                                item(key = "food_offer_banner") {
+                                    OfferBanner(kind = PromoKind.FOOD)
+                                }
+                            }
+
                             if (searchQuery.isBlank() && promoBanners.isNotEmpty()) {
                                 item(key = "food_promo_banners") {
                                     PromoBannerCarousel(
@@ -1295,20 +1308,42 @@ fun GroceryProductCard(
 
             if (product.hasVariants) {
                 val startingPrice = product.startingPrice ?: product.effectivePrice
-                Text(
-                    text = "Starting from ₹${"%.0f".format(startingPrice)}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = PriceGreen,
+                val gPromo = promoFor(PromoKind.GROCERY)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .padding(vertical = 4.dp)
                         .alpha(if (isInStockAndActive) 1f else 0.7f)
-                )
+                ) {
+                    if (gPromo != null && gPromo.percent > 0) {
+                        Text(
+                            text = "Starting from ₹${"%.0f".format(offerPrice(startingPrice, gPromo.percent))}",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = PriceGreen
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "₹${"%.0f".format(startingPrice)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            textDecoration = TextDecoration.LineThrough,
+                            color = TextMuted
+                        )
+                    } else {
+                        Text(
+                            text = "Starting from ₹${"%.0f".format(startingPrice)}",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = PriceGreen
+                        )
+                    }
+                }
             } else {
                 PriceDisplay(
                     price = product.effectivePrice,
                     mrp = product.effectiveMrp,
                     unit = product.unit,
+                    kind = PromoKind.GROCERY,
                     modifier = Modifier
                         .padding(vertical = 4.dp)
                         .alpha(if (isInStockAndActive) 1f else 0.7f)

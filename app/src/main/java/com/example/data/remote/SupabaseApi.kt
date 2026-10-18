@@ -273,6 +273,12 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<Double>
 
+    // Active promotional offer for a section ("food" / "grocery"). Returns [] when no offer runs.
+    @POST("rest/v1/rpc/get_active_promo")
+    suspend fun getActivePromo(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<List<ActivePromoRow>>
+
     @POST("rest/v1/rpc/calculate_city_coupon_discount")
     suspend fun calculateCityCouponDiscount(
         @Body body: Map<String, @JvmSuppressWildcards Any?>

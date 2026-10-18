@@ -65,6 +65,42 @@ class SndmartRepository(
     private val _hotelCart = MutableStateFlow<List<CartItem>>(emptyList())
     val hotelCart: StateFlow<List<CartItem>> = _hotelCart.asStateFlow()
 
+    // --- PROMOTIONAL OFFER (backend-driven) ---
+    // The active offer per section, fetched from public.get_active_promo. null = no offer, so the
+    // UI shows normal prices. One admin change to promo_campaigns updates both of these within a
+    // minute (MainActivity refreshes on city change + periodically).
+    private val _foodPromo = MutableStateFlow<ActivePromoRow?>(null)
+    val foodPromo: StateFlow<ActivePromoRow?> = _foodPromo.asStateFlow()
+
+    private val _groceryPromo = MutableStateFlow<ActivePromoRow?>(null)
+    val groceryPromo: StateFlow<ActivePromoRow?> = _groceryPromo.asStateFlow()
+
+    private suspend fun fetchActivePromo(cityId: String, type: String): ActivePromoRow? {
+        if (!SupabaseClient.isKeyConfigured()) return null
+        return try {
+            val response = api.getActivePromo(mapOf("p_city_id" to cityId, "p_type" to type))
+            val row = response.body()?.firstOrNull()
+            if (response.isSuccessful && row != null && row.percent > 0) row else null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "get_active_promo($type) failed: ${e.message}")
+            null
+        }
+    }
+
+    /** Refresh both section offers for the given city. Clears them when no city is selected. */
+    suspend fun refreshPromos(cityId: String?) {
+        val clean = cityId?.removePrefix("eq.")?.takeIf { it.isNotBlank() }
+        if (clean == null) {
+            _foodPromo.value = null
+            _groceryPromo.value = null
+            return
+        }
+        _foodPromo.value = fetchActivePromo(clean, "food")
+        _groceryPromo.value = fetchActivePromo(clean, "grocery")
+    }
+
     // Background scope used to mirror the in-memory cart to the cart_items table.
     private val cartSyncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var persistJob: Job? = null

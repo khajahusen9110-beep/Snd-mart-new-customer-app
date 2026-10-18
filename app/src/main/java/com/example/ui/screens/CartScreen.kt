@@ -102,6 +102,10 @@ fun CartScreen(
     // Calculate totals from fresh prices - unavailable/out-of-stock rows contribute 0
     // (CartItemUi.totalPrice already excludes them), so this naturally matches rule 2.
     val subtotal = freshItems.sumOf { it.totalPrice }
+    // Promotional offer (backend-driven). Vendor is paid in full; Sndmart bears the discount.
+    val cartPromo = promoFor(if (isHotelCartSelected) PromoKind.FOOD else PromoKind.GROCERY)
+    val promoDiscount = cartPromoDiscount(subtotal, cartPromo)
+    val payable = (subtotal - promoDiscount).coerceAtLeast(0.0)
     val unavailableItems = freshItems.filter { !it.isPurchasable }
     val hotelClosedMessage = if (isHotelCartSelected) {
         freshItems.firstOrNull { it.stateMessage == CART_HOTEL_CLOSED_MESSAGE }?.stateMessage
@@ -168,7 +172,7 @@ fun CartScreen(
                                     color = TextSecondary
                                 )
                                 Text(
-                                    "₹${"%.0f".format(subtotal)}",
+                                    "₹${"%.0f".format(payable)}",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = NaturalPrimary
@@ -533,15 +537,31 @@ fun CartScreen(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 BillRow("Item Subtotal", "₹${"%.2f".format(subtotal)}")
+                                if (promoDiscount > 0) {
+                                    BillRow(
+                                        "Offer ${Math.round(cartPromo?.percent ?: 0.0).toInt()}% OFF",
+                                        "−₹${"%.2f".format(promoDiscount)}",
+                                        color = SuccessGreen
+                                    )
+                                }
                                 BillRow("Delivery Fee", "Calculated at checkout", color = TextSecondary)
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                                 BillRow(
                                     "Total to Pay",
-                                    "₹${"%.2f".format(subtotal)}",
+                                    "₹${"%.2f".format(payable)}",
                                     isBold = true,
                                     fontSize = 16.sp,
                                     color = NaturalPrimary
                                 )
+                                if (promoDiscount > 0) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "You save ₹${"%.0f".format(promoDiscount)} 🎉",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SuccessGreen
+                                    )
+                                }
                             }
                         }
                     }

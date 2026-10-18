@@ -486,6 +486,10 @@ fun HotelMenuScreen(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
+                            item(key = "hotel_menu_offer_banner") {
+                                OfferBanner(kind = PromoKind.FOOD)
+                            }
+
                             if (!vendor?.bannerUrl.isNullOrBlank()) {
                                 item(key = "hotel_banner_header") {
                                     Box(
@@ -799,6 +803,7 @@ fun MenuItemCard(
                     price = product.effectivePrice,
                     mrp = product.effectiveMrp,
                     unit = product.unit,
+                    kind = PromoKind.FOOD,
                     modifier = Modifier.alpha(if (isAvailable) 1f else 0.7f)
                 )
             }
