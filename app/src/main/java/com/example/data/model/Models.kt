@@ -177,7 +177,9 @@ data class ResolvedProduct(
     val effectiveMrp: Double?,
     val effectiveStock: Int,
     val effectiveIsAvailable: Boolean,
-    val variants: List<ResolvedVariant> = emptyList()
+    val variants: List<ResolvedVariant> = emptyList(),
+    // "Most Selling" row only: total units sold in this city (for the "N sold" badge).
+    val soldCount: Int = 0
 ) {
     val id: String get() = baseProduct.id
     val name: String get() = baseProduct.name
@@ -369,6 +371,13 @@ data class ActivePromoRow(
     @Json(name = "starts_at") val startsAt: String? = null,
     @Json(name = "ends_at") val endsAt: String? = null,
     @Json(name = "banner_note") val bannerNote: String? = null
+)
+
+// Row from public.get_top_grocery_products: a grocery product id and its total units sold.
+@JsonClass(generateAdapter = true)
+data class TopGroceryRow(
+    @Json(name = "product_id") val productId: String = "",
+    @Json(name = "units_sold") val unitsSold: Long = 0
 )
 
 @JsonClass(generateAdapter = true)

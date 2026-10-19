@@ -1031,6 +1031,66 @@ class SndmartRepository(
     // Rule 1: Grocery product grid: 30 at a time.
     // Rule 2: Selective column fetching.
     // Rule 3: Batch fetch city stock overrides in ONE single request using .in().
+    private val topGroceryCache = java.util.concurrent.ConcurrentHashMap<String, CacheEntry<ResolvedProduct>>()
+
+    /**
+     * Up to 10 most-selling grocery products in this city (by units sold). The RPC ranks product
+     * ids + units sold; one products + city-stock request then resolves price/stock to render the
+     * same grocery card, with soldCount attached for the "N sold" badge. Empty on any failure.
+     */
+    suspend fun getTopSellingGroceryProducts(cityId: String, forceRefresh: Boolean = false): Result<List<ResolvedProduct>> {
+        if (!forceRefresh) {
+            val cached = topGroceryCache[cityId]
+            if (cached != null && !cached.isExpired()) return Result.success(cached.data)
+        }
+        if (!SupabaseClient.isKeyConfigured()) return Result.success(emptyList())
+        return try {
+            val rankRes = api.getTopGroceryProducts(mapOf("p_city_id" to cityId, "p_limit" to 10))
+            val ranked = rankRes.body().orEmpty()
+            if (!rankRes.isSuccessful || ranked.isEmpty()) return Result.success(emptyList())
+            val soldById = ranked.associate { it.productId to it.unitsSold.toInt() }
+            val ids = ranked.map { it.productId }.filter { it.isNotBlank() }
+            if (ids.isEmpty()) return Result.success(emptyList())
+
+            val prodRes = api.getProductsByIds(
+                idInQuery = "in.(${ids.joinToString(",")})",
+                select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,product_variants(id,label,is_active,product_variant_city_stock(price,stock_qty,is_available,city_id))"
+            )
+            val products = (prodRes.body().orEmpty()).filter { it.vendorId == null }
+            val stockRes = api.getProductCityStockBatch(
+                cityId = "eq.$cityId",
+                productIdsQuery = "in.(${ids.joinToString(",")})",
+                select = "product_id,price,mrp,stock_qty,is_available"
+            )
+            val stockMap = if (stockRes.isSuccessful) stockRes.body().orEmpty().associateBy { it.productId } else emptyMap()
+            val stockLoadFailed = !stockRes.isSuccessful
+
+            val resolved = products.mapNotNull { prod ->
+                val override = stockMap[prod.id]
+                val stock = override?.stockQty ?: 0
+                val isAvail = if (stockLoadFailed) false else (override?.isAvailable == true)
+                val rp = ResolvedProduct(
+                    baseProduct = prod,
+                    effectivePrice = override?.price ?: prod.price,
+                    effectiveMrp = override?.mrp ?: prod.mrp,
+                    effectiveStock = stock,
+                    effectiveIsAvailable = isAvail,
+                    variants = resolveProductVariants(prod, cityId),
+                    soldCount = soldById[prod.id] ?: 0
+                )
+                if (rp.isInStockAndActive) rp else null
+            }.sortedByDescending { it.soldCount }
+
+            topGroceryCache[cityId] = CacheEntry(data = resolved)
+            Result.success(resolved)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception fetching top grocery products: ${e.message}")
+            Result.success(emptyList())
+        }
+    }
+
     suspend fun getResolvedGroceryProducts(
         cityId: String,
         categoryId: String? = null,

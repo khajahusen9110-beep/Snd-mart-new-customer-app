@@ -128,6 +128,12 @@ fun HomeScreen(
         )
     }
     var isGroceryLoading by remember { mutableStateOf(groceryProducts.isEmpty()) }
+    // "Most Selling" grocery row (by units sold in this city).
+    var topSelling by remember(selectedCity?.id) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    LaunchedEffect(selectedCity?.id) {
+        val cid = selectedCity?.id ?: return@LaunchedEffect
+        topSelling = repository.getTopSellingGroceryProducts(cid).getOrNull() ?: emptyList()
+    }
     var isLoadingMoreProducts by remember { mutableStateOf(false) }
     var hasMoreProducts by remember { mutableStateOf(true) }
     var groceryError by remember { mutableStateOf<String?>(null) }
@@ -888,6 +894,28 @@ fun HomeScreen(
                             }
                         }
 
+                        if (searchQuery.isBlank() && topSelling.isNotEmpty()) {
+                            item(span = { GridItemSpan(2) }) {
+                                MostSellingRow(
+                                    products = topSelling,
+                                    groceryCart = groceryCart,
+                                    onIncrease = { prod ->
+                                        repository.addToCart(
+                                            productId = prod.id, vendorId = null, cityId = selectedCity.id,
+                                            quantityDelta = 1, isHotel = false, productForSnapshot = prod
+                                        )
+                                    },
+                                    onDecrease = { prod ->
+                                        repository.addToCart(
+                                            productId = prod.id, vendorId = null, cityId = selectedCity.id,
+                                            quantityDelta = -1, isHotel = false
+                                        )
+                                    },
+                                    onSelectSize = { prod -> variantPickerProduct = prod }
+                                )
+                            }
+                        }
+
                         freeDeliveryThreshold?.let { threshold ->
                             item(span = { GridItemSpan(2) }) {
                                 FreeDeliveryBanner(threshold = threshold)
@@ -1217,6 +1245,41 @@ fun NaturalFeaturedDealsBanner(
 
 
 @Composable
+/** Horizontal "Most Selling" grocery row — fixed-width cards with a "N sold" badge. */
+@Composable
+fun MostSellingRow(
+    products: List<ResolvedProduct>,
+    groceryCart: List<CartItem>,
+    onIncrease: (ResolvedProduct) -> Unit,
+    onDecrease: (ResolvedProduct) -> Unit,
+    onSelectSize: (ResolvedProduct) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp)) {
+        Text(
+            text = "🔥 Most Selling",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = TextPrimary,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(products, key = { it.id }) { product ->
+                val qty = groceryCart.filter { it.productId == product.id }.sumOf { it.quantity }
+                Box(modifier = Modifier.width(158.dp)) {
+                    GroceryProductCard(
+                        product = product,
+                        quantityInCart = qty,
+                        onIncrease = { onIncrease(product) },
+                        onDecrease = { onDecrease(product) },
+                        onSelectSize = { onSelectSize(product) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun GroceryProductCard(
     product: ResolvedProduct,
     quantityInCart: Int,
@@ -1267,6 +1330,24 @@ fun GroceryProductCard(
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                if (isInStockAndActive && product.soldCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(OfferRed)
+                            .padding(horizontal = 7.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = "🔥 ${product.soldCount} sold",
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1
                         )
                     }
                 }
