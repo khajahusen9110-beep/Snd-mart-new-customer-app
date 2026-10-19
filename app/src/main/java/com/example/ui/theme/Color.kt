@@ -31,6 +31,8 @@ val TextMuted = Color(0xFF79747E)
 val ErrorRed = Color(0xFFB3261E)
 val SuccessGreen = Color(0xFF2E7D32)
 val PriceGreen = Color(0xFF6750A4)
+// Promotional offer accent — discounted prices and "% OFF" badges use this red so deals pop.
+val OfferRed = Color(0xFFE11D48)
 
 // Category pastel backgrounds from Natural Tones design
 val PastelSage = Color(0xFFD3E3FD)

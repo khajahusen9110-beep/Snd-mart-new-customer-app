@@ -1317,24 +1317,30 @@ fun GroceryProductCard(
                 ) {
                     if (gPromo != null && gPromo.percent > 0) {
                         Text(
-                            text = "Starting from ₹${"%.0f".format(offerPrice(startingPrice, gPromo.percent))}",
+                            text = "From ₹${"%.0f".format(offerPrice(startingPrice, gPromo.percent))}",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = PriceGreen
+                            color = OfferRed,
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "₹${"%.0f".format(startingPrice)}",
                             style = MaterialTheme.typography.bodySmall,
                             textDecoration = TextDecoration.LineThrough,
-                            color = TextMuted
+                            color = TextMuted,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     } else {
                         Text(
                             text = "Starting from ₹${"%.0f".format(startingPrice)}",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = PriceGreen
+                            color = PriceGreen,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -1463,6 +1469,8 @@ fun GroceryVariantPickerSheet(
             val sortedVariants = remember(product) {
                 product.variants.sortedBy { it.price }
             }
+            // Offer (backend-driven) so each size shows its discounted price, matching checkout.
+            val sheetPromo = promoFor(PromoKind.GROCERY)
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -1499,12 +1507,34 @@ fun GroceryVariantPickerSheet(
                                     fontWeight = FontWeight.Bold,
                                     color = if (isVariantInStock) TextPrimary else TextMuted
                                 )
-                                Text(
-                                    text = "₹${"%.0f".format(variant.price)}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (isVariantInStock) PriceGreen else TextMuted
-                                )
+                                if (sheetPromo != null && sheetPromo.percent > 0 && isVariantInStock) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "₹${"%.0f".format(offerPrice(variant.price, sheetPromo.percent))}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = OfferRed,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "₹${"%.0f".format(variant.price)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            textDecoration = TextDecoration.LineThrough,
+                                            color = TextMuted,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        text = "₹${"%.0f".format(variant.price)}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isVariantInStock) PriceGreen else TextMuted
+                                    )
+                                }
                             }
 
                             if (!isVariantInStock) {

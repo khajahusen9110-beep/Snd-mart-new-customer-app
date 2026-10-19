@@ -357,7 +357,7 @@ fun PriceDisplay(
                 text = "₹${"%.0f".format(discounted)}",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = PriceGreen
+                color = OfferRed
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
