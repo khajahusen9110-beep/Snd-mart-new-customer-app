@@ -1244,7 +1244,6 @@ fun NaturalFeaturedDealsBanner(
 }
 
 
-@Composable
 /** Horizontal "Most Selling" grocery row — fixed-width cards with a "N sold" badge. */
 @Composable
 fun MostSellingRow(
