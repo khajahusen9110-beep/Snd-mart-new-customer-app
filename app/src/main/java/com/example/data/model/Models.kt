@@ -179,7 +179,9 @@ data class ResolvedProduct(
     val effectiveIsAvailable: Boolean,
     val variants: List<ResolvedVariant> = emptyList(),
     // "Most Selling" row only: total units sold in this city (for the "N sold" badge).
-    val soldCount: Int = 0
+    val soldCount: Int = 0,
+    // "Most Ordered" food row only: the hotel this dish belongs to (for the card + tap target).
+    val soldVendorName: String? = null
 ) {
     val id: String get() = baseProduct.id
     val name: String get() = baseProduct.name
@@ -377,6 +379,15 @@ data class ActivePromoRow(
 @JsonClass(generateAdapter = true)
 data class TopGroceryRow(
     @Json(name = "product_id") val productId: String = "",
+    @Json(name = "units_sold") val unitsSold: Long = 0
+)
+
+// Row from public.get_top_food_products: a hotel dish, its hotel, and total units sold.
+@JsonClass(generateAdapter = true)
+data class TopFoodRow(
+    @Json(name = "product_id") val productId: String = "",
+    @Json(name = "vendor_id") val vendorId: String = "",
+    @Json(name = "vendor_name") val vendorName: String? = null,
     @Json(name = "units_sold") val unitsSold: Long = 0
 )
 

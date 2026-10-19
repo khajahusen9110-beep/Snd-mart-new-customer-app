@@ -285,6 +285,12 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<List<TopGroceryRow>>
 
+    // Most-ordered hotel dishes for a city: product_id + vendor + units_sold, ranked.
+    @POST("rest/v1/rpc/get_top_food_products")
+    suspend fun getTopFoodProducts(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<List<TopFoodRow>>
+
     @POST("rest/v1/rpc/calculate_city_coupon_discount")
     suspend fun calculateCityCouponDiscount(
         @Body body: Map<String, @JvmSuppressWildcards Any?>

@@ -1091,6 +1091,65 @@ class SndmartRepository(
         }
     }
 
+    private val topFoodCache = java.util.concurrent.ConcurrentHashMap<String, CacheEntry<ResolvedProduct>>()
+
+    /**
+     * Up to 10 most-ordered hotel dishes in this city (by units sold). The RPC ranks product ids +
+     * their hotel + units sold; one products + city-stock request resolves price. Each item carries
+     * soldCount and soldVendorName; the card taps through to that hotel. Empty on any failure.
+     */
+    suspend fun getTopSellingFoodProducts(cityId: String, forceRefresh: Boolean = false): Result<List<ResolvedProduct>> {
+        if (!forceRefresh) {
+            val cached = topFoodCache[cityId]
+            if (cached != null && !cached.isExpired()) return Result.success(cached.data)
+        }
+        if (!SupabaseClient.isKeyConfigured()) return Result.success(emptyList())
+        return try {
+            val rankRes = api.getTopFoodProducts(mapOf("p_city_id" to cityId, "p_limit" to 10))
+            val ranked = rankRes.body().orEmpty()
+            if (!rankRes.isSuccessful || ranked.isEmpty()) return Result.success(emptyList())
+            val metaById = ranked.associateBy { it.productId }
+            val ids = ranked.map { it.productId }.filter { it.isNotBlank() }
+            if (ids.isEmpty()) return Result.success(emptyList())
+
+            val prodRes = api.getProductsByIds(
+                idInQuery = "in.(${ids.joinToString(",")})",
+                select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,available_from,available_until,product_variants(id,label,is_active,product_variant_city_stock(price,stock_qty,is_available,city_id))"
+            )
+            val products = (prodRes.body().orEmpty()).filter { it.vendorId != null }
+            val stockRes = api.getProductCityStockBatch(
+                cityId = "eq.$cityId",
+                productIdsQuery = "in.(${ids.joinToString(",")})",
+                select = "product_id,price,mrp,stock_qty,is_available"
+            )
+            val stockMap = if (stockRes.isSuccessful) stockRes.body().orEmpty().associateBy { it.productId } else emptyMap()
+
+            val resolved = products.mapNotNull { prod ->
+                if (prod.isActive != true) return@mapNotNull null
+                val override = stockMap[prod.id]
+                val meta = metaById[prod.id]
+                ResolvedProduct(
+                    baseProduct = prod,
+                    effectivePrice = override?.price ?: prod.price,
+                    effectiveMrp = override?.mrp ?: prod.mrp,
+                    effectiveStock = override?.stockQty ?: (prod.stockQty ?: (prod.stockQuantity ?: 0)),
+                    effectiveIsAvailable = override?.isAvailable ?: prod.isAvailable,
+                    variants = resolveProductVariants(prod, cityId),
+                    soldCount = meta?.unitsSold?.toInt() ?: 0,
+                    soldVendorName = meta?.vendorName
+                )
+            }.sortedByDescending { it.soldCount }
+
+            topFoodCache[cityId] = CacheEntry(data = resolved)
+            Result.success(resolved)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception fetching top food products: ${e.message}")
+            Result.success(emptyList())
+        }
+    }
+
     suspend fun getResolvedGroceryProducts(
         cityId: String,
         categoryId: String? = null,

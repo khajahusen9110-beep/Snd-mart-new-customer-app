@@ -18,8 +18,8 @@ android {
     applicationId = "in.sndmart.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 20
-    versionName = "1.19"
+    versionCode = 21
+    versionName = "1.20"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

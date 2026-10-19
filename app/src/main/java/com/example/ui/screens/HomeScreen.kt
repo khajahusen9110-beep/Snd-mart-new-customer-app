@@ -134,6 +134,12 @@ fun HomeScreen(
         val cid = selectedCity?.id ?: return@LaunchedEffect
         topSelling = repository.getTopSellingGroceryProducts(cid).getOrNull() ?: emptyList()
     }
+    // "Most Ordered" food row (hotel dishes by units sold in this city).
+    var topFood by remember(selectedCity?.id) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    LaunchedEffect(selectedCity?.id) {
+        val cid = selectedCity?.id ?: return@LaunchedEffect
+        topFood = repository.getTopSellingFoodProducts(cid).getOrNull() ?: emptyList()
+    }
     var isLoadingMoreProducts by remember { mutableStateOf(false) }
     var hasMoreProducts by remember { mutableStateOf(true) }
     var groceryError by remember { mutableStateOf<String?>(null) }
@@ -1075,6 +1081,17 @@ fun HomeScreen(
                                 }
                             }
 
+                            if (searchQuery.isBlank() && topFood.isNotEmpty()) {
+                                item(key = "food_most_ordered") {
+                                    MostOrderedFoodRow(
+                                        products = topFood,
+                                        onOpenHotel = { prod ->
+                                            onNavigateToHotelMenu(prod.vendorId ?: "", prod.soldVendorName ?: "Hotel")
+                                        }
+                                    )
+                                }
+                            }
+
                             if (searchQuery.isBlank() && promoBanners.isNotEmpty()) {
                                 item(key = "food_promo_banners") {
                                     PromoBannerCarousel(
@@ -1272,6 +1289,101 @@ fun MostSellingRow(
                         onDecrease = { onDecrease(product) },
                         onSelectSize = { onSelectSize(product) }
                     )
+                }
+            }
+        }
+    }
+}
+
+/** Horizontal "Most Ordered" food row — dish + hotel + offer price; tapping opens the hotel. */
+@Composable
+fun MostOrderedFoodRow(
+    products: List<ResolvedProduct>,
+    onOpenHotel: (ResolvedProduct) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
+        Text(
+            text = "🔥 Most Ordered",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = TextPrimary,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(products, key = { it.id }) { product ->
+                val fPromo = promoFor(PromoKind.FOOD)
+                Card(
+                    modifier = Modifier
+                        .width(158.dp)
+                        .clickable { onOpenHotel(product) },
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(104.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                        ) {
+                            ProductImage(url = product.imageUrl, contentDescription = product.name, modifier = Modifier.fillMaxSize())
+                            if (product.soldCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(6.dp)
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(OfferRed)
+                                        .padding(horizontal = 7.dp, vertical = 3.dp)
+                                ) {
+                                    Text("🔥 ${product.soldCount} sold", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = product.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = TextPrimary
+                        )
+                        product.soldVendorName?.let {
+                            Text(text = it, style = MaterialTheme.typography.labelSmall, color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        if (fPromo != null && fPromo.percent > 0) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "₹${"%.0f".format(offerPrice(product.effectivePrice, fPromo.percent))}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = OfferRed,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = "₹${"%.0f".format(product.effectivePrice)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textDecoration = TextDecoration.LineThrough,
+                                    color = TextMuted,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "₹${"%.0f".format(product.effectivePrice)}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = PriceGreen
+                            )
+                        }
+                    }
                 }
             }
         }
