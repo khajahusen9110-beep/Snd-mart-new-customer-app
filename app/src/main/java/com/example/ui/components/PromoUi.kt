@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ActivePromoRow
@@ -235,16 +236,19 @@ fun OfferRibbon(modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .height(34.dp)
             .background(Brush.horizontalGradient(listOf(Color(0xFFE11D48), Color(0xFFB91C3C))))
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "🎉 $pct% OFF on $what · ಇಂದೇ ಆರ್ಡರ್ ಮಾಡಿ",
+            text = "🎉 $pct% OFF on $what",
             color = Color.White,
             fontSize = 12.5.sp,
             fontWeight = FontWeight.ExtraBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center
         )
         if (left != null) {
@@ -252,8 +256,9 @@ fun OfferRibbon(modifier: Modifier = Modifier) {
             Text(
                 text = "⏳ $left",
                 color = Color.White,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
                 modifier = Modifier
                     .clip(RoundedCornerShape(999.dp))
                     .background(Color.White.copy(alpha = 0.22f))
