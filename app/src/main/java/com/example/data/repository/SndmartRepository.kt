@@ -145,7 +145,8 @@ class SndmartRepository(
     fun getCachedGroceryProducts(cityId: String?, categoryId: String?, searchQuery: String? = null): List<ResolvedProduct>? {
         if (cityId.isNullOrBlank() || categoryId.isNullOrBlank()) return null
         val cleanQuery = searchQuery?.trim()?.lowercase().orEmpty()
-        val cacheKey = "$cityId:$categoryId:$cleanQuery"
+        // A search is cached across all categories (key "all"); browsing is per-category.
+        val cacheKey = "$cityId:${if (cleanQuery.isNotEmpty()) "all" else categoryId}:$cleanQuery"
         val cached = groceryProductsCache[cacheKey]
         if (cached != null && !cached.isExpired()) {
             return cached.data
@@ -268,9 +269,11 @@ class SndmartRepository(
         val targetCatId = categoryId
             ?: demoGroceryCategories.firstOrNull { it.name.contains("veg", ignoreCase = true) }?.id
             ?: "cat_veg"
+        val searching = !searchQuery.isNullOrBlank()
         val filtered = DemoCatalog.GROCERY_PRODUCTS.filter { prod ->
-            val matchesCategory = prod.categoryId == targetCatId
-            val matchesQuery = searchQuery.isNullOrBlank() || prod.name.contains(searchQuery, ignoreCase = true)
+            // A search spans every category; browsing stays within the chosen category.
+            val matchesCategory = searching || prod.categoryId == targetCatId
+            val matchesQuery = !searching || prod.name.contains(searchQuery!!, ignoreCase = true)
             matchesCategory && matchesQuery
         }
         return filtered.map { prod ->
@@ -864,6 +867,10 @@ class SndmartRepository(
             return Result.success(paged)
         }
         return try {
+            // Free-text search: match hotels by their name OR by a menu item (dish) they serve.
+            if (cleanQuery.isNotEmpty()) {
+                return searchHotelsByNameOrDish(cityId, cleanQuery, searchQuery!!.trim(), limit, offset, cacheKey)
+            }
             val nameQuery = searchQuery?.takeIf { it.isNotBlank() }?.let {
                 "ilike.*" + java.net.URLEncoder.encode(it.trim(), "UTF-8").replace("+", "%20") + "*"
             }
@@ -904,6 +911,69 @@ class SndmartRepository(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Exception fetching hotels: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    // Food search: return hotels whose own name matches the query OR that serve a menu item
+    // whose name matches it (so "biryani" finds hotels cooking biryani, not only one named that).
+    private suspend fun searchHotelsByNameOrDish(
+        cityId: String,
+        cleanQuery: String,
+        rawQuery: String,
+        limit: Int,
+        offset: Int,
+        cacheKey: String
+    ): Result<List<Vendor>> {
+        return try {
+            val allResp = api.getVendors(
+                cityId = "eq.$cityId",
+                vendorType = "eq.hotel",
+                approvalStatus = "eq.approved",
+                name = null,
+                select = "id,name,banner_url,is_active,is_featured,is_open,address,latitude,longitude,opening_time,closing_time",
+                order = "is_active.desc,is_featured.desc.nullslast,name.asc",
+                limit = 500,
+                offset = 0
+            )
+            if (!allResp.isSuccessful || allResp.body() == null) {
+                if (allResp.code() == 401) {
+                    sessionManager.notifySessionExpired("Your session expired, please log in again")
+                    return Result.failure(SessionExpiredException("Your session expired, please log in again"))
+                }
+                return Result.failure(ApiException(allResp.code(), SupabaseClient.parseErrorMessage(allResp)))
+            }
+            val allHotels = allResp.body()!!
+            val hotelIds = allHotels.map { it.id }.filter { it.isNotBlank() }
+            val nameEnc = "ilike.*" + java.net.URLEncoder.encode(cleanQuery, "UTF-8").replace("+", "%20") + "*"
+            val itemVendorIds: Set<String> = if (hotelIds.isNotEmpty()) {
+                val itemsResp = api.getProducts(
+                    isActive = "eq.true",
+                    vendorId = "in.(${hotelIds.joinToString(",")})",
+                    name = nameEnc,
+                    select = "vendor_id",
+                    limit = 1000
+                )
+                if (itemsResp.isSuccessful && itemsResp.body() != null)
+                    itemsResp.body()!!.mapNotNull { it.vendorId?.takeIf { v -> v.isNotBlank() } }.toSet()
+                else emptySet()
+            } else emptySet()
+
+            val matched = allHotels
+                .filter { it.name.contains(rawQuery, ignoreCase = true) || it.id in itemVendorIds }
+                .sortedWith(HotelComparator)
+            val paged = matched.drop(offset).take(limit)
+            val hasMore = matched.size > offset + limit
+            if (offset == 0) {
+                hotelsCache[cacheKey] = CacheEntry(data = paged, hasMore = hasMore)
+            } else {
+                val existing = hotelsCache[cacheKey]?.data ?: emptyList()
+                val combined = (existing + paged).distinctBy { it.id }.sortedWith(HotelComparator)
+                hotelsCache[cacheKey] = CacheEntry(data = combined, hasMore = hasMore)
+            }
+            Result.success(paged)
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception searching hotels: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -1164,7 +1234,8 @@ class SndmartRepository(
             ?: "cat_veg"
 
         val cleanQuery = searchQuery?.trim()?.lowercase().orEmpty()
-        val cacheKey = "$cityId:$effectiveCatId:$cleanQuery"
+        val searching = cleanQuery.isNotEmpty()
+        val cacheKey = "$cityId:${if (searching) "all" else effectiveCatId}:$cleanQuery"
 
         if (offset == 0 && !forceRefresh) {
             val cached = groceryProductsCache[cacheKey]
@@ -1174,7 +1245,7 @@ class SndmartRepository(
         }
 
         if (!SupabaseClient.isKeyConfigured()) {
-            val demo = getFallbackGroceryProducts(effectiveCatId, searchQuery)
+            val demo = getFallbackGroceryProducts(if (searching) null else effectiveCatId, searchQuery)
             val paged = demo.drop(offset).take(limit)
             if (offset == 0) {
                 groceryProductsCache[cacheKey] = CacheEntry(data = paged, hasMore = demo.size > limit)
@@ -1185,8 +1256,8 @@ class SndmartRepository(
             return Result.success(paged)
         }
         return try {
-            // Product grid query — always scoped to selectedCategoryId, never "show everything"
-            val catQuery = "eq.$effectiveCatId"
+            // Browsing is scoped to the selected category; a search spans every category.
+            val catQuery = if (searching) null else "eq.$effectiveCatId"
             val nameQuery = searchQuery?.takeIf { it.isNotBlank() }?.let {
                 "ilike.*" + java.net.URLEncoder.encode(it.trim(), "UTF-8").replace("+", "%20") + "*"
             }
