@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,6 +30,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.data.model.CART_HOTEL_CLOSED_MESSAGE
 import com.example.data.model.CartAvailabilityState
 import com.example.data.model.CartItemUi
+import com.example.data.model.ResolvedProduct
 import com.example.data.repository.SndmartRepository
 import com.example.ui.components.*
 import com.example.ui.theme.*
@@ -97,6 +99,23 @@ fun CartScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // "Add more items" recommendations: popular items from the same hotel not already in the cart.
+    var recommendations by remember { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    val hotelVendorId = rawHotelCart.firstOrNull { !it.vendorId.isNullOrBlank() }?.vendorId
+    val hotelCartIdsKey = rawHotelCart.joinToString(",") { it.productId }
+    LaunchedEffect(isHotelCartSelected, hotelVendorId, hotelCartIdsKey, cityId) {
+        recommendations = emptyList()
+        if (isHotelCartSelected && !hotelVendorId.isNullOrBlank() && !cityId.isNullOrBlank()) {
+            val res = repository.getHotelProducts(vendorId = hotelVendorId, cityId = cityId, limit = 20)
+            if (res.isSuccess) {
+                val inCart = rawHotelCart.map { it.productId }.toSet()
+                recommendations = (res.getOrNull() ?: emptyList())
+                    .filter { it.id !in inCart && it.effectivePrice > 0 && it.isHotelItemAvailable }
+                    .take(10)
+            }
+        }
     }
 
     // Calculate totals from fresh prices - unavailable/out-of-stock rows contribute 0
@@ -521,6 +540,36 @@ fun CartScreen(
                         )
                     }
 
+                    // "Add more items" — popular items from the same hotel not in the cart
+                    if (recommendations.isNotEmpty()) {
+                        item {
+                            Column {
+                                Text(
+                                    "Add more items 🍽️",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    items(recommendations, key = { it.id }) { p ->
+                                        RecommendedFoodCard(
+                                            product = p,
+                                            onAdd = {
+                                                repository.addToCart(
+                                                    productId = p.id,
+                                                    vendorId = hotelVendorId,
+                                                    cityId = cityId,
+                                                    isHotel = true,
+                                                    productForSnapshot = p
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Bill Breakdown
                     item {
                         Card(
@@ -673,3 +722,58 @@ fun CartItemRow(
     }
 }
 
+
+@Composable
+private fun RecommendedFoodCard(product: ResolvedProduct, onAdd: () -> Unit) {
+    var added by remember { mutableStateOf(false) }
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        modifier = Modifier.width(132.dp)
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            ProductImage(
+                url = product.imageUrl,
+                contentDescription = product.name,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(88.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = product.name,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.height(32.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "₹${"%.0f".format(product.effectivePrice)}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                TextButton(
+                    onClick = { onAdd(); added = true },
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                    modifier = Modifier.height(30.dp)
+                ) {
+                    Text(
+                        if (added) "Added" else "+ Add",
+                        color = NaturalPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
+}
