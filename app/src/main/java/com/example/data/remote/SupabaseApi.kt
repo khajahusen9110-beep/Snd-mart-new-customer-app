@@ -285,6 +285,13 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<Unit>
 
+    // Hotel food search: exact (hotel/dish name) match first, then typo-tolerant
+    // fuzzy fallback. Returns [{ "vendor_id": "..." }].
+    @POST("rest/v1/rpc/search_hotel_vendor_ids")
+    suspend fun searchHotelVendorIds(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<List<Map<String, String?>>>
+
     // Active promotional offer for a section ("food" / "grocery"). Returns [] when no offer runs.
     @POST("rest/v1/rpc/get_active_promo")
     suspend fun getActivePromo(

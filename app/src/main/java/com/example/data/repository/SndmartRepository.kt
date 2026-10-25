@@ -944,23 +944,41 @@ class SndmartRepository(
                 return Result.failure(ApiException(allResp.code(), SupabaseClient.parseErrorMessage(allResp)))
             }
             val allHotels = allResp.body()!!
-            val hotelIds = allHotels.map { it.id }.filter { it.isNotBlank() }
-            val nameEnc = "ilike.*" + java.net.URLEncoder.encode(cleanQuery, "UTF-8").replace("+", "%20") + "*"
-            val itemVendorIds: Set<String> = if (hotelIds.isNotEmpty()) {
-                val itemsResp = api.getProducts(
-                    isActive = "eq.true",
-                    vendorId = "in.(${hotelIds.joinToString(",")})",
-                    name = nameEnc,
-                    select = "vendor_id",
-                    limit = 1000
+
+            // Primary: server RPC does exact (hotel/dish name) match first, then a
+            // typo-tolerant fuzzy fallback, so "Biriyani" still finds "Chicken Biryani".
+            val rpcVendorIds: Set<String> = try {
+                val rpcResp = api.searchHotelVendorIds(
+                    mapOf("p_city_id" to cityId, "p_query" to rawQuery)
                 )
-                if (itemsResp.isSuccessful && itemsResp.body() != null)
-                    itemsResp.body()!!.mapNotNull { it.vendorId?.takeIf { v -> v.isNotBlank() } }.toSet()
-                else emptySet()
-            } else emptySet()
+                if (rpcResp.isSuccessful && rpcResp.body() != null)
+                    rpcResp.body()!!.mapNotNull { it["vendor_id"]?.takeIf { v -> v.isNotBlank() } }.toSet()
+                else null
+            } catch (e: Exception) {
+                Log.w(TAG, "Hotel search RPC notice: ${e.message}")
+                null
+            } ?: run {
+                // Fallback: client-side name + dish ILIKE match (older behaviour).
+                val hotelIds = allHotels.map { it.id }.filter { it.isNotBlank() }
+                val nameEnc = "ilike.*" + java.net.URLEncoder.encode(cleanQuery, "UTF-8").replace("+", "%20") + "*"
+                val itemVendorIds: Set<String> = if (hotelIds.isNotEmpty()) {
+                    val itemsResp = api.getProducts(
+                        isActive = "eq.true",
+                        vendorId = "in.(${hotelIds.joinToString(",")})",
+                        name = nameEnc,
+                        select = "vendor_id",
+                        limit = 1000
+                    )
+                    if (itemsResp.isSuccessful && itemsResp.body() != null)
+                        itemsResp.body()!!.mapNotNull { it.vendorId?.takeIf { v -> v.isNotBlank() } }.toSet()
+                    else emptySet()
+                } else emptySet()
+                allHotels.filter { it.name.contains(rawQuery, ignoreCase = true) || it.id in itemVendorIds }
+                    .map { it.id }.toSet()
+            }
 
             val matched = allHotels
-                .filter { it.name.contains(rawQuery, ignoreCase = true) || it.id in itemVendorIds }
+                .filter { it.id in rpcVendorIds }
                 .sortedWith(HotelComparator)
             val paged = matched.drop(offset).take(limit)
             val hasMore = matched.size > offset + limit
