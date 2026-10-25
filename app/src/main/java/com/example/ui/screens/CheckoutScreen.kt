@@ -129,6 +129,14 @@ fun CheckoutScreen(
         "upi" to "UPI / Instant Pay"
     )
     var selectedPaymentMethod by remember { mutableStateOf("cod") }
+    // COD is hidden for customers blocked after repeated cancellations (server also enforces it).
+    var codAllowed by remember { mutableStateOf(true) }
+    LaunchedEffect(userId) {
+        val ok = repository.getMyCodAllowed()
+        codAllowed = ok
+        if (!ok && selectedPaymentMethod == "cod") selectedPaymentMethod = "upi"
+    }
+    val visiblePaymentMethods = if (codAllowed) paymentMethods else paymentMethods.filter { it.first != "cod" }
 
     // Order placement state
     val context = LocalContext.current
@@ -1279,7 +1287,7 @@ fun CheckoutScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        paymentMethods.forEach { (methodKey, label) ->
+                        visiblePaymentMethods.forEach { (methodKey, label) ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1300,6 +1308,14 @@ fun CheckoutScreen(
                                     fontWeight = if (selectedPaymentMethod == methodKey) FontWeight.SemiBold else FontWeight.Normal
                                 )
                             }
+                        }
+                        if (!codAllowed) {
+                            Text(
+                                text = "Cash on Delivery aapke account par abhi uplabdh nahi hai (pichle cancelled orders ki wajah se). Kripya UPI se pay karein.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NaturalBadgeRed,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
                         }
                     }
                 }

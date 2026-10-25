@@ -2173,6 +2173,25 @@ class SndmartRepository(
     }
 
     /**
+     * Whether this customer may pay Cash on Delivery. Blocked after repeated cancelled orders
+     * (or by an admin). Fails open — the checkout RPC also enforces it server-side.
+     */
+    suspend fun getMyCodAllowed(): Boolean {
+        if (!SupabaseClient.isKeyConfigured()) return true
+        return try {
+            val response = api.myCodStatus(emptyMap())
+            if (response.isSuccessful && response.body() != null) {
+                response.body()!!["cod_allowed"] != false
+            } else true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception calling my_cod_status: ${e.message}", e)
+            true
+        }
+    }
+
+    /**
      * Distance calculation exactly like the server:
      * - Grocery cart: pickup = delivery_zones (city, is_active = true, oldest created_at) center_latitude, center_longitude.
      * - Hotel cart: pickup = hotel vendors.latitude, vendors.longitude.

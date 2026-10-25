@@ -273,6 +273,12 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<Double>
 
+    // Whether the signed-in customer may pay Cash on Delivery (blocked after repeated cancels).
+    @POST("rest/v1/rpc/my_cod_status")
+    suspend fun myCodStatus(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Map<String, @JvmSuppressWildcards Any>>
+
     // Active promotional offer for a section ("food" / "grocery"). Returns [] when no offer runs.
     @POST("rest/v1/rpc/get_active_promo")
     suspend fun getActivePromo(
