@@ -137,6 +137,9 @@ fun CheckoutScreen(
         if (!ok && selectedPaymentMethod == "cod") selectedPaymentMethod = "upi"
     }
     val visiblePaymentMethods = if (codAllowed) paymentMethods else paymentMethods.filter { it.first != "cod" }
+    // Cooking (shown to the vendor) + delivery (shown to the partner) instructions.
+    var cookingInstructions by remember { mutableStateOf("") }
+    var deliveryInstructions by remember { mutableStateOf("") }
 
     // Order placement state
     val context = LocalContext.current
@@ -621,7 +624,9 @@ fun CheckoutScreen(
                                     addressId = selectedAddressId!!,
                                     paymentMethod = selectedPaymentMethod,
                                     coupon = appliedCoupon,
-                                    useWallet = walletApplied > 0.0
+                                    useWallet = walletApplied > 0.0,
+                                    cookingInstructions = cookingInstructions,
+                                    deliveryInstructions = deliveryInstructions
                                 )
 
                                 if (res.isSuccess) {
@@ -1268,6 +1273,46 @@ fun CheckoutScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // Cooking + Delivery Instructions (optional)
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Instructions (optional)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = cookingInstructions,
+                            onValueChange = { if (it.length <= 500) cookingInstructions = it },
+                            label = { Text("Cooking instructions (for the shop)") },
+                            placeholder = { Text("e.g. kam teekha, pyaaz nahi") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 1,
+                            maxLines = 3,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = deliveryInstructions,
+                            onValueChange = { if (it.length <= 500) deliveryInstructions = it },
+                            label = { Text("Delivery instructions (for the partner)") },
+                            placeholder = { Text("e.g. gate pe call karein, 2nd floor") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 1,
+                            maxLines = 3,
+                            shape = RoundedCornerShape(12.dp)
+                        )
                     }
                 }
             }

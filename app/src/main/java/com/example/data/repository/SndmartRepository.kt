@@ -2636,7 +2636,10 @@ class SndmartRepository(
         paymentMethod: String,
         coupon: Coupon? = null,
         // Pay part of the order from the Sndmart Wallet (the server decides how much).
-        useWallet: Boolean = false
+        useWallet: Boolean = false,
+        // Cooking (shown to the vendor) + delivery (shown to the partner) instructions.
+        cookingInstructions: String? = null,
+        deliveryInstructions: String? = null
     ): Result<Order> {
         return try {
             val rawCart = (if (isHotel) _hotelCart.value else _groceryCart.value).filter { it.quantity > 0 }
@@ -2712,6 +2715,8 @@ class SndmartRepository(
             val rpcResult = callCheckoutRpcWithRetry(isHotel, requestBody)
             if (rpcResult.isSuccess) {
                 val placedOrder = rpcResult.getOrNull()!!
+                // Cooking (vendor) + delivery (partner) instructions — best-effort, never fail the order.
+                setOrderInstructions(placedOrder.id, cookingInstructions, deliveryInstructions)
                 // Clear the checked-out cart_items rows directly from backend & memory
                 clearCartDirectly(isHotel)
                 cachedWallet = null // wallet used / cashback pending changed
@@ -2724,6 +2729,25 @@ class SndmartRepository(
         } catch (e: Exception) {
             Log.e(TAG, "Exception during placeOrder", e)
             Result.failure(e)
+        }
+    }
+
+    /** Saves the customer's cooking/delivery instructions on their just-placed order. */
+    private suspend fun setOrderInstructions(orderId: String?, cooking: String?, delivery: String?) {
+        if (orderId.isNullOrBlank() || !SupabaseClient.isKeyConfigured()) return
+        val c = cooking?.trim()?.takeIf { it.isNotEmpty() }
+        val d = delivery?.trim()?.takeIf { it.isNotEmpty() }
+        if (c == null && d == null) return
+        try {
+            val body = HashMap<String, Any>()
+            body["p_order_id"] = orderId
+            if (c != null) body["p_cooking"] = c
+            if (d != null) body["p_delivery"] = d
+            api.setOrderInstructions(body)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "set_order_instructions failed: ${e.message}")
         }
     }
 

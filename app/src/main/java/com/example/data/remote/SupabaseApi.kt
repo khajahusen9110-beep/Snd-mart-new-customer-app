@@ -279,6 +279,12 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<Map<String, @JvmSuppressWildcards Any>>
 
+    // Saves cooking/delivery instructions on the customer's own order (returns void).
+    @POST("rest/v1/rpc/set_order_instructions")
+    suspend fun setOrderInstructions(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
     // Active promotional offer for a section ("food" / "grocery"). Returns [] when no offer runs.
     @POST("rest/v1/rpc/get_active_promo")
     suspend fun getActivePromo(
