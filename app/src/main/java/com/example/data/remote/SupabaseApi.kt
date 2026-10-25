@@ -292,6 +292,13 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<List<Map<String, String?>>>
 
+    // Food search by dish: matching hotel ITEMS (exact first, then fuzzy).
+    // Returns [{ product_id, vendor_id, vendor_name, vendor_is_open, rank }].
+    @POST("rest/v1/rpc/search_hotel_dishes")
+    suspend fun searchHotelDishes(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<List<Map<String, @JvmSuppressWildcards Any?>>>
+
     // Active promotional offer for a section ("food" / "grocery"). Returns [] when no offer runs.
     @POST("rest/v1/rpc/get_active_promo")
     suspend fun getActivePromo(

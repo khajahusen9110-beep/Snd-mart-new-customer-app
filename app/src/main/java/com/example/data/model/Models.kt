@@ -180,8 +180,10 @@ data class ResolvedProduct(
     val variants: List<ResolvedVariant> = emptyList(),
     // "Most Selling" row only: total units sold in this city (for the "N sold" badge).
     val soldCount: Int = 0,
-    // "Most Ordered" food row only: the hotel this dish belongs to (for the card + tap target).
-    val soldVendorName: String? = null
+    // "Most Ordered" food row + dish-search only: the hotel this dish belongs to.
+    val soldVendorName: String? = null,
+    // Dish-search results only: whether the dish's hotel is currently open.
+    val hotelOpen: Boolean = true
 ) {
     val id: String get() = baseProduct.id
     val name: String get() = baseProduct.name

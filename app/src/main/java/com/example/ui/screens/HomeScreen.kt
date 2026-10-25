@@ -153,6 +153,10 @@ fun HomeScreen(
     var hasMoreHotels by remember { mutableStateOf(true) }
     var hotelsError by remember { mutableStateOf<String?>(null) }
 
+    // Food search: matching dishes shown directly (above the hotels list).
+    var dishResults by remember { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    var isDishResultsLoading by remember { mutableStateOf(false) }
+
     // "What's on your mind?" rotating category picker (Food Delivery hotel listing only).
     var hotelCategoriesPool by remember { mutableStateOf<List<Category>>(emptyList()) }
     var displayedFoodCategories by remember { mutableStateOf<List<Category>>(emptyList()) }
@@ -571,6 +575,20 @@ fun HomeScreen(
         delay(350)
         lastSearchedHotelsQuery = searchQuery
         loadHotelsData(cityId, searchQuery)
+    }
+
+    // Food search: fetch matching dishes directly (shown above the hotels list).
+    LaunchedEffect(searchQuery, browsingMode, selectedCity?.id) {
+        val cityId = selectedCity?.id
+        if (browsingMode != BrowsingMode.HOTELS || cityId == null || searchQuery.isBlank()) {
+            dishResults = emptyList()
+            isDishResultsLoading = false
+            return@LaunchedEffect
+        }
+        delay(350)
+        isDishResultsLoading = true
+        dishResults = repository.searchHotelDishes(cityId, searchQuery).getOrDefault(emptyList())
+        isDishResultsLoading = false
     }
 
     // Handle single-hotel rule conflict dialog
@@ -1055,7 +1073,7 @@ fun HomeScreen(
                         hotels.filter { it.id in matchingVendorIds }
                     } ?: hotels
 
-                    if (filteredHotels.isEmpty()) {
+                    if (filteredHotels.isEmpty() && dishResults.isEmpty() && !isDishResultsLoading) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -1063,7 +1081,8 @@ fun HomeScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "No hotels or restaurants available in this city.",
+                                if (searchQuery.isNotBlank()) "No dishes or hotels match \"${searchQuery.trim()}\"."
+                                else "No hotels or restaurants available in this city.",
                                 color = TextSecondary,
                                 style = MaterialTheme.typography.bodyLarge
                             )
@@ -1075,6 +1094,58 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(14.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
+                            // Food search: matching dishes shown directly, each with a quick Add.
+                            if (searchQuery.isNotBlank()) {
+                                if (isDishResultsLoading && dishResults.isEmpty()) {
+                                    item(key = "dish_results_loading") {
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(26.dp),
+                                                strokeWidth = 2.5.dp,
+                                                color = NaturalPrimary
+                                            )
+                                        }
+                                    }
+                                } else if (dishResults.isNotEmpty()) {
+                                    item(key = "dish_results_header") {
+                                        HotelSectionHeader(title = "Dishes matching \"${searchQuery.trim()}\"")
+                                    }
+                                    items(dishResults, key = { "dish_${it.id}" }) { dish ->
+                                        val qty = hotelCart.find { it.productId == dish.id }?.quantity ?: 0
+                                        SearchDishCard(
+                                            product = dish,
+                                            quantity = qty,
+                                            onOpenHotel = {
+                                                onNavigateToHotelMenu(dish.vendorId ?: "", dish.soldVendorName ?: "Hotel")
+                                            },
+                                            onAdd = { delta ->
+                                                val cid = selectedCity?.id
+                                                val vid = dish.vendorId
+                                                if (cid != null && vid != null) {
+                                                    val res = repository.addToCart(
+                                                        productId = dish.id,
+                                                        vendorId = vid,
+                                                        cityId = cid,
+                                                        quantityDelta = delta,
+                                                        isHotel = true,
+                                                        productForSnapshot = dish
+                                                    )
+                                                    if (res is AddToCartResult.HotelConflict) pendingHotelConflict = res
+                                                }
+                                            }
+                                        )
+                                    }
+                                    if (filteredHotels.isNotEmpty()) {
+                                        item(key = "restaurants_header") {
+                                            HotelSectionHeader(title = "Restaurants")
+                                        }
+                                    }
+                                }
+                            }
+
                             if (searchQuery.isBlank()) {
                                 item(key = "food_offer_banner") {
                                     OfferBanner(kind = PromoKind.FOOD)
@@ -1384,6 +1455,111 @@ fun MostOrderedFoodRow(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+// A food-search result: the dish itself (image, name, its hotel, price) with a direct Add.
+@Composable
+fun SearchDishCard(
+    product: ResolvedProduct,
+    quantity: Int,
+    onOpenHotel: () -> Unit,
+    onAdd: (Int) -> Unit
+) {
+    val orderable = product.hotelOpen && product.isHotelItemAvailable
+    val fPromo = promoFor(PromoKind.FOOD)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(78.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onOpenHotel() }
+            ) {
+                ProductImage(url = product.imageUrl, contentDescription = product.name, modifier = Modifier.fillMaxSize())
+                if (!orderable) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            if (product.hotelOpen) "N/A" else "Closed",
+                            color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = product.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = TextPrimary
+                )
+                product.soldVendorName?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable { onOpenHotel() }
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                if (fPromo != null && fPromo.percent > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "₹${"%.0f".format(offerPrice(product.effectivePrice, fPromo.percent))}",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = OfferRed,
+                            softWrap = false
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "₹${"%.0f".format(product.effectivePrice)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            textDecoration = TextDecoration.LineThrough,
+                            color = TextMuted,
+                            softWrap = false
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "₹${"%.0f".format(product.effectivePrice)}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = PriceGreen
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            if (orderable) {
+                QuantityStepper(
+                    quantity = quantity,
+                    onIncrease = { onAdd(1) },
+                    onDecrease = { onAdd(-1) }
+                )
+            } else {
+                OutlinedButton(
+                    onClick = onOpenHotel,
+                    shape = RoundedCornerShape(20.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp)
+                ) {
+                    Text("View", maxLines = 1)
                 }
             }
         }

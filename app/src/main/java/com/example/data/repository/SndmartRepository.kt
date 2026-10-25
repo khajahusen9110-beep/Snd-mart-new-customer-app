@@ -1186,6 +1186,69 @@ class SndmartRepository(
      * their hotel + units sold; one products + city-stock request resolves price. Each item carries
      * soldCount and soldVendorName; the card taps through to that hotel. Empty on any failure.
      */
+    /**
+     * Food search by dish: returns matching hotel ITEMS directly (not just the hotels), so results
+     * show dishes. Exact name match first, then a typo-tolerant fuzzy fallback ("Biriyani" ->
+     * "Chicken Biryani"). Each dish carries its hotel name (soldVendorName) and open state.
+     */
+    suspend fun searchHotelDishes(cityId: String, query: String): Result<List<ResolvedProduct>> {
+        val q = query.trim()
+        if (q.isEmpty()) return Result.success(emptyList())
+        if (!SupabaseClient.isKeyConfigured()) return Result.success(emptyList())
+        return try {
+            val rpcRes = api.searchHotelDishes(mapOf("p_city_id" to cityId, "p_query" to q))
+            val rows = rpcRes.body().orEmpty()
+            if (!rpcRes.isSuccessful || rows.isEmpty()) return Result.success(emptyList())
+            data class Meta(val vendorName: String?, val open: Boolean, val order: Int)
+            val metaById = HashMap<String, Meta>()
+            rows.forEachIndexed { i, r ->
+                val pid = r["product_id"] as? String ?: return@forEachIndexed
+                metaById[pid] = Meta(
+                    vendorName = r["vendor_name"] as? String,
+                    open = (r["vendor_is_open"] as? Boolean) ?: false,
+                    order = i
+                )
+            }
+            val ids = metaById.keys.toList()
+            if (ids.isEmpty()) return Result.success(emptyList())
+
+            val prodRes = api.getProductsByIds(
+                idInQuery = "in.(${ids.joinToString(",")})",
+                select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,available_from,available_until,product_variants(id,label,is_active,product_variant_city_stock(price,stock_qty,is_available,city_id))"
+            )
+            val products = (prodRes.body().orEmpty()).filter { it.vendorId != null }
+            val stockRes = api.getProductCityStockBatch(
+                cityId = "eq.$cityId",
+                productIdsQuery = "in.(${ids.joinToString(",")})",
+                select = "product_id,price,mrp,stock_qty,is_available"
+            )
+            val stockMap = if (stockRes.isSuccessful) stockRes.body().orEmpty().associateBy { it.productId } else emptyMap()
+
+            val resolved = products.mapNotNull { prod ->
+                if (prod.isActive != true) return@mapNotNull null
+                val override = stockMap[prod.id]
+                val meta = metaById[prod.id]
+                ResolvedProduct(
+                    baseProduct = prod,
+                    effectivePrice = override?.price ?: prod.price,
+                    effectiveMrp = override?.mrp ?: prod.mrp,
+                    effectiveStock = override?.stockQty ?: (prod.stockQty ?: (prod.stockQuantity ?: 0)),
+                    effectiveIsAvailable = override?.isAvailable ?: prod.isAvailable,
+                    variants = resolveProductVariants(prod, cityId),
+                    soldVendorName = meta?.vendorName,
+                    hotelOpen = meta?.open ?: false
+                )
+            }.sortedBy { metaById[it.id]?.order ?: Int.MAX_VALUE }
+
+            Result.success(resolved)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception searching dishes: ${e.message}")
+            Result.success(emptyList())
+        }
+    }
+
     suspend fun getTopSellingFoodProducts(cityId: String, forceRefresh: Boolean = false): Result<List<ResolvedProduct>> {
         if (!forceRefresh) {
             val cached = topFoodCache[cityId]
