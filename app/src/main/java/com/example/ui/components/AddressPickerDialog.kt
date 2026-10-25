@@ -250,7 +250,11 @@ fun AddressPickerDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        // decorFitsSystemWindows = false makes the dialog draw edge-to-edge AND dispatch
+        // window insets to the content, so navigationBarsPadding()/imePadding() below actually
+        // lift the Save/Confirm buttons above the gesture bar (otherwise they sit behind it,
+        // half-cut and un-tappable on gesture-navigation phones).
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         Scaffold(
             topBar = {
@@ -309,7 +313,11 @@ fun AddressPickerDialog(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
                 )
             },
-            containerColor = MaterialTheme.colorScheme.background
+            containerColor = MaterialTheme.colorScheme.background,
+            // The TopAppBar handles the status bar itself; the map goes edge-to-edge and each
+            // mode's footer handles the navigation/gesture bar via navigationBarsPadding(). So the
+            // Scaffold must NOT also pad the content (that would double the bottom gap).
+            contentWindowInsets = WindowInsets(0)
         ) { paddingValues ->
             BoxWithConstraints(
                 modifier = Modifier
@@ -320,7 +328,10 @@ fun AddressPickerDialog(
             // so it can't push its own "Use This Location" / "Save" button off-screen — the
             // sheet scrolls internally instead (see each uiMode branch below).
             val maxSheetHeight = maxHeight * 0.62f
-            Column(modifier = Modifier.fillMaxSize()) {
+            // Edge-to-edge means the window no longer auto-resizes for the keyboard, so lift the
+            // whole map+sheet above the IME ourselves (the map shrinks via its weight); this keeps
+            // the address fields and the Save button visible while typing.
+            Column(modifier = Modifier.fillMaxSize().imePadding()) {
                 // --- MAP SECTION ---
                 Box(
                     modifier = Modifier
