@@ -385,7 +385,9 @@ data class ActivePromoRow(
     @Json(name = "min_order_amount") val minOrderAmount: Double = 0.0,
     @Json(name = "starts_at") val startsAt: String? = null,
     @Json(name = "ends_at") val endsAt: String? = null,
-    @Json(name = "banner_note") val bannerNote: String? = null
+    @Json(name = "banner_note") val bannerNote: String? = null,
+    @Json(name = "show_ribbon") val showRibbon: Boolean = true,
+    @Json(name = "show_countdown") val showCountdown: Boolean = true
 )
 
 // Row from public.get_top_grocery_products: a grocery product id and its total units sold.

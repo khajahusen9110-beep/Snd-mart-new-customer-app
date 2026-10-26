@@ -119,7 +119,7 @@ fun OfferBanner(kind: PromoKind, modifier: Modifier = Modifier) {
     }
     val pct = Math.round(promo.percent).toInt()
     val title = promo.bannerNote?.takeIf { it.isNotBlank() } ?: "$pct% OFF"
-    val timeLeft = rememberTimeLeft(promo.endsAt)
+    val timeLeft = if (promo.showCountdown) rememberTimeLeft(promo.endsAt) else null
 
     Column(
         modifier = modifier
@@ -217,7 +217,7 @@ fun OfferRibbon(modifier: Modifier = Modifier) {
     val food = state.food
     val grocery = state.grocery
     val promo = food ?: grocery ?: return
-    if (promo.percent <= 0) return
+    if (promo.percent <= 0 || !promo.showRibbon) return
 
     val pct = Math.round(maxOf(food?.percent ?: 0.0, grocery?.percent ?: 0.0)).toInt()
     val what = when {
@@ -227,7 +227,7 @@ fun OfferRibbon(modifier: Modifier = Modifier) {
     }
     // Ribbon counts down to whichever active offer ends first.
     val endIso = listOfNotNull(food?.endsAt, grocery?.endsAt).minByOrNull { parsePromoMillis(it) ?: Long.MAX_VALUE }
-    val timeLeft = rememberTimeLeft(endIso)
+    val timeLeft = if (promo.showCountdown) rememberTimeLeft(endIso) else null
     val left = timeLeft?.let {
         val p = countdownParts(it)
         if (p.d > 0) "${p.d}d ${pad(p.h)}h" else "${pad(p.h)}h ${pad(p.m)}m ${pad(p.s)}s"
