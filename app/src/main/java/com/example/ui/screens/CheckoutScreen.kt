@@ -1356,7 +1356,7 @@ fun CheckoutScreen(
                         }
                         if (!codAllowed) {
                             Text(
-                                text = "Cash on Delivery aapke account par abhi uplabdh nahi hai (pichle cancelled orders ki wajah se). Kripya UPI se pay karein.",
+                                text = "ಕ್ಯಾಶ್ ಆನ್ ಡೆಲಿವರಿ ನಿಮ್ಮ ಖಾತೆಯಲ್ಲಿ ಸದ್ಯಕ್ಕೆ ಲಭ್ಯವಿಲ್ಲ (ಹಿಂದಿನ ರದ್ದಾದ ಆರ್ಡರ್‌ಗಳ ಕಾರಣದಿಂದ). ದಯವಿಟ್ಟು UPI ಮೂಲಕ ಪಾವತಿಸಿ.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = NaturalBadgeRed,
                                 modifier = Modifier.padding(top = 6.dp)
