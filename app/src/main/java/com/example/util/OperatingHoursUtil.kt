@@ -37,6 +37,16 @@ fun isVendorWithinOperatingHours(
 }
 
 /**
+ * City Admin's Operating Hours cap: outside this window, or while Emergency Closed, nothing in
+ * the city — hotel or grocery — can be ordered, regardless of any vendor's own hours.
+ */
+fun isCityOpenNow(city: com.example.data.model.City?, now: LocalTime = LocalTime.now()): Boolean {
+    if (city == null) return true
+    if (city.emergencyClosed) return false
+    return isVendorWithinOperatingHours(city.openTime, city.closeTime, now)
+}
+
+/**
  * Checks if current time falls within ANY of the vendor's operating hour slots.
  * Missing or empty slots are treated as unrestricted (always open) to match existing behavior
  * for hotels that haven't set slot hours yet.

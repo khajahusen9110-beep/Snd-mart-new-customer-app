@@ -85,6 +85,8 @@ fun HomeScreen(
     // before its other catalog is ready — the home tab defaults accordingly, re-derived
     // whenever the selected city changes.
     val serviceMode = selectedCity?.serviceMode ?: "both"
+    // City Admin's Operating Hours / Emergency Close — caps grocery & hotel ordering city-wide.
+    val cityIsOpen = com.example.util.isCityOpenNow(selectedCity)
     var browsingMode by rememberSaveable(selectedCity?.id) {
         mutableStateOf(if (serviceMode == "food_only") BrowsingMode.HOTELS else BrowsingMode.GROCERY)
     }
@@ -282,7 +284,7 @@ fun HomeScreen(
     // ("Load More Hotels") doesn't reset the 5-minute timer.
     LaunchedEffect(hotelCategoriesPool, hotels.isNotEmpty()) {
         while (true) {
-            val openVendorIds = hotels.filter { it.isOpenNow }.map { it.id }.toSet()
+            val openVendorIds = hotels.filter { it.isEffectivelyOpenNow(selectedCity) }.map { it.id }.toSet()
             displayedFoodCategories = pickRotatingFoodCategories(hotelCategoriesPool, openVendorIds)
             delay(5 * 60 * 1000L)
         }
@@ -972,6 +974,7 @@ fun HomeScreen(
                                 MostSellingRow(
                                     products = topSelling,
                                     groceryCart = groceryCart,
+                                    cityOpen = cityIsOpen,
                                     onIncrease = { prod ->
                                         repository.addToCart(
                                             productId = prod.id, vendorId = null, cityId = selectedCity.id,
@@ -1044,6 +1047,7 @@ fun HomeScreen(
                                 GroceryProductCard(
                                     product = product,
                                     quantityInCart = totalQuantityInCart,
+                                    cityOpen = cityIsOpen,
                                     onIncrease = {
                                         repository.addToCart(
                                             productId = product.id,
@@ -1404,7 +1408,8 @@ fun MostSellingRow(
     groceryCart: List<CartItem>,
     onIncrease: (ResolvedProduct) -> Unit,
     onDecrease: (ResolvedProduct) -> Unit,
-    onSelectSize: (ResolvedProduct) -> Unit
+    onSelectSize: (ResolvedProduct) -> Unit,
+    cityOpen: Boolean = true
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp)) {
         Text(
@@ -1423,7 +1428,8 @@ fun MostSellingRow(
                         quantityInCart = qty,
                         onIncrease = { onIncrease(product) },
                         onDecrease = { onDecrease(product) },
-                        onSelectSize = { onSelectSize(product) }
+                        onSelectSize = { onSelectSize(product) },
+                        cityOpen = cityOpen
                     )
                 }
             }
@@ -1637,9 +1643,10 @@ fun GroceryProductCard(
     quantityInCart: Int,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
-    onSelectSize: () -> Unit = {}
+    onSelectSize: () -> Unit = {},
+    cityOpen: Boolean = true
 ) {
-    val isInStockAndActive = product.isInStockAndActive
+    val isInStockAndActive = cityOpen && product.isInStockAndActive
 
     Card(
         modifier = Modifier

@@ -76,6 +76,11 @@ fun HotelMenuScreen(
 
     var vendor by remember { mutableStateOf<Vendor?>(null) }
     var operatingSlots by remember { mutableStateOf<List<OperatingSlot>>(emptyList()) }
+    // City Admin's Operating Hours / Emergency Close — caps this hotel's own hours.
+    var city by remember(cityId) { mutableStateOf<com.example.data.model.City?>(null) }
+    LaunchedEffect(cityId) {
+        city = repository.getCity(cityId).getOrNull()
+    }
     val effectiveSlots by remember(operatingSlots, vendor) {
         derivedStateOf {
             if (operatingSlots.isNotEmpty()) {
@@ -228,7 +233,7 @@ fun HotelMenuScreen(
 
     val isHotelActive = vendor?.isActive ?: true
     val isWithinHours = isWithinAnySlot(effectiveSlots)
-    val isHotelOpen = isHotelActive && isWithinHours
+    val isHotelOpen = isHotelActive && isWithinHours && com.example.util.isCityOpenNow(city)
 
     // Category tab ordering/availability (spec rules 1-2): recomputed whenever the underlying
     // data, hotel-open state, or timeTick (minute tick / resume) changes.

@@ -14,7 +14,12 @@ data class City(
     @Json(name = "center_lng") val centerLng: Double? = null,
     @Json(name = "service_radius_km") val serviceRadiusKm: Double? = null,
     // 'food_only' | 'grocery_only' | 'both' — set by City Admin (Launch Mode). Defaults to 'both'.
-    @Json(name = "service_mode") val serviceMode: String? = "both"
+    @Json(name = "service_mode") val serviceMode: String? = "both",
+    // City-wide ordering window (City Admin, Operating Hours) — caps every vendor's own hours.
+    @Json(name = "open_time") val openTime: String? = "06:00",
+    @Json(name = "close_time") val closeTime: String? = "23:00",
+    // City Admin's Emergency Close switch — instantly stops every vendor from taking new orders.
+    @Json(name = "emergency_closed") val emergencyClosed: Boolean = false
 )
 
 @JsonClass(generateAdapter = true)
@@ -78,6 +83,10 @@ data class Vendor(
  */
 val Vendor.isOpenNow: Boolean
     get() = isOpen && isActive && isVendorWithinOperatingHours(openingTime, closingTime)
+
+/** Same as [isOpenNow], also capped by the city's Operating Hours / Emergency Close. */
+fun Vendor.isEffectivelyOpenNow(city: City?): Boolean =
+    isOpenNow && com.example.util.isCityOpenNow(city)
 
 /**
  * Hotel listing order (task: 4 sections in this exact order):
