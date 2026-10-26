@@ -30,11 +30,9 @@ import com.example.util.rupees
 import kotlinx.coroutines.launch
 
 private const val SHARE_URL = "https://sndmart.in"
-private const val REFERRER_REWARD = 50
-private const val FRIEND_REWARD = 30
 
-private fun shareMessage(code: String) =
-    "Sndmart se order karo aur ₹$FRIEND_REWARD paao! Mera referral code use karo: $code\n$SHARE_URL"
+private fun shareMessage(code: String, friendReward: Double) =
+    "Sndmart se order karo aur ₹${friendReward.toInt()} paao! Mera referral code use karo: $code\n$SHARE_URL"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +46,9 @@ fun ReferEarnScreen(
     var code by remember { mutableStateOf<String?>(null) }
     var totalReferred by remember { mutableStateOf(0) }
     var totalEarned by remember { mutableStateOf(0.0) }
+    var referrerReward by remember { mutableStateOf(50.0) }
+    var friendReward by remember { mutableStateOf(30.0) }
+    var minOrderAmount by remember { mutableStateOf(99.0) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var copied by remember { mutableStateOf(false) }
@@ -63,6 +64,9 @@ fun ReferEarnScreen(
             code = s.referralCode
             totalReferred = s.totalReferred
             totalEarned = s.totalEarned
+            referrerReward = s.referrerReward
+            friendReward = s.friendReward
+            minOrderAmount = s.minOrderAmount
             isLoading = false
         }.onFailure {
             error = it.message ?: "Failed to load referral info"
@@ -105,7 +109,7 @@ fun ReferEarnScreen(
                         Icon(Icons.Outlined.CardGiftcard, contentDescription = null, tint = NaturalPrimary, modifier = Modifier.size(36.dp))
                         Text("Refer friends, earn wallet cash", fontWeight = FontWeight.Bold, fontSize = 18.sp, textAlign = TextAlign.Center)
                         Text(
-                            "Share your code — your friend gets ₹$FRIEND_REWARD on their first order, and you get ₹$REFERRER_REWARD in your Sndmart wallet.",
+                            "Share your code — your friend gets ₹${friendReward.toInt()} on their first order, and you get ₹${referrerReward.toInt()} in your Sndmart wallet.",
                             color = TextSecondary, fontSize = 13.sp, textAlign = TextAlign.Center
                         )
                     }
@@ -147,7 +151,7 @@ fun ReferEarnScreen(
                                     code?.let {
                                         val intent = Intent(Intent.ACTION_SEND).apply {
                                             type = "text/plain"
-                                            putExtra(Intent.EXTRA_TEXT, shareMessage(it))
+                                            putExtra(Intent.EXTRA_TEXT, shareMessage(it, friendReward))
                                         }
                                         context.startActivity(Intent.createChooser(intent, "Share your referral code"))
                                     }
@@ -162,7 +166,7 @@ fun ReferEarnScreen(
                             OutlinedButton(
                                 onClick = {
                                     code?.let {
-                                        val encoded = Uri.encode(shareMessage(it))
+                                        val encoded = Uri.encode(shareMessage(it, friendReward))
                                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/?text=$encoded")))
                                     }
                                 },
@@ -197,7 +201,7 @@ fun ReferEarnScreen(
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Got a friend's code?", color = TextSecondary, fontSize = 12.sp)
                             if (applied) {
-                                Text("Code applied — place your first order to unlock ₹$FRIEND_REWARD bonus.", color = SuccessGreen, fontSize = 13.sp)
+                                Text("Code applied — place your first order to unlock ₹${friendReward.toInt()} bonus.", color = SuccessGreen, fontSize = 13.sp)
                             } else {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     OutlinedTextField(
@@ -241,7 +245,7 @@ fun ReferEarnScreen(
                         Text("How it works", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text("1. Share your code with a friend who hasn't ordered on Sndmart yet.", color = TextSecondary, fontSize = 13.sp)
                         Text("2. They enter it on this page before placing their first order.", color = TextSecondary, fontSize = 13.sp)
-                        Text("3. When their first order (₹99+) is delivered, you both get wallet cash.", color = TextSecondary, fontSize = 13.sp)
+                        Text("3. When their first order (₹${minOrderAmount.toInt()}+) is delivered, you both get wallet cash.", color = TextSecondary, fontSize = 13.sp)
                     }
                 }
             }

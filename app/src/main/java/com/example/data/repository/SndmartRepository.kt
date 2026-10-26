@@ -3464,7 +3464,11 @@ class SndmartRepository(
         val referralCode: String?,
         val totalReferred: Int,
         val totalRewarded: Int,
-        val totalEarned: Double
+        val totalEarned: Double,
+        // This city's current reward amounts (City-Admin-editable).
+        val referrerReward: Double = 50.0,
+        val friendReward: Double = 30.0,
+        val minOrderAmount: Double = 99.0
     )
 
     /** The caller's referral code + how many friends they've earned from. Creates a code if missing. */
@@ -3485,7 +3489,10 @@ class SndmartRepository(
                     referralCode = code,
                     totalReferred = (row["total_referred"] as? Number)?.toInt() ?: 0,
                     totalRewarded = (row["total_rewarded"] as? Number)?.toInt() ?: 0,
-                    totalEarned = (row["total_earned"] as? Number)?.toDouble() ?: 0.0
+                    totalEarned = (row["total_earned"] as? Number)?.toDouble() ?: 0.0,
+                    referrerReward = (row["referrer_reward"] as? Number)?.toDouble() ?: 50.0,
+                    friendReward = (row["friend_reward"] as? Number)?.toDouble() ?: 30.0,
+                    minOrderAmount = (row["min_order_amount"] as? Number)?.toDouble() ?: 99.0
                 )
             )
         } catch (e: Exception) {

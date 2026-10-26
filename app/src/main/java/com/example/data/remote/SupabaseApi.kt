@@ -408,7 +408,8 @@ interface SupabaseApi {
 
     // --- REFER & EARN ---
 
-    @POST("rest/v1/rpc/get_my_referral_stats")
+    // v2 also returns this city's current reward amounts (City-Admin-editable).
+    @POST("rest/v1/rpc/get_my_referral_stats_v2")
     suspend fun getMyReferralStats(
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<List<Map<String, @JvmSuppressWildcards Any?>>>
