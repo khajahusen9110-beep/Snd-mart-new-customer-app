@@ -3531,6 +3531,21 @@ class SndmartRepository(
         }
     }
 
+    /** Links the caller to an agent by their code (one-time, permanent). Separate from Refer & Earn. */
+    suspend fun applyAgentCode(code: String): Result<Unit> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.failure(Exception("Service not configured"))
+        return try {
+            val res = api.applyAgentCode(mapOf("p_code" to code))
+            if (!res.isSuccessful) {
+                return Result.failure(Exception(SupabaseClient.parseErrorMessage(res)))
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
     @Volatile private var cachedWallet: Pair<Long, MyWallet>? = null
 
     /** The customer's wallet summary (cached for a minute; force = true on the Wallet screen). */

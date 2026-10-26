@@ -424,6 +424,12 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<Unit>
 
+    // Agent program (separate from Refer & Earn) — one-time, permanent link to an agent's code.
+    @POST("rest/v1/rpc/apply_agent_code")
+    suspend fun applyAgentCode(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
     @POST("rest/v1/rpc/get_my_wallet_history")
     suspend fun getMyWalletHistory(
         @Body body: RequestBody

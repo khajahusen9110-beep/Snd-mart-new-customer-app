@@ -78,6 +78,7 @@ sealed class Screen(val route: String, val title: String) {
     }
     object Wallet : Screen("wallet", "Wallet")
     object ReferEarn : Screen("refer_earn", "Refer & Earn")
+    object AgentCode : Screen("agent_code", "Agent Code")
     object MyReviews : Screen("my_reviews", "My Reviews")
     object AddressBook : Screen("address_book", "Saved Addresses")
     object EditProfile : Screen("edit_profile", "Edit Profile")
@@ -851,6 +852,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                     onNavigateToCityPicker = { showCityPicker = true },
                                     onNavigateToWallet = { navController.navigate(Screen.Wallet.route) },
                                     onNavigateToReferEarn = { navController.navigate(Screen.ReferEarn.route) },
+                                    onNavigateToAgentCode = { navController.navigate(Screen.AgentCode.route) },
                                     onNavigateToEditProfile = { navController.navigate(Screen.EditProfile.route) },
                                     onNavigateToAddresses = { navController.navigate(Screen.AddressBook.route) },
                                     onNavigateToMyReviews = { navController.navigate(Screen.MyReviews.route) },
@@ -891,6 +893,13 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
                             composable(Screen.ReferEarn.route) {
                                 ReferEarnScreen(
+                                    repository = repository,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable(Screen.AgentCode.route) {
+                                AgentCodeScreen(
                                     repository = repository,
                                     onBack = { navController.popBackStack() }
                                 )

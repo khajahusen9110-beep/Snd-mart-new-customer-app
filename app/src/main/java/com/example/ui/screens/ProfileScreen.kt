@@ -36,6 +36,7 @@ fun ProfileScreen(
     onNavigateToCityPicker: () -> Unit,
     onNavigateToWallet: () -> Unit,
     onNavigateToReferEarn: () -> Unit,
+    onNavigateToAgentCode: () -> Unit,
     onNavigateToEditProfile: () -> Unit,
     onNavigateToAddresses: () -> Unit,
     onNavigateToMyReviews: () -> Unit,
@@ -231,6 +232,17 @@ fun ProfileScreen(
                                 else onRequireLogin()
                             },
                             testTag = "menu_item_refer"
+                        )
+                        HorizontalDivider()
+                        ProfileMenuItem(
+                            icon = Icons.Outlined.Work,
+                            title = "Agent Code",
+                            subtitle = "Referred by a Sndmart Agent? Enter their code",
+                            onClick = {
+                                if (isLoggedIn) onNavigateToAgentCode()
+                                else onRequireLogin()
+                            },
+                            testTag = "menu_item_agent_code"
                         )
                         HorizontalDivider()
                         ProfileMenuItem(
