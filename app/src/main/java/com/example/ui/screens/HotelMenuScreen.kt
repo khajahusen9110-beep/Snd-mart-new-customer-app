@@ -500,7 +500,7 @@ fun HotelMenuScreen(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(140.dp)
+                                            .aspectRatio(16f / 9f)
                                             .clip(RoundedCornerShape(16.dp))
                                     ) {
                                         ProductImage(

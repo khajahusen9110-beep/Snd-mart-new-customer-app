@@ -2175,7 +2175,7 @@ fun HotelCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(135.dp)
+                    .aspectRatio(16f / 9f)
             ) {
                 ProductImage(
                     url = vendor.bannerUrl,
