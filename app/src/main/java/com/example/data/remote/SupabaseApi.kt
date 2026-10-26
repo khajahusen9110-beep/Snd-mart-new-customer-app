@@ -406,6 +406,23 @@ interface SupabaseApi {
         @Body body: RequestBody
     ): Response<ResponseBody>
 
+    // --- REFER & EARN ---
+
+    @POST("rest/v1/rpc/get_my_referral_stats")
+    suspend fun getMyReferralStats(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<List<Map<String, @JvmSuppressWildcards Any?>>>
+
+    @POST("rest/v1/rpc/get_my_referral_code")
+    suspend fun getMyReferralCode(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/apply_referral_code")
+    suspend fun applyReferralCode(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
     @POST("rest/v1/rpc/get_my_wallet_history")
     suspend fun getMyWalletHistory(
         @Body body: RequestBody

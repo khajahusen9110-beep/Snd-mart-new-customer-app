@@ -40,6 +40,7 @@ private data class LedgerStyle(val label: String, val sign: String, val color: C
 
 private fun ledgerStyle(e: WalletLedgerEntry): LedgerStyle = when (e.entryType) {
     "cashback_credit" -> LedgerStyle("Cashback received", "+", SuccessGreen, Icons.Outlined.CardGiftcard)
+    "referral_credit" -> LedgerStyle("Refer & Earn bonus", "+", SuccessGreen, Icons.Outlined.CardGiftcard)
     "wallet_used" -> LedgerStyle(
         if (!e.orderNumber.isNullOrBlank()) "Used on order #${e.orderNumber}" else "Used on order",
         "−", NaturalBadgeRed, Icons.Outlined.ShoppingBag

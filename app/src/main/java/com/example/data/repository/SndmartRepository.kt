@@ -3458,6 +3458,72 @@ class SndmartRepository(
         }
     }
 
+    // --- REFER & EARN ---
+
+    data class ReferralStats(
+        val referralCode: String?,
+        val totalReferred: Int,
+        val totalRewarded: Int,
+        val totalEarned: Double
+    )
+
+    /** The caller's referral code + how many friends they've earned from. Creates a code if missing. */
+    suspend fun getMyReferralStats(): Result<ReferralStats> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.failure(Exception("Service not configured"))
+        return try {
+            val res = api.getMyReferralStats(emptyMap())
+            if (!res.isSuccessful || res.body().isNullOrEmpty()) {
+                return Result.failure(Exception(SupabaseClient.parseErrorMessage(res)))
+            }
+            val row = res.body()!!.first()
+            var code = row["referral_code"] as? String
+            if (code.isNullOrBlank()) {
+                code = getMyReferralCode().getOrNull()
+            }
+            Result.success(
+                ReferralStats(
+                    referralCode = code,
+                    totalReferred = (row["total_referred"] as? Number)?.toInt() ?: 0,
+                    totalRewarded = (row["total_rewarded"] as? Number)?.toInt() ?: 0,
+                    totalEarned = (row["total_earned"] as? Number)?.toDouble() ?: 0.0
+                )
+            )
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
+    /** Ensures the caller has a referral code, generating one on first call. */
+    suspend fun getMyReferralCode(): Result<String> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.failure(Exception("Service not configured"))
+        return try {
+            val res = api.getMyReferralCode(emptyMap())
+            if (!res.isSuccessful || res.body() == null) {
+                return Result.failure(Exception(SupabaseClient.parseErrorMessage(res)))
+            }
+            Result.success(res.body()!!.string().trim('"'))
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
+    /** Applies a friend's referral code to the caller's own account (one-time, before first order). */
+    suspend fun applyReferralCode(code: String): Result<Unit> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.failure(Exception("Service not configured"))
+        return try {
+            val res = api.applyReferralCode(mapOf("p_code" to code))
+            if (!res.isSuccessful) {
+                return Result.failure(Exception(SupabaseClient.parseErrorMessage(res)))
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
     @Volatile private var cachedWallet: Pair<Long, MyWallet>? = null
 
     /** The customer's wallet summary (cached for a minute; force = true on the Wallet screen). */

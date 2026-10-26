@@ -35,6 +35,7 @@ fun ProfileScreen(
     sessionManager: UserSessionManager,
     onNavigateToCityPicker: () -> Unit,
     onNavigateToWallet: () -> Unit,
+    onNavigateToReferEarn: () -> Unit,
     onNavigateToEditProfile: () -> Unit,
     onNavigateToAddresses: () -> Unit,
     onNavigateToMyReviews: () -> Unit,
@@ -219,6 +220,17 @@ fun ProfileScreen(
                                 else onRequireLogin()
                             },
                             testTag = "menu_item_wallet"
+                        )
+                        HorizontalDivider()
+                        ProfileMenuItem(
+                            icon = Icons.Outlined.CardGiftcard,
+                            title = "Refer & Earn",
+                            subtitle = "Share your code, earn wallet cash",
+                            onClick = {
+                                if (isLoggedIn) onNavigateToReferEarn()
+                                else onRequireLogin()
+                            },
+                            testTag = "menu_item_refer"
                         )
                         HorizontalDivider()
                         ProfileMenuItem(
