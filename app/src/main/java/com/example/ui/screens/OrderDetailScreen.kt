@@ -139,6 +139,15 @@ fun OrderDetailScreen(
     var upiPaymentMessage by remember { mutableStateOf("Starting payment...") }
     var activeRpData by remember { mutableStateOf<RazorpayOrderResponse?>(null) }
     var currentTimeMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    var scratchCardAmount by remember { mutableStateOf<Double?>(null) }
+
+    // One-time per order: show the scratch-card reward if one was generated at checkout and
+    // hasn't been scratched yet.
+    LaunchedEffect(orderId) {
+        repository.getMyScratchCard(orderId).onSuccess { card ->
+            if (card != null && !card.isScratched) scratchCardAmount = card.amount
+        }
+    }
 
     // Polling function for active orders
     fun loadOrderData(isSilent: Boolean = false) {
@@ -1158,6 +1167,14 @@ fun OrderDetailScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    scratchCardAmount?.let { amount ->
+        com.example.ui.components.ScratchCardDialog(
+            amount = amount,
+            onRevealed = { coroutineScope.launch { repository.scratchMyCard(orderId) } },
+            onDismiss = { scratchCardAmount = null }
         )
     }
 }

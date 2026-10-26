@@ -3531,6 +3531,44 @@ class SndmartRepository(
         }
     }
 
+    // --- SCRATCH CARD (post-order reward) ---
+
+    data class ScratchCard(val amount: Double, val isScratched: Boolean, val status: String)
+
+    /** The scratch card for an order, or null if none was generated (e.g. order below the minimum). */
+    suspend fun getMyScratchCard(orderId: String): Result<ScratchCard?> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.failure(Exception("Service not configured"))
+        return try {
+            val res = api.getMyScratchCard(mapOf("p_order_id" to orderId))
+            if (!res.isSuccessful || res.body() == null) {
+                return Result.failure(Exception(SupabaseClient.parseErrorMessage(res)))
+            }
+            val raw = res.body()!!.string().trim()
+            if (raw.isEmpty() || raw == "null") return Result.success(null)
+            val obj = JSONObject(raw)
+            Result.success(ScratchCard(obj.doubleOr("amount"), obj.optBoolean("is_scratched", false), obj.optString("status", "pending")))
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
+    /** Marks the card scratched (idempotent — calling again just returns the already-revealed amount). */
+    suspend fun scratchMyCard(orderId: String): Result<ScratchCard> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.failure(Exception("Service not configured"))
+        return try {
+            val res = api.scratchMyCard(mapOf("p_order_id" to orderId))
+            if (!res.isSuccessful || res.body() == null) {
+                return Result.failure(Exception(SupabaseClient.parseErrorMessage(res)))
+            }
+            val obj = JSONObject(res.body()!!.string())
+            Result.success(ScratchCard(obj.doubleOr("amount"), obj.optBoolean("is_scratched", false), obj.optString("status", "pending")))
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
     /** Links the caller to an agent by their code (one-time, permanent). Separate from Refer & Earn. */
     suspend fun applyAgentCode(code: String): Result<Unit> {
         if (!SupabaseClient.isKeyConfigured()) return Result.failure(Exception("Service not configured"))

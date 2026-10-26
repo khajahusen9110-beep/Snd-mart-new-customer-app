@@ -430,6 +430,18 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<Unit>
 
+    // Post-order scratch card reward. Response body is raw JSON (possibly the literal "null"
+    // when no card was generated) — parsed manually rather than via a typed Map adapter.
+    @POST("rest/v1/rpc/get_my_scratch_card")
+    suspend fun getMyScratchCard(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/scratch_my_card")
+    suspend fun scratchMyCard(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<ResponseBody>
+
     @POST("rest/v1/rpc/get_my_wallet_history")
     suspend fun getMyWalletHistory(
         @Body body: RequestBody
