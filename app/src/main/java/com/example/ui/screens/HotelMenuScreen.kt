@@ -800,7 +800,8 @@ fun MenuItemCard(
                         text = "Available ${product.baseProduct.availableFrom} - ${product.baseProduct.availableUntil}",
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isAvailable) NaturalPrimary else NaturalBadgeRed,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))

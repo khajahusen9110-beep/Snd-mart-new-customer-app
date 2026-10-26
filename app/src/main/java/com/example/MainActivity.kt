@@ -23,8 +23,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -107,6 +109,17 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         val repository = SndmartRepository(sessionManager = sessionManager)
 
         setContent {
+            // Some OEM skins (Samsung, Xiaomi, budget phones) allow system font scale up to
+            // 1.5-2x vs stock Android's ~1.3x cap, and compound it with a separate "display
+            // size" density setting — together these break fixed-width layouts. Clamp the
+            // effective font scale app-wide so every screen stays within a safe range
+            // regardless of what the device allows.
+            val baseDensity = LocalDensity.current
+            val clampedDensity = Density(
+                density = baseDensity.density,
+                fontScale = baseDensity.fontScale.coerceIn(0.85f, 1.3f)
+            )
+            CompositionLocalProvider(LocalDensity provides clampedDensity) {
             SndmartTheme {
                 val navController = rememberNavController()
                 val currentBackStack by navController.currentBackStackEntryAsState()
@@ -1096,6 +1109,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         }
     }
         }
+            }
     }
     }
 

@@ -869,6 +869,7 @@ fun HomeScreen(
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 13.sp,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     color = if (!groceryAvailable) TextSecondary.copy(alpha = 0.5f) else if (isGrocery) Color.White else TextSecondary
                                 )
                                 if (!groceryAvailable) {
@@ -899,6 +900,7 @@ fun HomeScreen(
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 13.sp,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     color = if (!hotelsAvailable) TextSecondary.copy(alpha = 0.5f) else if (isHotel) Color.White else TextSecondary
                                 )
                                 if (!hotelsAvailable) {
@@ -1480,7 +1482,7 @@ fun MostOrderedFoodRow(
                                         .background(OfferRed)
                                         .padding(horizontal = 7.dp, vertical = 3.dp)
                                 ) {
-                                    Text("🔥 ${product.soldCount} sold", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                                    Text("🔥 ${product.soldCount} sold", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                         }
@@ -1505,7 +1507,8 @@ fun MostOrderedFoodRow(
                                     fontWeight = FontWeight.Bold,
                                     color = OfferRed,
                                     maxLines = 1,
-                                    softWrap = false
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Text(
@@ -1514,7 +1517,8 @@ fun MostOrderedFoodRow(
                                     textDecoration = TextDecoration.LineThrough,
                                     color = TextMuted,
                                     maxLines = 1,
-                                    softWrap = false
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         } else {
@@ -1597,7 +1601,9 @@ fun SearchDishCard(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = OfferRed,
-                            softWrap = false
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
@@ -1605,7 +1611,9 @@ fun SearchDishCard(
                             style = MaterialTheme.typography.bodySmall,
                             textDecoration = TextDecoration.LineThrough,
                             color = TextMuted,
-                            softWrap = false
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 } else {
@@ -1706,7 +1714,8 @@ fun GroceryProductCard(
                             color = Color.White,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -1762,7 +1771,8 @@ fun GroceryProductCard(
                             fontWeight = FontWeight.Bold,
                             color = OfferRed,
                             maxLines = 1,
-                            softWrap = false
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
@@ -1771,7 +1781,8 @@ fun GroceryProductCard(
                             textDecoration = TextDecoration.LineThrough,
                             color = TextMuted,
                             maxLines = 1,
-                            softWrap = false
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     } else {
                         Text(
@@ -1780,7 +1791,8 @@ fun GroceryProductCard(
                             fontWeight = FontWeight.Bold,
                             color = PriceGreen,
                             maxLines = 1,
-                            softWrap = false
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -1955,7 +1967,8 @@ fun GroceryVariantPickerSheet(
                                             fontWeight = FontWeight.Bold,
                                             color = OfferRed,
                                             maxLines = 1,
-                                            softWrap = false
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
@@ -1964,7 +1977,8 @@ fun GroceryVariantPickerSheet(
                                             textDecoration = TextDecoration.LineThrough,
                                             color = TextMuted,
                                             maxLines = 1,
-                                            softWrap = false
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 } else {

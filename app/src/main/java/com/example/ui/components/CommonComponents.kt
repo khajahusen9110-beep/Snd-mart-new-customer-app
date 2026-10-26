@@ -141,7 +141,8 @@ fun SndmartTopBar(
                             color = DarkGreenText,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 12.sp,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
