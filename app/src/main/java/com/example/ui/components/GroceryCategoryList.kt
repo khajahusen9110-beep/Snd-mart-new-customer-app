@@ -3,8 +3,6 @@ package com.example.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,13 +23,14 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Scale
 import com.example.data.model.Category
-import androidx.compose.runtime.remember
 import com.example.ui.theme.*
 
+private const val COLUMNS = 4
+
 /**
- * Horizontal scroll of grocery category image cards (image_url + name).
- * Only "Vegitables" and "Fruits" categories are displayed (no "All" tab).
- * Tapping a card selects that category.
+ * All grocery categories, shown as a 4-per-row grid (wraps to as many rows as needed — no
+ * vertical limit). Tapping a card selects that category. A non-lazy grid (chunked rows) since
+ * this sits as a single item inside the outer product LazyVerticalGrid.
  */
 @Composable
 fun GroceryCategoryList(
@@ -40,19 +39,6 @@ fun GroceryCategoryList(
     onCategorySelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Only "Vegitables" and "Fruits" categories remain, with Vegetables first
-    val displayCategories = remember(categories) {
-        val filtered = categories.filter { c ->
-            val n = c.name.lowercase()
-            n.contains("veg") || n.contains("fruit")
-        }
-        if (filtered.isNotEmpty()) {
-            filtered.sortedBy { if (it.name.lowercase().contains("veg")) 0 else 1 }
-        } else {
-            categories
-        }
-    }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -65,24 +51,35 @@ fun GroceryCategoryList(
             color = TextPrimary,
             modifier = Modifier.padding(horizontal = 4.dp)
         )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp),
+        Spacer(modifier = Modifier.height(10.dp))
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("grocery_category_list")
+                .padding(horizontal = 4.dp)
+                .testTag("grocery_category_list"),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            items(displayCategories, key = { it.id }) { category ->
-                GroceryCategoryCard(
-                    name = category.name,
-                    imageUrl = category.imageUrl,
-                    isSelected = selectedCategoryId == category.id,
-                    fallbackIcon = Icons.Outlined.Storefront,
-                    onClick = {
-                        onCategorySelected(category.id)
-                    },
-                    testTag = "category_item_${category.id}"
-                )
+            categories.chunked(COLUMNS).forEach { rowCategories ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowCategories.forEach { category ->
+                        GroceryCategoryCard(
+                            name = category.name,
+                            imageUrl = category.imageUrl,
+                            isSelected = selectedCategoryId == category.id,
+                            fallbackIcon = Icons.Outlined.Storefront,
+                            onClick = { onCategorySelected(category.id) },
+                            testTag = "category_item_${category.id}",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    // Pad a partial last row so earlier rows' cards keep the same width.
+                    repeat(COLUMNS - rowCategories.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
     }
@@ -95,12 +92,12 @@ private fun GroceryCategoryCard(
     isSelected: Boolean,
     fallbackIcon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
-    testTag: String
+    testTag: String,
+    modifier: Modifier = Modifier
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .width(76.dp)
+        modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
             .testTag(testTag)
