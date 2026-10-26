@@ -3594,6 +3594,47 @@ class SndmartRepository(
         }
     }
 
+    // --- LOCAL ADS (paid banners from local businesses, set per-city by City Admin) ---
+
+    private val localAdCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<LocalAd>>>()
+
+    /** Last loaded local ads for this city/placement (shown at once while fresh ones load). */
+    fun getCachedLocalAds(cityId: String?, placement: String): List<LocalAd>? =
+        cityId?.let { localAdCache["$it:$placement"]?.second?.let(::liveLocalAds) }
+
+    private fun liveLocalAds(list: List<LocalAd>): List<LocalAd> {
+        val now = System.currentTimeMillis()
+        return list.filter { a ->
+            val starts = parseIsoTime(a.startsAt)
+            val ends = parseIsoTime(a.endsAt)
+            (starts == null || starts <= now) && (ends == null || ends > now) && a.imageUrl.startsWith("https://")
+        }
+    }
+
+    /**
+     * Paid local-business ads for a placement ('home' top banner, or the bottom of the food /
+     * grocery lists — "food_bottom" / "grocery_bottom"). Cached for 5 minutes.
+     */
+    suspend fun getLocalAds(cityId: String, placement: String, force: Boolean = false): List<LocalAd> {
+        val key = "$cityId:$placement"
+        val hit = localAdCache[key]
+        if (!force && hit != null && System.currentTimeMillis() - hit.first < 5 * 60_000L) return liveLocalAds(hit.second)
+        if (!SupabaseClient.isKeyConfigured()) return emptyList()
+        return try {
+            val res = api.getLocalAds(cityIdEq = "eq.$cityId", placementIn = "in.($placement,all)")
+            if (res.isSuccessful && res.body() != null) {
+                val list = res.body()!!
+                localAdCache[key] = System.currentTimeMillis() to list
+                liveLocalAds(list)
+            } else {
+                hit?.second?.let(::liveLocalAds) ?: emptyList()
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            hit?.second?.let(::liveLocalAds) ?: emptyList()
+        }
+    }
+
     // --- WALLET (READ-ONLY) ---
     // Rule 1: Paginate by 20 at a time.
     suspend fun getWalletTransactions(customerId: String, limit: Int = 20, offset: Int = 0): Result<List<CustomerWalletTransaction>> {

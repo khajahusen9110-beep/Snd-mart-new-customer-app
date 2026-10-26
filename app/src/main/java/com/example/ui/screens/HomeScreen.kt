@@ -102,6 +102,23 @@ fun HomeScreen(
         val cid = selectedCity?.id ?: return@LaunchedEffect
         promoBanners = repository.getPromoBanners(cid, bannerPlacement, force = bannerRefreshTick > 0)
     }
+    // Local-business paid ads: 'home' banner + bottom-of-list strip for each tab.
+    var homeAds by remember(selectedCity?.id) {
+        mutableStateOf(repository.getCachedLocalAds(selectedCity?.id, "home") ?: emptyList())
+    }
+    LaunchedEffect(selectedCity?.id) {
+        val cid = selectedCity?.id ?: return@LaunchedEffect
+        homeAds = repository.getLocalAds(cid, "home")
+    }
+    val bottomAdPlacement = if (browsingMode == BrowsingMode.HOTELS) "food_bottom" else "grocery_bottom"
+    var bottomAds by remember(selectedCity?.id, bottomAdPlacement) {
+        mutableStateOf(repository.getCachedLocalAds(selectedCity?.id, bottomAdPlacement) ?: emptyList())
+    }
+    LaunchedEffect(selectedCity?.id, bottomAdPlacement) {
+        val cid = selectedCity?.id ?: return@LaunchedEffect
+        bottomAds = repository.getLocalAds(cid, bottomAdPlacement)
+    }
+
     var searchQuery by remember { mutableStateOf("") }
 
     // Intercept back navigation when on the Hotels tab to return to the Home screen (Grocery view)
@@ -702,6 +719,13 @@ fun HomeScreen(
         }
     }
 
+    // Local ad tap: opens the link (website/map), a WhatsApp chat, or the dialer. No-op for a Fixed ad.
+    fun openLocalAd(a: LocalAd) {
+        if (!a.isClickable) return
+        val target = a.linkValue ?: return
+        runCatching { uriHandler.openUri(target) }
+    }
+
     Scaffold(
         topBar = {
             SndmartTopBar(
@@ -912,6 +936,12 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        if (searchQuery.isBlank() && homeAds.isNotEmpty()) {
+                            item(span = { GridItemSpan(2) }) {
+                                LocalAdStrip(ads = homeAds, onOpen = { a -> openLocalAd(a) }, modifier = Modifier.padding(top = 6.dp))
+                            }
+                        }
+
                         if (searchQuery.isBlank()) {
                             item(span = { GridItemSpan(2) }) {
                                 OfferBanner(kind = PromoKind.GROCERY, modifier = Modifier.padding(top = 6.dp))
@@ -1046,6 +1076,12 @@ fun HomeScreen(
                                             }
                                         }
                                     }
+                                }
+                            }
+
+                            if (!hasMoreProducts && bottomAds.isNotEmpty()) {
+                                item(span = { GridItemSpan(2) }) {
+                                    LocalAdStrip(ads = bottomAds, onOpen = { a -> openLocalAd(a) })
                                 }
                             }
                         }
@@ -1248,6 +1284,16 @@ fun HomeScreen(
                                             }
                                         }
                                     }
+                                }
+                            }
+
+                            if (!hasMoreHotels && bottomAds.isNotEmpty()) {
+                                item(key = "local_ads_bottom") {
+                                    LocalAdStrip(
+                                        ads = bottomAds,
+                                        onOpen = { a -> openLocalAd(a) },
+                                        modifier = Modifier.padding(horizontal = 16.dp)
+                                    )
                                 }
                             }
                         }

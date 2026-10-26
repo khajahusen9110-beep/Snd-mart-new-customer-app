@@ -751,3 +751,22 @@ data class PromoBanner(
     val isClickable: Boolean
         get() = linkType != "none" && !linkValue.isNullOrBlank()
 }
+
+/** A paid banner for a local business (table local_ads), set by that city's own City Admin. */
+@JsonClass(generateAdapter = true)
+data class LocalAd(
+    val id: String = "",
+    @Json(name = "city_id") val cityId: String = "",
+    @Json(name = "advertiser_name") val advertiserName: String = "",
+    @Json(name = "image_url") val imageUrl: String = "",
+    val placement: String = "home", // home / food_bottom / grocery_bottom / all
+    @Json(name = "ad_type") val adType: String = "fixed", // fixed / clickable
+    @Json(name = "link_type") val linkType: String? = null, // website / whatsapp / call / map
+    @Json(name = "link_value") val linkValue: String? = null,
+    @Json(name = "sort_order") val sortOrder: Int = 0,
+    @Json(name = "starts_at") val startsAt: String? = null,
+    @Json(name = "ends_at") val endsAt: String? = null
+) {
+    val isClickable: Boolean
+        get() = adType == "clickable" && !linkValue.isNullOrBlank()
+}

@@ -422,6 +422,17 @@ interface SupabaseApi {
         @Query("limit") limit: Int = 5
     ): Response<List<PromoBanner>>
 
+    // --- LOCAL ADS (paid banners from local businesses, set per-city by City Admin) ---
+
+    @GET("rest/v1/local_ads")
+    suspend fun getLocalAds(
+        @Query("city_id") cityIdEq: String,
+        @Query("placement") placementIn: String,
+        @Query("select") select: String = "id,city_id,advertiser_name,image_url,placement,ad_type,link_type,link_value,sort_order,starts_at,ends_at",
+        @Query("order") order: String = "sort_order.asc",
+        @Query("limit") limit: Int = 5
+    ): Response<List<LocalAd>>
+
     // --- DELIVERY ASSIGNMENTS & PARTNER ---
 
     @GET("rest/v1/delivery_assignments")
