@@ -12,7 +12,9 @@ data class City(
     val status: String = "active", // 'active'/'inactive'/'coming_soon'
     @Json(name = "center_lat") val centerLat: Double? = null,
     @Json(name = "center_lng") val centerLng: Double? = null,
-    @Json(name = "service_radius_km") val serviceRadiusKm: Double? = null
+    @Json(name = "service_radius_km") val serviceRadiusKm: Double? = null,
+    // 'food_only' | 'grocery_only' | 'both' — set by City Admin (Launch Mode). Defaults to 'both'.
+    @Json(name = "service_mode") val serviceMode: String? = "both"
 )
 
 @JsonClass(generateAdapter = true)

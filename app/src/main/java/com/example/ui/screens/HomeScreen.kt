@@ -81,7 +81,13 @@ fun HomeScreen(
     val coroutineScope = rememberCoroutineScope()
     val unreadNotificationCount by repository.sessionManager.unreadNotificationCount.collectAsState()
 
-    var browsingMode by rememberSaveable { mutableStateOf(BrowsingMode.GROCERY) }
+    // Launch Mode (set by City Admin): a new city can go live Food-only or Grocery-only
+    // before its other catalog is ready — the home tab defaults accordingly, re-derived
+    // whenever the selected city changes.
+    val serviceMode = selectedCity?.serviceMode ?: "both"
+    var browsingMode by rememberSaveable(selectedCity?.id) {
+        mutableStateOf(if (serviceMode == "food_only") BrowsingMode.HOTELS else BrowsingMode.GROCERY)
+    }
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
     // Sndmart Wallet balance for the top-bar chip (cached for a minute in the repository).
@@ -122,7 +128,8 @@ fun HomeScreen(
     var searchQuery by remember { mutableStateOf("") }
 
     // Intercept back navigation when on the Hotels tab to return to the Home screen (Grocery view)
-    BackHandler(enabled = browsingMode == BrowsingMode.HOTELS) {
+    // — only when Grocery is actually available in this city.
+    BackHandler(enabled = browsingMode == BrowsingMode.HOTELS && serviceMode != "food_only") {
         browsingMode = BrowsingMode.GROCERY
     }
 
@@ -733,7 +740,7 @@ fun HomeScreen(
                 cartCount = totalCartCount,
                 deliveryAddressLabel = deliveryAddressLabel,
                 unreadNotificationCount = unreadNotificationCount,
-                navigationIcon = if (browsingMode == BrowsingMode.HOTELS) {
+                navigationIcon = if (browsingMode == BrowsingMode.HOTELS && serviceMode != "food_only") {
                     {
                         IconButton(
                             onClick = { browsingMode = BrowsingMode.GROCERY },
@@ -840,50 +847,62 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     val isGrocery = browsingMode == BrowsingMode.GROCERY
+                    val groceryAvailable = serviceMode != "food_only"
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = if (isGrocery) NaturalPrimary else Color.Transparent,
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(20.dp))
-                            .clickable { browsingMode = BrowsingMode.GROCERY }
+                            .clickable(enabled = groceryAvailable) { browsingMode = BrowsingMode.GROCERY }
                             .testTag("toggle_grocery")
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier.padding(vertical = 10.dp)
                         ) {
-                            Text(
-                                text = "Fresh Groceries & Fruits",
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 13.sp,
-                                maxLines = 1,
-                                color = if (isGrocery) Color.White else TextSecondary
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "Fresh Groceries & Fruits",
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    color = if (!groceryAvailable) TextSecondary.copy(alpha = 0.5f) else if (isGrocery) Color.White else TextSecondary
+                                )
+                                if (!groceryAvailable) {
+                                    Text("Coming Soon", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = NaturalPrimary)
+                                }
+                            }
                         }
                     }
 
                     val isHotel = browsingMode == BrowsingMode.HOTELS
+                    val hotelsAvailable = serviceMode != "grocery_only"
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = if (isHotel) NaturalPrimary else Color.Transparent,
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(20.dp))
-                            .clickable { browsingMode = BrowsingMode.HOTELS }
+                            .clickable(enabled = hotelsAvailable) { browsingMode = BrowsingMode.HOTELS }
                             .testTag("toggle_hotels")
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier.padding(vertical = 10.dp)
                         ) {
-                            Text(
-                                text = "Hotel Food & Dining",
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 13.sp,
-                                maxLines = 1,
-                                color = if (isHotel) Color.White else TextSecondary
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "Hotel Food & Dining",
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    color = if (!hotelsAvailable) TextSecondary.copy(alpha = 0.5f) else if (isHotel) Color.White else TextSecondary
+                                )
+                                if (!hotelsAvailable) {
+                                    Text("Coming Soon", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = NaturalPrimary)
+                                }
+                            }
                         }
                     }
                 }
