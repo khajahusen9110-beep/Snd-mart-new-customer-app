@@ -159,9 +159,13 @@ interface SupabaseApi {
 
     // --- PRODUCT CITY STOCK ---
 
+    // Explicit `select` on every product_city_stock read: this table's RLS read policy is
+    // public (needed for price/stock display to anonymous shoppers), so an admin-only column
+    // like cost_price must never be reachable via a default `select=*` from this app.
     @GET("rest/v1/product_city_stock")
     suspend fun getProductCityStock(
-        @Query("city_id") cityId: String
+        @Query("city_id") cityId: String,
+        @Query("select") select: String = "product_id,city_id,price,mrp,stock_qty,is_available,is_active"
     ): Response<List<ProductCityStock>>
 
     @GET("rest/v1/product_city_stock")
@@ -174,7 +178,8 @@ interface SupabaseApi {
     @GET("rest/v1/product_city_stock")
     suspend fun getSingleProductCityStock(
         @Query("product_id") productId: String,
-        @Query("city_id") cityId: String
+        @Query("city_id") cityId: String,
+        @Query("select") select: String = "product_id,city_id,price,mrp,stock_qty,is_available,is_active"
     ): Response<List<ProductCityStock>>
 
     // --- CART ITEMS ---
