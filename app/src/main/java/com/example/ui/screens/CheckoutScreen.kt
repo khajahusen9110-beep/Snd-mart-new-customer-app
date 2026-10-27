@@ -172,6 +172,10 @@ fun CheckoutScreen(
                     }
                     val isDismissOrCancelled = result.code == 0 ||
                         result.response?.contains("cancelled", ignoreCase = true) == true
+                    Analytics.trackEvent(
+                        "payment_failed",
+                        mapOf("method" to "upi", "reason" to if (isDismissOrCancelled) "upi_cancelled" else "upi_error")
+                    )
                     if (isDismissOrCancelled) {
                         snackbarHostState.showSnackbar("Payment pending. Complete payment within the time limit.")
                     } else {
@@ -213,6 +217,7 @@ fun CheckoutScreen(
                     activePaymentRpData = null
 
                     if (!isVerified) {
+                        Analytics.trackEvent("payment_failed", mapOf("method" to "upi", "reason" to "upi_verification_failed"))
                         snackbarHostState.showSnackbar("Payment received, confirming with your bank... you can check status from your order.")
                     }
                     onOrderPlacedSuccess(orderId)
@@ -661,6 +666,15 @@ fun CheckoutScreen(
                                 } else {
                                     isPlacingOrder = false
                                     val err = res.exceptionOrNull()?.message ?: "Failed to place order"
+                                    // Order was never created — a short, non-PII reason tag only.
+                                    val reason = if (err.contains("coupon", ignoreCase = true) || err.contains("minimum order amount", ignoreCase = true)) {
+                                        "coupon_rejected"
+                                    } else if (err.contains("wallet", ignoreCase = true)) {
+                                        "wallet_mismatch"
+                                    } else {
+                                        "order_creation_failed"
+                                    }
+                                    Analytics.trackEvent("payment_failed", mapOf("method" to selectedPaymentMethod, "reason" to reason))
                                     if (err.contains("coupon", ignoreCase = true) || err.contains("minimum order amount", ignoreCase = true)) {
                                         clearCoupon()
                                         couponErrorMessage = err
