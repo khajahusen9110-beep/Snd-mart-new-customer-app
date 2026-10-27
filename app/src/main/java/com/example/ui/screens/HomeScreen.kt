@@ -341,13 +341,16 @@ fun HomeScreen(
             val catRes = repository.getGroceryCategories(forceRefresh = forceRefresh)
             if (catRes.isSuccess) {
                 val list = catRes.getOrNull() ?: emptyList()
-                val filtered = list.filter { c ->
-                    val n = c.name.lowercase()
-                    n.contains("veg") || n.contains("fruit")
-                }.ifEmpty { list }
+                // Show every City Admin-created grocery category (not just Vegetables/Fruits),
+                // vegetables first, then fruits, then everything else (e.g. Milk, Dairy).
+                fun typeOrder(c: Category): Int = when {
+                    c.vendorType == "vegetable" || c.name.lowercase().contains("veg") -> 0
+                    c.vendorType == "fruit" || c.name.lowercase().contains("fruit") -> 1
+                    else -> 2
+                }
+                val filtered = list.sortedBy(::typeOrder)
                 categories = filtered
-                val vegCategory = filtered.firstOrNull { it.name.lowercase().contains("veg") }
-                    ?: filtered.firstOrNull()
+                val vegCategory = filtered.firstOrNull()
                 if (vegCategory != null && (selectedCategoryId == null || filtered.none { it.id == selectedCategoryId })) {
                     selectedCategoryId = vegCategory.id
                 }
