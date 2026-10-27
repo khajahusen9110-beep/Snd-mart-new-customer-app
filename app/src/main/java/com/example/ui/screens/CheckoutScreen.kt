@@ -72,7 +72,7 @@ fun CheckoutScreen(
     repository: SndmartRepository,
     sessionManager: UserSessionManager,
     onBack: () -> Unit,
-    onOrderPlacedSuccess: (orderId: String) -> Unit,
+    onOrderPlacedSuccess: (orderId: String, amount: Double?) -> Unit,
     onRequireLogin: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -153,7 +153,7 @@ fun CheckoutScreen(
     var isCheckingMaintenanceOnRetry by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        Analytics.trackEvent("checkout_started")
+        Analytics.trackEvent("checkout_started", mapOf("subtotal" to subtotal))
     }
 
     // Listen for Razorpay payment callback results
@@ -184,7 +184,7 @@ fun CheckoutScreen(
                         snackbarHostState.showSnackbar(errMsg)
                     }
                     if (orderId.isNotBlank()) {
-                        onOrderPlacedSuccess(orderId)
+                        onOrderPlacedSuccess(orderId, currentOrder.totalAmount)
                     }
                 }
                 is RazorpayPaymentResult.Success -> {
@@ -220,7 +220,7 @@ fun CheckoutScreen(
                         Analytics.trackEvent("payment_failed", mapOf("method" to "upi", "reason" to "upi_verification_failed"))
                         snackbarHostState.showSnackbar("Payment received, confirming with your bank... you can check status from your order.")
                     }
-                    onOrderPlacedSuccess(orderId)
+                    onOrderPlacedSuccess(orderId, currentOrder.totalAmount)
                 }
             }
         }
@@ -661,7 +661,7 @@ fun CheckoutScreen(
                                         startUpiPayment(order)
                                     } else {
                                         isPlacingOrder = false
-                                        onOrderPlacedSuccess(order.id ?: "")
+                                        onOrderPlacedSuccess(order.id ?: "", order.totalAmount)
                                     }
                                 } else {
                                     isPlacingOrder = false
@@ -1584,7 +1584,7 @@ fun CheckoutScreen(
         AlertDialog(
             onDismissRequest = {
                 confirmPayOrder = null
-                onOrderPlacedSuccess(pending.id ?: "")
+                onOrderPlacedSuccess(pending.id ?: "", pending.totalAmount)
             },
             title = { Text("Amount to pay") },
             text = {
@@ -1607,7 +1607,7 @@ fun CheckoutScreen(
             dismissButton = {
                 TextButton(onClick = {
                     confirmPayOrder = null
-                    onOrderPlacedSuccess(pending.id ?: "")
+                    onOrderPlacedSuccess(pending.id ?: "", pending.totalAmount)
                 }) {
                     Text("Later")
                 }

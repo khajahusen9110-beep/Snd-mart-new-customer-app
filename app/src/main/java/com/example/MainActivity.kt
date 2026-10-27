@@ -851,11 +851,11 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                     repository = repository,
                                     sessionManager = sessionManager,
                                     onBack = { navController.popBackStack() },
-                                    onOrderPlacedSuccess = { orderId ->
+                                    onOrderPlacedSuccess = { orderId, amount ->
                                         // Fires only here — the single real order-success callback
                                         // every placement path (COD, UPI, pending-sync) routes
                                         // through — never on a payment-method click or form submit.
-                                        Analytics.trackEvent("order_placed", mapOf("order_id" to orderId))
+                                        Analytics.trackEvent("order_placed", mapOf("order_id" to orderId, "amount" to amount))
                                         navController.navigate(Screen.OrderDetail.createRoute(orderId)) {
                                             popUpTo(Screen.Home.route)
                                         }
