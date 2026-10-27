@@ -2328,10 +2328,12 @@ class SndmartRepository(
         return dist.coerceAtLeast(0.0)
     }
 
-    suspend fun getCity(cityId: String): Result<City?> {
+    suspend fun getCity(cityId: String, forceRefresh: Boolean = false): Result<City?> {
         val cleanId = cityId.removePrefix("eq.")
-        val cached = getCities().getOrNull()?.find { it.id == cleanId }
-        if (cached != null && cached.centerLat != null && cached.centerLng != null) {
+        // getCities(forceRefresh) already re-fetches from the server when forceRefresh is set,
+        // so a match found there is already fresh — no need for the extra getCityById round trip.
+        val cached = getCities(forceRefresh).getOrNull()?.find { it.id == cleanId }
+        if (cached != null && (forceRefresh || (cached.centerLat != null && cached.centerLng != null))) {
             return Result.success(cached)
         }
         if (!SupabaseClient.isKeyConfigured()) return Result.success(cached)

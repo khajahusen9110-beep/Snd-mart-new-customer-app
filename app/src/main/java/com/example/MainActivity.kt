@@ -323,10 +323,20 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 // (see lifecycle observer below) or an explicit "Update my location" tap.
                 LaunchedEffect(userId) {
                     val currentUserId = userId ?: return@LaunchedEffect
-                    if (selectedCity == null) {
+                    val cityAtStart = selectedCity
+                    if (cityAtStart == null) {
                         val profileCity = repository.resolveUserCity(currentUserId).getOrNull()
                         if (profileCity != null) {
                             sessionManager.setSelectedCity(profileCity)
+                        }
+                    } else {
+                        // Only id/name/state are persisted across app restarts (see
+                        // UserSessionManager.loadSelectedCity), so serviceMode/openTime/
+                        // closeTime/emergencyClosed would otherwise silently sit at their
+                        // model defaults forever instead of reflecting City Admin changes.
+                        val freshCity = repository.getCity(cityAtStart.id, forceRefresh = true).getOrNull()
+                        if (freshCity != null) {
+                            sessionManager.setSelectedCity(freshCity)
                         }
                     }
                     val addresses = repository.getAddresses(currentUserId).getOrNull()
