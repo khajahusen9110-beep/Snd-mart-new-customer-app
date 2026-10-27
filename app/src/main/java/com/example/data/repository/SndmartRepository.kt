@@ -1960,6 +1960,7 @@ class SndmartRepository(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to sync cart from backend", e)
+            Analytics.trackEvent("app_error", mapOf("context" to "cart_sync", "message" to "cart_sync_failed"))
         }
     }
 

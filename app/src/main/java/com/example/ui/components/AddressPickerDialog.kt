@@ -3,6 +3,7 @@ package com.example.ui.components
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import com.example.data.analytics.Analytics
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -1140,6 +1141,7 @@ fun AddressPickerDialog(
                                                 onSaved(saved)
                                             } else {
                                                 statusMessage = res.exceptionOrNull()?.message ?: "Failed to save address"
+                                                Analytics.trackEvent("app_error", mapOf("context" to "address_save", "message" to "address_save_failed"))
                                             }
                                         }
                                     },

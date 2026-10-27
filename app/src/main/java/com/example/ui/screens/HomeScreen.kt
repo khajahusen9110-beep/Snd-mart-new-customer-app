@@ -359,6 +359,7 @@ fun HomeScreen(
             } else {
                 val error = catRes.exceptionOrNull()
                 Log.e("HomeScreen", "Categories fetch error: ${error?.message}", error)
+                Analytics.trackEvent("app_error", mapOf("context" to "categories_load", "message" to "categories_load_failed"))
                 if (categories.isEmpty()) {
                     categories = emptyList()
                     if (groceryProducts.isEmpty()) {
