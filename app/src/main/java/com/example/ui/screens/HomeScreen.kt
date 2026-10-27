@@ -440,6 +440,17 @@ fun HomeScreen(
                     lastLoadedCityId = cityId
                     lastLoadedCategoryId = effectiveCatId
                     lastLoadedQuery = query
+                    if (query.isNotBlank()) {
+                        Analytics.trackEvent(
+                            "search",
+                            mapOf(
+                                "query" to query,
+                                "result_count" to newProducts.size,
+                                "zero_result" to newProducts.isEmpty(),
+                                "category" to "grocery"
+                            )
+                        )
+                    }
                 } else {
                     groceryProducts = (groceryProducts + newProducts).distinctBy { it.id }.sortedWith(
                         compareByDescending<ResolvedProduct> { it.isInStockAndActive }
@@ -1001,7 +1012,13 @@ fun HomeScreen(
                                             quantityDelta = -1, isHotel = false
                                         )
                                     },
-                                    onSelectSize = { prod -> variantPickerProduct = prod }
+                                    onSelectSize = { prod ->
+                                        variantPickerProduct = prod
+                                        Analytics.trackEvent(
+                                            "product_view",
+                                            mapOf("product_id" to prod.id, "category" to "grocery")
+                                        )
+                                    }
                                 )
                             }
                         }
@@ -1090,6 +1107,10 @@ fun HomeScreen(
                                     },
                                     onSelectSize = {
                                         variantPickerProduct = product
+                                        Analytics.trackEvent(
+                                            "product_view",
+                                            mapOf("product_id" to product.id, "category" to "grocery")
+                                        )
                                     }
                                 )
                             }

@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
+import com.example.data.analytics.Analytics
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -541,6 +542,12 @@ fun HotelMenuScreen(
                                             quantityDelta = -1,
                                             isHotel = true
                                         )
+                                    },
+                                    onView = {
+                                        Analytics.trackEvent(
+                                            "product_view",
+                                            mapOf("product_id" to product.id, "category" to "hotel")
+                                        )
                                     }
                                 )
                             }
@@ -698,7 +705,8 @@ fun MenuItemCard(
     isHotelActive: Boolean = true,
     vendorSlots: List<OperatingSlot> = emptyList(),
     onIncrease: () -> Unit,
-    onDecrease: () -> Unit
+    onDecrease: () -> Unit,
+    onView: () -> Unit = {}
 ) {
     val isAvailable = isHotelActive && product.isHotelItemAvailable(vendorSlots)
 
@@ -706,6 +714,7 @@ fun MenuItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .alpha(if (isAvailable) 1f else 0.65f)
+            .clickable(onClick = onView)
             .testTag("menu_item_${product.id}"),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(

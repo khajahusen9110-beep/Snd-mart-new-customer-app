@@ -53,6 +53,7 @@ object Analytics {
                     put("id", id)
                     this@Analytics.userId?.let { put("user_id", it) }
                     put("is_authenticated", this@Analytics.userId != null)
+                    put("platform", "android")
                     put("device_type", "mobile")
                     put("os", "Android ${Build.VERSION.RELEASE}")
                     put("browser", "AndroidApp")
