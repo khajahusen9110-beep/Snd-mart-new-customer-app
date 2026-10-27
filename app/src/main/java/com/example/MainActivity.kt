@@ -34,6 +34,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.example.data.analytics.Analytics
 import com.example.data.location.LocationDetector
 import com.example.data.model.*
 import com.example.data.repository.SndmartRepository
@@ -127,6 +128,19 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
                 val selectedCity by sessionManager.selectedCity.collectAsState()
                 val userId by sessionManager.userId.collectAsState()
+
+                // Analytics: one session per process lifetime, tracked regardless of login state
+                // (mirrors the website's initAnalyticsSession()); keep the user id in sync as it
+                // changes (login/logout) and track every screen change as a page view.
+                LaunchedEffect(Unit) {
+                    Analytics.init(sessionManager.userId.value)
+                }
+                LaunchedEffect(userId) {
+                    Analytics.setUserId(userId)
+                }
+                LaunchedEffect(currentDestination) {
+                    currentDestination?.let { Analytics.trackPageView(it) }
+                }
 
                 // Promotional offer state (backend-driven). Refreshed on city change + every minute so
                 // an admin change / expiry reflects within ~60s. Empty when no offer is active.
@@ -389,6 +403,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 DisposableEffect(lifecycleOwner) {
                     val observer = LifecycleEventObserver { _, event ->
                         if (event == Lifecycle.Event.ON_RESUME) {
+                            Analytics.resumeHeartbeat()
                             val currentUserId = sessionManager.userId.value
                             if (!currentUserId.isNullOrBlank()) {
                                 coroutineScope.launch {
@@ -418,6 +433,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                             if (lastDetectionTimeMs > 0 && elapsed > 30 * 60 * 1000L) {
                                 recheckLocationSilently()
                             }
+                        } else if (event == Lifecycle.Event.ON_PAUSE) {
+                            Analytics.pauseHeartbeat()
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
@@ -835,6 +852,10 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                     sessionManager = sessionManager,
                                     onBack = { navController.popBackStack() },
                                     onOrderPlacedSuccess = { orderId ->
+                                        // Fires only here — the single real order-success callback
+                                        // every placement path (COD, UPI, pending-sync) routes
+                                        // through — never on a payment-method click or form submit.
+                                        Analytics.trackEvent("order_placed", mapOf("order_id" to orderId))
                                         navController.navigate(Screen.OrderDetail.createRoute(orderId)) {
                                             popUpTo(Screen.Home.route)
                                         }

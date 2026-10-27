@@ -29,6 +29,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.ui.platform.LocalContext
+import com.example.data.analytics.Analytics
 import com.example.data.model.*
 import com.example.data.repository.SndmartRepository
 import com.example.data.session.UserSessionManager
@@ -150,6 +151,10 @@ fun CheckoutScreen(
     var placementError by remember { mutableStateOf<String?>(null) }
     var activeMaintenanceMessage by remember { mutableStateOf<String?>(null) }
     var isCheckingMaintenanceOnRetry by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        Analytics.trackEvent("checkout_started")
+    }
 
     // Listen for Razorpay payment callback results
     LaunchedEffect(Unit) {
@@ -1336,13 +1341,19 @@ fun CheckoutScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selectedPaymentMethod = methodKey }
+                                    .clickable {
+                                        selectedPaymentMethod = methodKey
+                                        Analytics.trackEvent("payment_method_selected", mapOf("method" to methodKey))
+                                    }
                                     .padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 RadioButton(
                                     selected = selectedPaymentMethod == methodKey,
-                                    onClick = { selectedPaymentMethod = methodKey },
+                                    onClick = {
+                                        selectedPaymentMethod = methodKey
+                                        Analytics.trackEvent("payment_method_selected", mapOf("method" to methodKey))
+                                    },
                                     colors = RadioButtonDefaults.colors(selectedColor = NaturalPrimary),
                                     modifier = Modifier.testTag("payment_radio_$methodKey")
                                 )

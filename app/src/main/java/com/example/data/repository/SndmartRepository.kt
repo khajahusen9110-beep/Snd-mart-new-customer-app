@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import android.util.Log
+import com.example.data.analytics.Analytics
 import com.example.data.model.*
 import com.example.data.remote.ApiException
 import com.example.data.remote.SessionExpiredException
@@ -1979,6 +1980,12 @@ class SndmartRepository(
         productForSnapshot: ResolvedProduct? = null
     ): AddToCartResult {
         val currentUserId = sessionManager.userId.value ?: "guest"
+        if (quantityDelta > 0) {
+            Analytics.trackEvent(
+                "add_to_cart",
+                mapOf("product_id" to productId, "quantity" to quantityDelta, "is_hotel" to isHotel)
+            )
+        }
         if (productForSnapshot != null) {
             val variantLabel = variantId?.let { vid -> productForSnapshot.variants.firstOrNull { it.id == vid }?.label }
             sessionManager.cacheCartProductSnapshot(

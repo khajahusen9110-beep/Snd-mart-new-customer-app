@@ -631,5 +631,26 @@ interface SupabaseApi {
         @Query("select") select: String = "*",
         @Query("limit") limit: Int = 1
     ): Response<List<OrderCancellation>>
+
+    // --- ANALYTICS (fire-and-forget; Super Admin dashboard only reads these) ---
+
+    @Headers("Prefer: resolution=merge-duplicates,return=minimal")
+    @POST("rest/v1/analytics_sessions")
+    suspend fun upsertAnalyticsSession(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<ResponseBody>
+
+    @Headers("Prefer: return=minimal")
+    @PATCH("rest/v1/analytics_sessions")
+    suspend fun touchAnalyticsSession(
+        @Query("id") idQuery: String,
+        @Body body: Map<String, String>
+    ): Response<ResponseBody>
+
+    @Headers("Prefer: return=minimal")
+    @POST("rest/v1/analytics_events")
+    suspend fun insertAnalyticsEvent(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<ResponseBody>
 }
 

@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.BuildConfig
+import com.example.data.analytics.Analytics
 import com.example.data.model.*
 import com.example.data.repository.AddToCartResult
 import com.example.data.repository.SndmartRepository
@@ -618,6 +619,14 @@ fun HomeScreen(
         isDishResultsLoading = true
         dishResults = repository.searchHotelDishes(cityId, searchQuery).getOrDefault(emptyList())
         isDishResultsLoading = false
+        Analytics.trackEvent(
+            "search",
+            mapOf(
+                "query" to searchQuery,
+                "result_count" to dishResults.size,
+                "zero_result" to dishResults.isEmpty()
+            )
+        )
     }
 
     // Handle single-hotel rule conflict dialog
@@ -1024,7 +1033,14 @@ fun HomeScreen(
                                 GroceryCategoryList(
                                     categories = categories,
                                     selectedCategoryId = selectedCategoryId,
-                                    onCategorySelected = { selectedCategoryId = it }
+                                    onCategorySelected = { catId ->
+                                        selectedCategoryId = catId
+                                        val catName = categories.firstOrNull { it.id == catId }?.name
+                                        Analytics.trackEvent(
+                                            "category_select",
+                                            mapOf("category_id" to catId, "category_name" to catName)
+                                        )
+                                    }
                                 )
                             }
                         }

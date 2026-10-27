@@ -29,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.analytics.Analytics
 import com.example.data.model.Profile
 import com.example.data.repository.SndmartRepository
 import com.example.data.session.UserSessionManager
@@ -207,6 +208,8 @@ fun AuthScreen(
                     expiresInSeconds = authResponse.expiresIn
                 )
 
+                Analytics.trackEvent("login_success")
+
                 // Single device login: register this device as active session and sign out others
                 repository.registerDeviceSession(uid)
 
@@ -300,6 +303,7 @@ fun AuthScreen(
             // supabase.from("profiles").insert({ id, role: "customer", full_name, phone })
             val insertRes = repository.createProfile(profileToInsert)
             if (insertRes.isSuccess) {
+                Analytics.trackEvent("registration_success")
                 repository.registerDeviceSession(uid)
                 sessionManager.saveSession(
                     token = verifiedToken ?: sessionManager.getAccessToken(),
