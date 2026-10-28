@@ -328,6 +328,13 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<List<BudgetFoodRow>>
 
+    // This logged-in customer's own recently-viewed products (real product_view analytics
+    // history, newest first). Requires auth — returns [] for a signed-out/anon call.
+    @POST("rest/v1/rpc/get_recently_viewed_products")
+    suspend fun getRecentlyViewedProducts(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<List<RecentlyViewedRow>>
+
     @POST("rest/v1/rpc/calculate_city_coupon_discount")
     suspend fun calculateCityCouponDiscount(
         @Body body: Map<String, @JvmSuppressWildcards Any?>

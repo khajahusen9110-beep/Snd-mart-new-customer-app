@@ -418,6 +418,15 @@ data class BudgetFoodRow(
     @Json(name = "mrp") val mrp: Double? = null
 )
 
+// Row from public.get_recently_viewed_products: this customer's own product_view history,
+// newest-viewed first. Only product_id + timestamp — current product fields are re-fetched
+// fresh (a viewed item may since be out of stock, repriced, or removed).
+@JsonClass(generateAdapter = true)
+data class RecentlyViewedRow(
+    @Json(name = "product_id") val productId: String = "",
+    @Json(name = "last_viewed_at") val lastViewedAt: String? = null
+)
+
 @JsonClass(generateAdapter = true)
 data class CouponUsage(
     val id: String? = null,

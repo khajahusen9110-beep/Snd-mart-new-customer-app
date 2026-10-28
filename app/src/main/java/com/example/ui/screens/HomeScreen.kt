@@ -188,6 +188,22 @@ fun HomeScreen(
         val cid = selectedCity?.id ?: return@LaunchedEffect
         budgetFood = repository.getBudgetFoodProducts(cid).getOrNull() ?: emptyList()
     }
+    // "Recently Viewed" rows — real product_view history for this logged-in customer only;
+    // a signed-out visitor has no server-side history, so this stays empty for them.
+    var recentGrocery by remember(selectedCity?.id) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    var recentFood by remember(selectedCity?.id) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    LaunchedEffect(selectedCity?.id) {
+        val cid = selectedCity?.id ?: return@LaunchedEffect
+        val uid = repository.sessionManager.getUserId()
+        if (uid.isNullOrBlank()) {
+            recentGrocery = emptyList()
+            recentFood = emptyList()
+            return@LaunchedEffect
+        }
+        val recent = repository.getRecentlyViewedProducts(cid, uid).getOrNull()
+        recentGrocery = recent?.grocery ?: emptyList()
+        recentFood = recent?.food ?: emptyList()
+    }
     var isLoadingMoreProducts by remember { mutableStateOf(false) }
     var hasMoreProducts by remember { mutableStateOf(true) }
     var groceryError by remember { mutableStateOf<String?>(null) }
@@ -1063,6 +1079,37 @@ fun HomeScreen(
                             }
                         }
 
+                        if (searchQuery.isBlank() && recentGrocery.isNotEmpty()) {
+                            item(span = { GridItemSpan(2) }) {
+                                MostSellingRow(
+                                    products = recentGrocery,
+                                    groceryCart = groceryCart,
+                                    cityOpen = cityIsOpen,
+                                    title = "👀 Recently Viewed",
+                                    tint = PastelSky,
+                                    onIncrease = { prod ->
+                                        repository.addToCart(
+                                            productId = prod.id, vendorId = null, cityId = selectedCity.id,
+                                            quantityDelta = 1, isHotel = false, productForSnapshot = prod
+                                        )
+                                    },
+                                    onDecrease = { prod ->
+                                        repository.addToCart(
+                                            productId = prod.id, vendorId = null, cityId = selectedCity.id,
+                                            quantityDelta = -1, isHotel = false
+                                        )
+                                    },
+                                    onSelectSize = { prod ->
+                                        variantPickerProduct = prod
+                                        Analytics.trackEvent(
+                                            "product_view",
+                                            mapOf("product_id" to prod.id, "category" to "grocery")
+                                        )
+                                    }
+                                )
+                            }
+                        }
+
                         if (searchQuery.isBlank() && topSelling.isNotEmpty()) {
                             item(span = { GridItemSpan(2) }) {
                                 MostSellingRow(
@@ -1322,6 +1369,19 @@ fun HomeScreen(
                                 }
                             }
 
+                            if (searchQuery.isBlank() && recentFood.isNotEmpty()) {
+                                item(key = "food_recently_viewed") {
+                                    MostOrderedFoodRow(
+                                        products = recentFood,
+                                        title = "👀 Recently Viewed",
+                                        tint = PastelSky,
+                                        onOpenHotel = { prod ->
+                                            onNavigateToHotelMenu(prod.vendorId ?: "", prod.soldVendorName ?: "Hotel")
+                                        }
+                                    )
+                                }
+                            }
+
                             if (searchQuery.isBlank() && topFood.isNotEmpty()) {
                                 item(key = "food_most_ordered") {
                                     MostOrderedFoodRow(
@@ -1338,6 +1398,7 @@ fun HomeScreen(
                                     MostOrderedFoodRow(
                                         products = budgetFood,
                                         title = "💸 99 Store",
+                                        tint = PastelMint,
                                         onOpenHotel = { prod ->
                                             onNavigateToHotelMenu(prod.vendorId ?: "", prod.soldVendorName ?: "Hotel")
                                         }
@@ -1532,11 +1593,18 @@ fun MostSellingRow(
     onIncrease: (ResolvedProduct) -> Unit,
     onDecrease: (ResolvedProduct) -> Unit,
     onSelectSize: (ResolvedProduct) -> Unit,
-    cityOpen: Boolean = true
+    cityOpen: Boolean = true,
+    title: String = "🔥 Most Selling",
+    tint: Color = PastelSage
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tint.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+            .padding(top = 10.dp, bottom = 8.dp, start = 4.dp, end = 4.dp)
+    ) {
         Text(
-            text = "🔥 Most Selling",
+            text = title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.ExtraBold,
             color = TextPrimary,
@@ -1565,9 +1633,15 @@ fun MostSellingRow(
 fun MostOrderedFoodRow(
     products: List<ResolvedProduct>,
     onOpenHotel: (ResolvedProduct) -> Unit,
-    title: String = "🔥 Most Ordered"
+    title: String = "🔥 Most Ordered",
+    tint: Color = PastelPeach
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tint.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+            .padding(top = 10.dp, bottom = 8.dp, start = 4.dp, end = 4.dp)
+    ) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,

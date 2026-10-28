@@ -119,6 +119,15 @@ class SndmartRepository(
             System.currentTimeMillis() - timestamp > ttlMs
     }
 
+    data class RecentlyViewed(
+        val grocery: List<ResolvedProduct>,
+        val food: List<ResolvedProduct>,
+        val timestamp: Long = System.currentTimeMillis()
+    ) {
+        fun isExpired(ttlMs: Long = CACHE_TTL_MS): Boolean =
+            System.currentTimeMillis() - timestamp > ttlMs
+    }
+
     // Rule 6: In-memory caches for slow-changing data with short-lived TTL
     private var cachedCities: List<City>? = null
     private var cachedGroceryCategories: List<Category>? = null
@@ -1207,6 +1216,7 @@ class SndmartRepository(
 
     private val topFoodCache = java.util.concurrent.ConcurrentHashMap<String, CacheEntry<ResolvedProduct>>()
     private val budgetFoodCache = java.util.concurrent.ConcurrentHashMap<String, CacheEntry<ResolvedProduct>>()
+    private val recentlyViewedCache = java.util.concurrent.ConcurrentHashMap<String, RecentlyViewed>()
 
     /**
      * Up to 10 most-ordered hotel dishes in this city (by units sold). The RPC ranks product ids +
@@ -1365,6 +1375,74 @@ class SndmartRepository(
         } catch (e: Exception) {
             Log.w(TAG, "Exception fetching budget food products: ${e.message}")
             Result.success(emptyList())
+        }
+    }
+
+    /**
+     * This logged-in customer's own recently-viewed products (real product_view analytics
+     * history, newest first), split into grocery and food so each renders with its usual card.
+     * Signed-out customers have no server-side history to show — callers must check login
+     * state themselves before calling, same as the RPC requires auth.uid().
+     */
+    suspend fun getRecentlyViewedProducts(cityId: String, userId: String, forceRefresh: Boolean = false): Result<RecentlyViewed> {
+        val cacheKey = "$cityId:$userId"
+        if (!forceRefresh) {
+            val cached = recentlyViewedCache[cacheKey]
+            if (cached != null && !cached.isExpired()) return Result.success(cached)
+        }
+        if (!SupabaseClient.isKeyConfigured()) return Result.success(RecentlyViewed(emptyList(), emptyList()))
+        return try {
+            val rankRes = api.getRecentlyViewedProducts(mapOf("p_limit" to 12))
+            val ranked = rankRes.body().orEmpty()
+            if (!rankRes.isSuccessful || ranked.isEmpty()) return Result.success(RecentlyViewed(emptyList(), emptyList()))
+            val order = ranked.map { it.productId }.filter { it.isNotBlank() }
+            val ids = order.distinct()
+            if (ids.isEmpty()) return Result.success(RecentlyViewed(emptyList(), emptyList()))
+
+            val prodRes = api.getProductsByIds(
+                idInQuery = "in.(${ids.joinToString(",")})",
+                select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,available_from,available_until,product_variants(id,label,is_active,product_variant_city_stock(price,stock_qty,is_available,city_id))"
+            )
+            val productsById = prodRes.body().orEmpty().associateBy { it.id }
+            val stockRes = api.getProductCityStockBatch(
+                cityId = "eq.$cityId",
+                productIdsQuery = "in.(${ids.joinToString(",")})",
+                select = "product_id,price,mrp,stock_qty,is_available"
+            )
+            val stockMap = if (stockRes.isSuccessful) stockRes.body().orEmpty().associateBy { it.productId } else emptyMap()
+
+            val foodVendorIds = order.mapNotNull { productsById[it]?.takeIf { p -> p.vendorId != null }?.vendorId }.distinct()
+            val vendorNameById = if (foodVendorIds.isNotEmpty()) {
+                val vRes = api.getVendorsByIds(idInQuery = "in.(${foodVendorIds.joinToString(",")})", select = "id,name")
+                if (vRes.isSuccessful) vRes.body().orEmpty().associateBy({ it.id }, { it.name }) else emptyMap()
+            } else emptyMap()
+
+            val grocery = mutableListOf<ResolvedProduct>()
+            val food = mutableListOf<ResolvedProduct>()
+            for (id in order) {
+                val prod = productsById[id] ?: continue
+                if (prod.isActive != true) continue
+                val override = stockMap[prod.id]
+                val resolved = ResolvedProduct(
+                    baseProduct = prod,
+                    effectivePrice = override?.price ?: prod.price,
+                    effectiveMrp = override?.mrp ?: prod.mrp,
+                    effectiveStock = override?.stockQty ?: (prod.stockQty ?: (prod.stockQuantity ?: 0)),
+                    effectiveIsAvailable = override?.isAvailable ?: prod.isAvailable,
+                    variants = resolveProductVariants(prod, cityId),
+                    soldVendorName = prod.vendorId?.let { vendorNameById[it] }
+                )
+                if (prod.vendorId != null) food.add(resolved) else grocery.add(resolved)
+            }
+
+            val result = RecentlyViewed(grocery = grocery, food = food)
+            recentlyViewedCache[cacheKey] = result
+            Result.success(result)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception fetching recently viewed products: ${e.message}")
+            Result.success(RecentlyViewed(emptyList(), emptyList()))
         }
     }
 
