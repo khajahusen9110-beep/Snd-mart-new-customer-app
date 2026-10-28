@@ -101,6 +101,21 @@ fun HomeScreen(
         }
     }
 
+    // Scratch-card rewards credited on delivery but not yet revealed — a customer who doesn't
+    // revisit that order's detail page would otherwise never find out. Checked once per Home
+    // load (logged-in only) and shown as a persistent banner until scratched.
+    var pendingScratchCards by remember {
+        mutableStateOf<List<SndmartRepository.PendingScratchCard>>(emptyList())
+    }
+    var revealingScratchCard by remember {
+        mutableStateOf<SndmartRepository.PendingScratchCard?>(null)
+    }
+    LaunchedEffect(Unit) {
+        if (!repository.sessionManager.getUserId().isNullOrBlank()) {
+            pendingScratchCards = repository.getMyPendingScratchCards().getOrNull() ?: emptyList()
+        }
+    }
+
     // Super-Admin promo banners for the tab being shown (last loaded ones appear at once).
     val bannerPlacement = if (browsingMode == BrowsingMode.HOTELS) "food" else "grocery"
     var promoBanners by remember(selectedCity?.id, bannerPlacement) {
@@ -738,6 +753,18 @@ fun HomeScreen(
         )
     }
 
+    // Scratch card reveal: opened by tapping the persistent Home reminder banner.
+    revealingScratchCard?.let { card ->
+        com.example.ui.components.ScratchCardDialog(
+            amount = card.amount,
+            onRevealed = { coroutineScope.launch { repository.scratchMyCard(card.orderId) } },
+            onDismiss = {
+                revealingScratchCard = null
+                pendingScratchCards = pendingScratchCards.filter { it.id != card.id }
+            }
+        )
+    }
+
     // Banner tap: opens a grocery category, a hotel menu or an https link.
     fun openPromoBanner(b: PromoBanner) {
         val target = b.linkValue ?: return
@@ -952,6 +979,41 @@ fun HomeScreen(
                     }
                 }
                 return@Scaffold
+            }
+
+            if (pendingScratchCards.isNotEmpty()) {
+                val first = pendingScratchCards.first()
+                androidx.compose.material3.Surface(
+                    onClick = { revealingScratchCard = first },
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                    color = com.example.ui.theme.NaturalPrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Outlined.CardGiftcard,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                        Text(
+                            text = if (pendingScratchCards.size > 1)
+                                "You have ${pendingScratchCards.size} scratch card rewards waiting!"
+                            else "You have a scratch card reward waiting!",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text("Tap to reveal", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
 
             // --- GROCERY VIEW ---

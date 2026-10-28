@@ -447,6 +447,13 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<ResponseBody>
 
+    // Credited-but-unscratched scratch cards from any past order, for a persistent Home
+    // reminder — no args, scoped to auth.uid() server-side.
+    @POST("rest/v1/rpc/get_my_pending_scratch_cards")
+    suspend fun getMyPendingScratchCards(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<ResponseBody>
+
     @POST("rest/v1/rpc/get_my_wallet_history")
     suspend fun getMyWalletHistory(
         @Body body: RequestBody

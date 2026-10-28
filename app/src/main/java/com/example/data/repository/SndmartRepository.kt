@@ -3563,6 +3563,30 @@ class SndmartRepository(
         }
     }
 
+    data class PendingScratchCard(val id: String, val orderId: String, val amount: Double)
+
+    /** Credited-but-unscratched scratch cards from any past order (newest first) — for a
+     * persistent Home reminder so a reward isn't missed if the customer doesn't revisit that
+     * order's detail page. */
+    suspend fun getMyPendingScratchCards(): Result<List<PendingScratchCard>> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.success(emptyList())
+        return try {
+            val res = api.getMyPendingScratchCards(emptyMap())
+            if (!res.isSuccessful || res.body() == null) {
+                return Result.failure(Exception(SupabaseClient.parseErrorMessage(res)))
+            }
+            val arr = org.json.JSONArray(res.body()!!.string().trim())
+            val list = (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                PendingScratchCard(obj.optString("id"), obj.optString("order_id"), obj.doubleOr("amount"))
+            }
+            Result.success(list)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Result.failure(e)
+        }
+    }
+
     /** Marks the card scratched (idempotent — calling again just returns the already-revealed amount). */
     suspend fun scratchMyCard(orderId: String): Result<ScratchCard> {
         if (!SupabaseClient.isKeyConfigured()) return Result.failure(Exception("Service not configured"))
