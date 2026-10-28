@@ -1095,6 +1095,31 @@ class SndmartRepository(
         }
     }
 
+    // Top dishes (photo + price) for the Home hotel card's auto-sliding carousel. Mirrors the
+    // existing per-card getVendorOperatingSlots/getVendorAverageRating pattern on this screen
+    // (one call per visible card, not a new batched mechanism) so this stays consistent with how
+    // HotelCard already fetches its extras.
+    suspend fun getHotelTopItems(vendorId: String): Result<List<Product>> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.success(emptyList())
+        return try {
+            val response = api.getProducts(
+                isActive = "eq.true",
+                vendorId = "eq.$vendorId",
+                select = "id,vendor_id,name,image_url,price,is_featured,is_available,created_at",
+                order = "is_featured.desc,created_at.desc",
+                limit = 7
+            )
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!.filter { it.isAvailable && !it.imageUrl.isNullOrBlank() })
+            } else {
+                Result.success(emptyList())
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception fetching hotel top items: ${e.message}", e)
+            Result.success(emptyList())
+        }
+    }
+
     fun resolveProductVariants(prod: Product, cityId: String): List<ResolvedVariant> {
         val variants = prod.productVariants?.filter { it.isActive } ?: return emptyList()
         val list = mutableListOf<ResolvedVariant>()

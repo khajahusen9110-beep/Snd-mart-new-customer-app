@@ -2274,6 +2274,21 @@ fun HotelCard(
         avgRating = repository.getVendorAverageRating(vendor.id).getOrNull() ?: 0.0
     }
 
+    // Top dishes (photo + price) for the auto-sliding banner carousel, Swiggy-style; falls back
+    // to the static vendor.bannerUrl below 2 real item photos.
+    var topItems by remember(vendor.id) { mutableStateOf<List<Product>>(emptyList()) }
+    LaunchedEffect(vendor.id) {
+        topItems = repository.getHotelTopItems(vendor.id).getOrNull() ?: emptyList()
+    }
+    var topItemIndex by remember(vendor.id) { mutableStateOf(0) }
+    LaunchedEffect(topItems) {
+        if (topItems.size < 2) return@LaunchedEffect
+        while (true) {
+            delay(2800)
+            topItemIndex = (topItemIndex + 1) % topItems.size
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -2294,12 +2309,52 @@ fun HotelCard(
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
             ) {
-                ProductImage(
-                    url = vendor.bannerUrl,
-                    contentDescription = vendor.name,
-                    modifier = Modifier.fillMaxSize(),
-                    colorFilter = if (isOpen) null else grayscaleFilter
-                )
+                if (topItems.size >= 2) {
+                    val current = topItems[topItemIndex.coerceIn(0, topItems.size - 1)]
+                    ProductImage(
+                        url = current.imageUrl,
+                        contentDescription = "${current.name} at ${vendor.name}",
+                        modifier = Modifier.fillMaxSize(),
+                        colorFilter = if (isOpen) null else grayscaleFilter
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Black.copy(alpha = 0.78f),
+                        contentColor = Color.White,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "Items at ₹${current.price.toInt()}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        topItems.forEachIndexed { i, _ ->
+                            Box(
+                                modifier = Modifier
+                                    .size(width = if (i == topItemIndex) 14.dp else 5.dp, height = 5.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(if (i == topItemIndex) Color.White else Color.White.copy(alpha = 0.55f))
+                            )
+                        }
+                    }
+                } else {
+                    ProductImage(
+                        url = vendor.bannerUrl,
+                        contentDescription = vendor.name,
+                        modifier = Modifier.fillMaxSize(),
+                        colorFilter = if (isOpen) null else grayscaleFilter
+                    )
+                }
                 // Status chips
                 Row(
                     modifier = Modifier
