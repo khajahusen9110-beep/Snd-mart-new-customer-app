@@ -448,6 +448,7 @@ fun ProductImage(
     colorFilter: ColorFilter? = null
 ) {
     if (!url.isNullOrBlank()) {
+        val fallbackPainter = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Outlined.Fastfood)
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(url)
@@ -457,7 +458,9 @@ fun ProductImage(
             contentDescription = contentDescription,
             modifier = modifier,
             contentScale = ContentScale.Crop,
-            colorFilter = colorFilter
+            colorFilter = colorFilter,
+            placeholder = fallbackPainter,
+            error = fallbackPainter
         )
     } else {
         Box(
