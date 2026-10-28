@@ -1349,24 +1349,66 @@ class SndmartRepository(
             val res = api.getBudgetFoodProducts(mapOf("p_city_id" to cityId, "p_max_price" to 99, "p_limit" to 20))
             val rows = res.body().orEmpty()
             if (!res.isSuccessful || rows.isEmpty()) return Result.success(emptyList())
-            // The RPC already returns full product fields (unlike get_top_food_products), so no
-            // second products round trip is needed — one request resolves the whole row.
-            val resolved = rows.filter { it.price in 0.01..99.0 }.map { r ->
-                ResolvedProduct(
-                    baseProduct = Product(
-                        id = r.productId,
-                        vendorId = r.vendorId,
-                        name = r.name ?: "",
-                        imageUrl = r.imageUrl,
-                        price = r.price,
-                        mrp = r.mrp
-                    ),
-                    effectivePrice = r.price,
-                    effectiveMrp = r.mrp,
-                    effectiveStock = 1,
-                    effectiveIsAvailable = true,
-                    soldVendorName = r.vendorName
+            val vendorNameById = rows.associateBy({ it.productId }, { it.vendorName })
+            val ids = rows.map { it.productId }.filter { it.isNotBlank() }.distinct()
+            if (ids.isEmpty()) return Result.success(emptyList())
+
+            // The RPC row alone doesn't carry enough to know whether a dish is actually
+            // orderable right now (stock, availability window, or whether the hotel itself is
+            // open) — re-fetch real current product + stock + vendor rows, same as the
+            // recently-viewed row does, so 99 Store never offers something you can't buy.
+            val prodRes = api.getProductsByIds(
+                idInQuery = "in.(${ids.joinToString(",")})",
+                select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,available_from,available_until,product_variants(id,label,is_active,product_variant_city_stock(price,stock_qty,is_available,city_id))"
+            )
+            val productsById = prodRes.body().orEmpty().associateBy { it.id }
+            val stockRes = api.getProductCityStockBatch(
+                cityId = "eq.$cityId",
+                productIdsQuery = "in.(${ids.joinToString(",")})",
+                select = "product_id,price,mrp,stock_qty,is_available"
+            )
+            val stockMap = if (stockRes.isSuccessful) stockRes.body().orEmpty().associateBy { it.productId } else emptyMap()
+
+            val vendorIds = ids.mapNotNull { productsById[it]?.vendorId }.distinct()
+            if (vendorIds.isEmpty()) return Result.success(emptyList())
+            val vRes = api.getVendorsByIds(
+                idInQuery = "in.(${vendorIds.joinToString(",")})",
+                select = "id,name,banner_url,is_active,is_featured,is_open,address,latitude,longitude,opening_time,closing_time,default_category_id"
+            )
+            val vendorsById = if (vRes.isSuccessful) vRes.body().orEmpty().associateBy { it.id } else emptyMap()
+            val slotsRes = api.getVendorOperatingHours(
+                vendorId = "in.(${vendorIds.joinToString(",")})",
+                isActive = "eq.true"
+            )
+            val slotsByVendor = if (slotsRes.isSuccessful) slotsRes.body().orEmpty().groupBy { it.vendorId } else emptyMap()
+
+            val resolved = ids.mapNotNull { id ->
+                val prod = productsById[id] ?: return@mapNotNull null
+                if (prod.isActive != true) return@mapNotNull null
+                val vendor = prod.vendorId?.let { vendorsById[it] } ?: return@mapNotNull null
+                if (!vendor.isOpenNow) return@mapNotNull null
+                val ownSlots = slotsByVendor[vendor.id].orEmpty()
+                val effectiveSlots = if (ownSlots.isNotEmpty()) {
+                    ownSlots
+                } else if (!vendor.openingTime.isNullOrBlank() && !vendor.closingTime.isNullOrBlank()) {
+                    listOf(OperatingSlot(vendorId = vendor.id, startTime = vendor.openingTime!!, endTime = vendor.closingTime!!))
+                } else {
+                    emptyList()
+                }
+                val override = stockMap[prod.id]
+                val r = ResolvedProduct(
+                    baseProduct = prod,
+                    effectivePrice = override?.price ?: prod.price,
+                    effectiveMrp = override?.mrp ?: prod.mrp,
+                    effectiveStock = override?.stockQty ?: (prod.stockQty ?: (prod.stockQuantity ?: 0)),
+                    effectiveIsAvailable = override?.isAvailable ?: prod.isAvailable,
+                    variants = resolveProductVariants(prod, cityId),
+                    soldVendorName = vendorNameById[id] ?: vendor.name
                 )
+                if (r.effectivePrice !in 0.01..99.0) return@mapNotNull null
+                if (r.effectiveStock <= 0) return@mapNotNull null
+                if (!r.isHotelItemAvailable(effectiveSlots)) return@mapNotNull null
+                r
             }
             budgetFoodCache[cityId] = CacheEntry(data = resolved)
             Result.success(resolved)
