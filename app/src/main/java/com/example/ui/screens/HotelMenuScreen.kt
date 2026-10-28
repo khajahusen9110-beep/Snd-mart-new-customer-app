@@ -107,6 +107,7 @@ fun HotelMenuScreen(
         mutableStateOf(categories.firstOrNull()?.id)
     }
     var hasUserSelectedCategory by remember(vendorId) { mutableStateOf(false) }
+    var dishQuery by remember(vendorId) { mutableStateOf("") }
     var timeTick by remember { mutableStateOf(0L) }
     var isLoadingCategories by remember { mutableStateOf(categories.isEmpty()) }
     var isLoadingProducts by remember { mutableStateOf(false) }
@@ -389,7 +390,7 @@ fun HotelMenuScreen(
                 // Filter items reacting to the selected category (Swiggy-style)
                 // The item grid should always be filtered to whichever category is currently selected - never show all of this hotel's items unfiltered.
                 // Preserving existing sort logic: available+featured first, unavailable last
-                val displayedProducts = remember(allProducts, selectedCategoryId, isHotelOpen, effectiveSlots) {
+                val categoryProducts = remember(allProducts, selectedCategoryId, isHotelOpen, effectiveSlots) {
                     allProducts
                         .filter { it.categoryId == selectedCategoryId }
                         .sortedWith(
@@ -397,6 +398,13 @@ fun HotelMenuScreen(
                                 .thenByDescending { it.isFeatured }
                                 .thenBy { it.name.lowercase() }
                         )
+                }
+                // Filters the already-loaded category's items for THIS hotel only — no server
+                // round trip, the category's menu is small enough to filter on every keystroke.
+                val trimmedQuery = dishQuery.trim()
+                val displayedProducts = remember(categoryProducts, trimmedQuery) {
+                    if (trimmedQuery.isBlank()) categoryProducts
+                    else categoryProducts.filter { it.name.contains(trimmedQuery, ignoreCase = true) }
                 }
 
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -438,6 +446,42 @@ fun HotelMenuScreen(
                                 )
                             }
                         }
+                    }
+
+                    if (categories.isNotEmpty() || allProducts.isNotEmpty()) {
+                        OutlinedTextField(
+                            value = dishQuery,
+                            onValueChange = { dishQuery = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .testTag("hotel_dish_search_input"),
+                            placeholder = {
+                                Text(
+                                    "Search for dishes",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextSecondary
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Search, contentDescription = "Search", tint = TextSecondary)
+                            },
+                            trailingIcon = {
+                                if (dishQuery.isNotEmpty()) {
+                                    IconButton(onClick = { dishQuery = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Clear search", tint = TextSecondary)
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(24.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = SurfaceVariantLight,
+                                unfocusedContainerColor = SurfaceVariantLight,
+                                focusedBorderColor = NaturalPrimary,
+                                unfocusedBorderColor = OutlineBorder
+                            ),
+                            singleLine = true
+                        )
                     }
 
                     // 1 & 4: Horizontal category row (fixed at top, does not scroll away)
@@ -513,43 +557,58 @@ fun HotelMenuScreen(
                                 }
                             }
 
-                            items(displayedProducts, key = { it.id }) { product ->
-                                val inCart = hotelCart.find { it.productId == product.id }
-                                val qty = inCart?.quantity ?: 0
-                                MenuItemCard(
-                                    product = product,
-                                    quantityInCart = qty,
-                                    isHotelActive = isHotelOpen,
-                                    vendorSlots = effectiveSlots,
-                                    onIncrease = {
-                                        val res = repository.addToCart(
-                                            productId = product.id,
-                                            vendorId = vendorId,
-                                            cityId = cityId,
-                                            quantityDelta = 1,
-                                            isHotel = true,
-                                            productForSnapshot = product
-                                        )
-                                        if (res is AddToCartResult.HotelConflict) {
-                                            pendingConflict = res
-                                        }
-                                    },
-                                    onDecrease = {
-                                        repository.addToCart(
-                                            productId = product.id,
-                                            vendorId = vendorId,
-                                            cityId = cityId,
-                                            quantityDelta = -1,
-                                            isHotel = true
-                                        )
-                                    },
-                                    onView = {
-                                        Analytics.trackEvent(
-                                            "product_view",
-                                            mapOf("product_id" to product.id, "category" to "hotel")
+                            // Swiggy-style 2-column dish grid — a plain chunked-row grid (not a
+                            // nested LazyVerticalGrid) since this already sits inside the outer
+                            // LazyColumn, matching the pattern used for grocery category chips.
+                            items(displayedProducts.chunked(2), key = { row -> row.joinToString(",") { it.id } }) { row ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    row.forEach { product ->
+                                        val inCart = hotelCart.find { it.productId == product.id }
+                                        val qty = inCart?.quantity ?: 0
+                                        MenuGridCard(
+                                            product = product,
+                                            quantityInCart = qty,
+                                            isHotelActive = isHotelOpen,
+                                            vendorSlots = effectiveSlots,
+                                            modifier = Modifier.weight(1f),
+                                            onIncrease = {
+                                                val res = repository.addToCart(
+                                                    productId = product.id,
+                                                    vendorId = vendorId,
+                                                    cityId = cityId,
+                                                    quantityDelta = 1,
+                                                    isHotel = true,
+                                                    productForSnapshot = product
+                                                )
+                                                if (res is AddToCartResult.HotelConflict) {
+                                                    pendingConflict = res
+                                                }
+                                            },
+                                            onDecrease = {
+                                                repository.addToCart(
+                                                    productId = product.id,
+                                                    vendorId = vendorId,
+                                                    cityId = cityId,
+                                                    quantityDelta = -1,
+                                                    isHotel = true
+                                                )
+                                            },
+                                            onView = {
+                                                Analytics.trackEvent(
+                                                    "product_view",
+                                                    mapOf("product_id" to product.id, "category" to "hotel")
+                                                )
+                                            }
                                         )
                                     }
-                                )
+                                    // Pad an odd-sized last row so the single card keeps half width.
+                                    if (row.size == 1) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
                             }
                         }
                     }
@@ -698,12 +757,15 @@ fun HotelCategoryCircleTab(
     }
 }
 
+// Swiggy-style dish grid card: photo on top, name, price, Add below — same visual shape as
+// HomeScreen.kt's GroceryProductCard, used in the hotel menu's 2-column dish grid.
 @Composable
-fun MenuItemCard(
+fun MenuGridCard(
     product: ResolvedProduct,
     quantityInCart: Int,
     isHotelActive: Boolean = true,
     vendorSlots: List<OperatingSlot> = emptyList(),
+    modifier: Modifier = Modifier,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
     onView: () -> Unit = {}
@@ -711,28 +773,24 @@ fun MenuItemCard(
     val isAvailable = isHotelActive && product.isHotelItemAvailable(vendorSlots)
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .alpha(if (isAvailable) 1f else 0.65f)
             .clickable(onClick = onView)
             .testTag("menu_item_${product.id}"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isAvailable) MaterialTheme.colorScheme.surface
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Column(modifier = Modifier.padding(10.dp)) {
             Box(
                 modifier = Modifier
-                    .size(92.dp)
+                    .fillMaxWidth()
+                    .height(118.dp)
                     .clip(RoundedCornerShape(16.dp))
             ) {
                 ProductImage(
@@ -746,16 +804,16 @@ fun MenuItemCard(
                     Surface(
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(4.dp),
+                            .padding(6.dp),
                         shape = RoundedCornerShape(6.dp),
                         color = PastelPeach,
                         contentColor = DarkGreenText
                     ) {
                         Text(
                             "POPULAR",
-                            fontSize = 8.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
@@ -766,15 +824,15 @@ fun MenuItemCard(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Surface(
-                                shape = RoundedCornerShape(4.dp),
+                                shape = RoundedCornerShape(6.dp),
                                 color = NaturalBadgeRed,
                                 contentColor = Color.White
                             ) {
                                 Text(
                                     text = if (!isHotelActive) "CLOSED" else "UNAVAILABLE",
-                                    fontSize = 9.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                                 )
                             }
                         }
@@ -782,69 +840,65 @@ fun MenuItemCard(
                 }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = product.name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isAvailable) TextPrimary else TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            if (!product.baseProduct.availableFrom.isNullOrBlank() && !product.baseProduct.availableUntil.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = product.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isAvailable) TextPrimary else TextMuted,
+                    text = "Available ${product.baseProduct.availableFrom} - ${product.baseProduct.availableUntil}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isAvailable) NaturalPrimary else NaturalBadgeRed,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (!product.description.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = product.description!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (!product.baseProduct.availableFrom.isNullOrBlank() && !product.baseProduct.availableUntil.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Available ${product.baseProduct.availableFrom} - ${product.baseProduct.availableUntil}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isAvailable) NaturalPrimary else NaturalBadgeRed,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                PriceDisplay(
-                    price = product.effectivePrice,
-                    mrp = product.effectiveMrp,
-                    unit = product.unit,
-                    kind = PromoKind.FOOD,
-                    modifier = Modifier.alpha(if (isAvailable) 1f else 0.7f)
-                )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            PriceDisplay(
+                price = product.effectivePrice,
+                mrp = product.effectiveMrp,
+                unit = product.unit,
+                kind = PromoKind.FOOD,
+                modifier = Modifier
+                    .padding(vertical = 4.dp)
+                    .alpha(if (isAvailable) 1f else 0.7f)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             if (isAvailable) {
                 QuantityStepper(
                     quantity = quantityInCart,
                     onIncrease = onIncrease,
                     onDecrease = onDecrease,
+                    modifier = Modifier.fillMaxWidth(),
                     testTagPrefix = "hotel_item_${product.id}"
                 )
             } else {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(34.dp)
                 ) {
-                    Text(
-                        text = if (!isHotelActive) "Closed" else "Unavailable",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextMuted,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = if (!isHotelActive) "Closed" else "Unavailable",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextMuted
+                        )
+                    }
                 }
             }
         }
