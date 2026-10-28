@@ -7,6 +7,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -2340,7 +2343,14 @@ private fun HotelSectionHeader(title: String) {
  * Auto-sliding photo+price strip of a hotel's top dishes (Swiggy-style). Caller decides the
  * fallback-to-static-banner condition (topItems.size < 2); this composable just renders the
  * slides. Reused by [HotelCard]'s own banner and the hero banner on the hotel menu/detail page.
+ *
+ * Built on [HorizontalPager] rather than swapping a single image's URL on a timer: the pager
+ * composes each page's `ProductImage`/Coil request independently and keeps nearby pages composed,
+ * so there is no single <img>-style element being re-pointed mid-flight. An earlier version did
+ * that src-swap and would leave every slide after the first blank on some devices — this
+ * architecture has no such swap to race.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HotelItemsCarousel(
     topItems: List<Product>,
@@ -2349,55 +2359,64 @@ fun HotelItemsCarousel(
     modifier: Modifier = Modifier,
     intervalMs: Long = 2800L
 ) {
-    var topItemIndex by remember(topItems) { mutableStateOf(0) }
-    LaunchedEffect(topItems) {
-        if (topItems.size < 2) return@LaunchedEffect
+    if (topItems.size < 2) return
+    val pagerState = rememberPagerState(pageCount = { topItems.size })
+    LaunchedEffect(topItems.size) {
         while (true) {
             delay(intervalMs)
-            topItemIndex = (topItemIndex + 1) % topItems.size
+            if (!pagerState.isScrollInProgress) {
+                pagerState.animateScrollToPage((pagerState.currentPage + 1) % topItems.size)
+            }
         }
     }
     val grayscaleFilter = remember {
         ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
     }
-    val current = topItems.getOrNull(topItemIndex.coerceIn(0, topItems.size - 1)) ?: return
     Box(modifier = modifier) {
-        ProductImage(
-            url = current.imageUrl,
-            contentDescription = "${current.name} at $vendorName",
-            modifier = Modifier.fillMaxSize(),
-            colorFilter = if (isOpen) null else grayscaleFilter
-        )
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = Color.Black.copy(alpha = 0.78f),
-            contentColor = Color.White,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(8.dp)
-        ) {
-            Text(
-                text = "Items at ₹${current.price.toInt()}",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-            )
-        }
-        if (topItems.size > 1) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(10.dp),
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                topItems.forEachIndexed { i, _ ->
-                    Box(
-                        modifier = Modifier
-                            .size(width = if (i == topItemIndex) 14.dp else 5.dp, height = 5.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(if (i == topItemIndex) Color.White else Color.White.copy(alpha = 0.55f))
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            val item = topItems[page]
+            Box(modifier = Modifier.fillMaxSize()) {
+                ProductImage(
+                    url = item.imageUrl,
+                    contentDescription = "${item.name} at $vendorName",
+                    modifier = Modifier.fillMaxSize(),
+                    colorFilter = if (isOpen) null else grayscaleFilter
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.78f),
+                    contentColor = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = "${item.name} at ₹${item.price.toInt()}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            topItems.forEachIndexed { i, _ ->
+                Box(
+                    modifier = Modifier
+                        .size(width = if (i == pagerState.currentPage) 14.dp else 5.dp, height = 5.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(if (i == pagerState.currentPage) Color.White else Color.White.copy(alpha = 0.55f))
+                )
             }
         }
     }
@@ -2434,6 +2453,13 @@ fun HotelCard(
         avgRating = repository.getVendorAverageRating(vendor.id).getOrNull() ?: 0.0
     }
 
+    // Top dish photos for the Swiggy-style auto-sliding banner; falls back to the plain static
+    // banner below when there are fewer than 2.
+    var topItems by remember(vendor.id) { mutableStateOf<List<Product>>(emptyList()) }
+    LaunchedEffect(vendor.id) {
+        topItems = repository.getHotelTopItems(vendor.id).getOrNull() ?: emptyList()
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -2454,12 +2480,21 @@ fun HotelCard(
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
             ) {
-                ProductImage(
-                    url = vendor.bannerUrl,
-                    contentDescription = vendor.name,
-                    modifier = Modifier.fillMaxSize(),
-                    colorFilter = if (isOpen) null else grayscaleFilter
-                )
+                if (topItems.size >= 2) {
+                    HotelItemsCarousel(
+                        topItems = topItems,
+                        vendorName = vendor.name,
+                        isOpen = isOpen,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    ProductImage(
+                        url = vendor.bannerUrl,
+                        contentDescription = vendor.name,
+                        modifier = Modifier.fillMaxSize(),
+                        colorFilter = if (isOpen) null else grayscaleFilter
+                    )
+                }
                 // Status chips
                 Row(
                     modifier = Modifier

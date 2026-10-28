@@ -77,6 +77,12 @@ fun HotelMenuScreen(
 
     var vendor by remember { mutableStateOf<Vendor?>(null) }
     var operatingSlots by remember { mutableStateOf<List<OperatingSlot>>(emptyList()) }
+    // Top dish photos for the hero's Swiggy-style auto-sliding banner; falls back to the plain
+    // static banner below when there are fewer than 2.
+    var heroTopItems by remember(vendorId) { mutableStateOf<List<Product>>(emptyList()) }
+    LaunchedEffect(vendorId) {
+        heroTopItems = repository.getHotelTopItems(vendorId).getOrNull() ?: emptyList()
+    }
     // City Admin's Operating Hours / Emergency Close — caps this hotel's own hours.
     var city by remember(cityId) { mutableStateOf<com.example.data.model.City?>(null) }
     LaunchedEffect(cityId) {
@@ -548,11 +554,21 @@ fun HotelMenuScreen(
                                             .aspectRatio(16f / 9f)
                                             .clip(RoundedCornerShape(16.dp))
                                     ) {
-                                        ProductImage(
-                                            url = vendor!!.bannerUrl,
-                                            contentDescription = vendorName,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
+                                        if (heroTopItems.size >= 2) {
+                                            HotelItemsCarousel(
+                                                topItems = heroTopItems,
+                                                vendorName = vendorName,
+                                                isOpen = isHotelOpen,
+                                                modifier = Modifier.fillMaxSize(),
+                                                intervalMs = 3200L
+                                            )
+                                        } else {
+                                            ProductImage(
+                                                url = vendor!!.bannerUrl,
+                                                contentDescription = vendorName,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
                                     }
                                 }
                             }
