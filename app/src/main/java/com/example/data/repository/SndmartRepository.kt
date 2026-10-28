@@ -1206,6 +1206,7 @@ class SndmartRepository(
     }
 
     private val topFoodCache = java.util.concurrent.ConcurrentHashMap<String, CacheEntry<ResolvedProduct>>()
+    private val budgetFoodCache = java.util.concurrent.ConcurrentHashMap<String, CacheEntry<ResolvedProduct>>()
 
     /**
      * Up to 10 most-ordered hotel dishes in this city (by units sold). The RPC ranks product ids +
@@ -1323,6 +1324,46 @@ class SndmartRepository(
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "Exception fetching top food products: ${e.message}")
+            Result.success(emptyList())
+        }
+    }
+
+    /** Up to 20 hotel dishes priced ₹99 or under across the city, for the "99 Store" row. */
+    suspend fun getBudgetFoodProducts(cityId: String, forceRefresh: Boolean = false): Result<List<ResolvedProduct>> {
+        if (!forceRefresh) {
+            val cached = budgetFoodCache[cityId]
+            if (cached != null && !cached.isExpired()) return Result.success(cached.data)
+        }
+        if (!SupabaseClient.isKeyConfigured()) return Result.success(emptyList())
+        return try {
+            val res = api.getBudgetFoodProducts(mapOf("p_city_id" to cityId, "p_max_price" to 99, "p_limit" to 20))
+            val rows = res.body().orEmpty()
+            if (!res.isSuccessful || rows.isEmpty()) return Result.success(emptyList())
+            // The RPC already returns full product fields (unlike get_top_food_products), so no
+            // second products round trip is needed — one request resolves the whole row.
+            val resolved = rows.filter { it.price in 0.01..99.0 }.map { r ->
+                ResolvedProduct(
+                    baseProduct = Product(
+                        id = r.productId,
+                        vendorId = r.vendorId,
+                        name = r.name ?: "",
+                        imageUrl = r.imageUrl,
+                        price = r.price,
+                        mrp = r.mrp
+                    ),
+                    effectivePrice = r.price,
+                    effectiveMrp = r.mrp,
+                    effectiveStock = 1,
+                    effectiveIsAvailable = true,
+                    soldVendorName = r.vendorName
+                )
+            }
+            budgetFoodCache[cityId] = CacheEntry(data = resolved)
+            Result.success(resolved)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception fetching budget food products: ${e.message}")
             Result.success(emptyList())
         }
     }

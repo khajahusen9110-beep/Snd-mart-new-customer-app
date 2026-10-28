@@ -322,6 +322,12 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<List<TopFoodRow>>
 
+    // Hotel dishes priced ₹99 or under across the city, for the "99 Store" row.
+    @POST("rest/v1/rpc/get_budget_food_products")
+    suspend fun getBudgetFoodProducts(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<List<BudgetFoodRow>>
+
     @POST("rest/v1/rpc/calculate_city_coupon_discount")
     suspend fun calculateCityCouponDiscount(
         @Body body: Map<String, @JvmSuppressWildcards Any?>

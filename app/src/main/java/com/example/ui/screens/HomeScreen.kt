@@ -182,6 +182,12 @@ fun HomeScreen(
         val cid = selectedCity?.id ?: return@LaunchedEffect
         topFood = repository.getTopSellingFoodProducts(cid).getOrNull() ?: emptyList()
     }
+    // "99 Store" row (hotel dishes priced ₹99 or under, across the city).
+    var budgetFood by remember(selectedCity?.id) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    LaunchedEffect(selectedCity?.id) {
+        val cid = selectedCity?.id ?: return@LaunchedEffect
+        budgetFood = repository.getBudgetFoodProducts(cid).getOrNull() ?: emptyList()
+    }
     var isLoadingMoreProducts by remember { mutableStateOf(false) }
     var hasMoreProducts by remember { mutableStateOf(true) }
     var groceryError by remember { mutableStateOf<String?>(null) }
@@ -1327,6 +1333,18 @@ fun HomeScreen(
                                 }
                             }
 
+                            if (searchQuery.isBlank() && budgetFood.isNotEmpty()) {
+                                item(key = "food_99_store") {
+                                    MostOrderedFoodRow(
+                                        products = budgetFood,
+                                        title = "💸 99 Store",
+                                        onOpenHotel = { prod ->
+                                            onNavigateToHotelMenu(prod.vendorId ?: "", prod.soldVendorName ?: "Hotel")
+                                        }
+                                    )
+                                }
+                            }
+
                             if (searchQuery.isBlank() && promoBanners.isNotEmpty()) {
                                 item(key = "food_promo_banners") {
                                     PromoBannerCarousel(
@@ -1546,11 +1564,12 @@ fun MostSellingRow(
 @Composable
 fun MostOrderedFoodRow(
     products: List<ResolvedProduct>,
-    onOpenHotel: (ResolvedProduct) -> Unit
+    onOpenHotel: (ResolvedProduct) -> Unit,
+    title: String = "🔥 Most Ordered"
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
         Text(
-            text = "🔥 Most Ordered",
+            text = title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.ExtraBold,
             color = TextPrimary,

@@ -406,6 +406,18 @@ data class TopFoodRow(
     @Json(name = "units_sold") val unitsSold: Long = 0
 )
 
+// Row from public.get_budget_food_products: a hotel dish priced ₹99 or under, with its hotel.
+@JsonClass(generateAdapter = true)
+data class BudgetFoodRow(
+    @Json(name = "product_id") val productId: String = "",
+    @Json(name = "vendor_id") val vendorId: String = "",
+    @Json(name = "vendor_name") val vendorName: String? = null,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "image_url") val imageUrl: String? = null,
+    @Json(name = "price") val price: Double = 0.0,
+    @Json(name = "mrp") val mrp: Double? = null
+)
+
 @JsonClass(generateAdapter = true)
 data class CouponUsage(
     val id: String? = null,
