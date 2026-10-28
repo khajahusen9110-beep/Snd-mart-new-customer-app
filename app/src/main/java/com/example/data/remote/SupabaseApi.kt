@@ -639,7 +639,13 @@ interface SupabaseApi {
 
     // --- ANALYTICS (fire-and-forget; Super Admin dashboard only reads these) ---
 
-    @Headers("Prefer: resolution=merge-duplicates,return=minimal")
+    // A plain insert, not an upsert: with RLS SELECT on analytics_sessions restricted to
+    // admins, anon/authenticated callers can't satisfy the ON CONFLICT check a
+    // merge-duplicates upsert needs, so it always fails ("new row violates row-level
+    // security policy") and no session row is ever created. A duplicate id (rare — one per
+    // process lifetime) just fails the primary key and is caught by the caller, same as
+    // before, but a first-time insert now actually succeeds.
+    @Headers("Prefer: return=minimal")
     @POST("rest/v1/analytics_sessions")
     suspend fun upsertAnalyticsSession(
         @Body body: Map<String, @JvmSuppressWildcards Any>
