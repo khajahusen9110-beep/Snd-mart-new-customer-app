@@ -2341,7 +2341,7 @@ private fun HotelSectionHeader(title: String) {
 
 /**
  * Auto-sliding photo+price strip of a hotel's top dishes (Swiggy-style). Caller decides the
- * fallback-to-static-banner condition (topItems.size < 2); this composable just renders the
+ * fallback-to-static-banner condition (topItems is empty); this composable just renders the
  * slides. Reused by [HotelCard]'s own banner and the hero banner on the hotel menu/detail page.
  *
  * Built on [HorizontalPager] rather than swapping a single image's URL on a timer: the pager
@@ -2359,7 +2359,7 @@ fun HotelItemsCarousel(
     modifier: Modifier = Modifier,
     intervalMs: Long = 2800L
 ) {
-    if (topItems.size < 2) return
+    if (topItems.isEmpty()) return
     val pagerState = rememberPagerState(pageCount = { topItems.size })
     LaunchedEffect(topItems.size) {
         while (true) {
@@ -2454,7 +2454,7 @@ fun HotelCard(
     }
 
     // Top dish photos for the Swiggy-style auto-sliding banner; falls back to the plain static
-    // banner below when there are fewer than 2.
+    // banner below only when there are none at all.
     var topItems by remember(vendor.id) { mutableStateOf<List<Product>>(emptyList()) }
     LaunchedEffect(vendor.id) {
         topItems = repository.getHotelTopItems(vendor.id).getOrNull() ?: emptyList()
@@ -2480,7 +2480,7 @@ fun HotelCard(
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
             ) {
-                if (topItems.size >= 2) {
+                if (topItems.isNotEmpty()) {
                     HotelItemsCarousel(
                         topItems = topItems,
                         vendorName = vendor.name,

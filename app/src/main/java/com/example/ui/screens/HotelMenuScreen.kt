@@ -554,7 +554,7 @@ fun HotelMenuScreen(
                                             .aspectRatio(16f / 9f)
                                             .clip(RoundedCornerShape(16.dp))
                                     ) {
-                                        if (heroTopItems.size >= 2) {
+                                        if (heroTopItems.isNotEmpty()) {
                                             HotelItemsCarousel(
                                                 topItems = heroTopItems,
                                                 vendorName = vendorName,
