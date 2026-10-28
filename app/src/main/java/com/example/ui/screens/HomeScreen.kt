@@ -2360,13 +2360,6 @@ fun HotelCard(
         avgRating = repository.getVendorAverageRating(vendor.id).getOrNull() ?: 0.0
     }
 
-    // Top dishes (photo + price) for the auto-sliding banner carousel, Swiggy-style; falls back
-    // to the static vendor.bannerUrl below 2 real item photos.
-    var topItems by remember(vendor.id) { mutableStateOf<List<Product>>(emptyList()) }
-    LaunchedEffect(vendor.id) {
-        topItems = repository.getHotelTopItems(vendor.id).getOrNull() ?: emptyList()
-    }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -2387,21 +2380,12 @@ fun HotelCard(
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
             ) {
-                if (topItems.size >= 2) {
-                    HotelItemsCarousel(
-                        topItems = topItems,
-                        vendorName = vendor.name,
-                        isOpen = isOpen,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    ProductImage(
-                        url = vendor.bannerUrl,
-                        contentDescription = vendor.name,
-                        modifier = Modifier.fillMaxSize(),
-                        colorFilter = if (isOpen) null else grayscaleFilter
-                    )
-                }
+                ProductImage(
+                    url = vendor.bannerUrl,
+                    contentDescription = vendor.name,
+                    modifier = Modifier.fillMaxSize(),
+                    colorFilter = if (isOpen) null else grayscaleFilter
+                )
                 // Status chips
                 Row(
                     modifier = Modifier

@@ -108,11 +108,6 @@ fun HotelMenuScreen(
     }
     var hasUserSelectedCategory by remember(vendorId) { mutableStateOf(false) }
     var dishQuery by remember(vendorId) { mutableStateOf("") }
-    // Hero carousel photos for the banner; falls back to the static vendor.bannerUrl below 2.
-    var heroTopItems by remember(vendorId) { mutableStateOf<List<Product>>(emptyList()) }
-    LaunchedEffect(vendorId) {
-        heroTopItems = repository.getHotelTopItems(vendorId).getOrNull() ?: emptyList()
-    }
     var timeTick by remember { mutableStateOf(0L) }
     var isLoadingCategories by remember { mutableStateOf(categories.isEmpty()) }
     var isLoadingProducts by remember { mutableStateOf(false) }
@@ -553,21 +548,11 @@ fun HotelMenuScreen(
                                             .aspectRatio(16f / 9f)
                                             .clip(RoundedCornerShape(16.dp))
                                     ) {
-                                        if (heroTopItems.size >= 2) {
-                                            HotelItemsCarousel(
-                                                topItems = heroTopItems,
-                                                vendorName = vendorName,
-                                                isOpen = true,
-                                                modifier = Modifier.fillMaxSize(),
-                                                intervalMs = 3300L
-                                            )
-                                        } else {
-                                            ProductImage(
-                                                url = vendor!!.bannerUrl,
-                                                contentDescription = vendorName,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        }
+                                        ProductImage(
+                                            url = vendor!!.bannerUrl,
+                                            contentDescription = vendorName,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
                                     }
                                 }
                             }
