@@ -2262,6 +2262,73 @@ private fun HotelSectionHeader(title: String) {
     )
 }
 
+/**
+ * Auto-sliding photo+price strip of a hotel's top dishes (Swiggy-style). Caller decides the
+ * fallback-to-static-banner condition (topItems.size < 2); this composable just renders the
+ * slides. Reused by [HotelCard]'s own banner and the hero banner on the hotel menu/detail page.
+ */
+@Composable
+fun HotelItemsCarousel(
+    topItems: List<Product>,
+    vendorName: String,
+    isOpen: Boolean,
+    modifier: Modifier = Modifier,
+    intervalMs: Long = 2800L
+) {
+    var topItemIndex by remember(topItems) { mutableStateOf(0) }
+    LaunchedEffect(topItems) {
+        if (topItems.size < 2) return@LaunchedEffect
+        while (true) {
+            delay(intervalMs)
+            topItemIndex = (topItemIndex + 1) % topItems.size
+        }
+    }
+    val grayscaleFilter = remember {
+        ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+    }
+    val current = topItems.getOrNull(topItemIndex.coerceIn(0, topItems.size - 1)) ?: return
+    Box(modifier = modifier) {
+        ProductImage(
+            url = current.imageUrl,
+            contentDescription = "${current.name} at $vendorName",
+            modifier = Modifier.fillMaxSize(),
+            colorFilter = if (isOpen) null else grayscaleFilter
+        )
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color.Black.copy(alpha = 0.78f),
+            contentColor = Color.White,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(8.dp)
+        ) {
+            Text(
+                text = "Items at ₹${current.price.toInt()}",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            )
+        }
+        if (topItems.size > 1) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                topItems.forEachIndexed { i, _ ->
+                    Box(
+                        modifier = Modifier
+                            .size(width = if (i == topItemIndex) 14.dp else 5.dp, height = 5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (i == topItemIndex) Color.White else Color.White.copy(alpha = 0.55f))
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun HotelCard(
     vendor: Vendor,
@@ -2299,14 +2366,6 @@ fun HotelCard(
     LaunchedEffect(vendor.id) {
         topItems = repository.getHotelTopItems(vendor.id).getOrNull() ?: emptyList()
     }
-    var topItemIndex by remember(vendor.id) { mutableStateOf(0) }
-    LaunchedEffect(topItems) {
-        if (topItems.size < 2) return@LaunchedEffect
-        while (true) {
-            delay(2800)
-            topItemIndex = (topItemIndex + 1) % topItems.size
-        }
-    }
 
     Card(
         modifier = Modifier
@@ -2329,43 +2388,12 @@ fun HotelCard(
                     .aspectRatio(16f / 9f)
             ) {
                 if (topItems.size >= 2) {
-                    val current = topItems[topItemIndex.coerceIn(0, topItems.size - 1)]
-                    ProductImage(
-                        url = current.imageUrl,
-                        contentDescription = "${current.name} at ${vendor.name}",
-                        modifier = Modifier.fillMaxSize(),
-                        colorFilter = if (isOpen) null else grayscaleFilter
+                    HotelItemsCarousel(
+                        topItems = topItems,
+                        vendorName = vendor.name,
+                        isOpen = isOpen,
+                        modifier = Modifier.fillMaxSize()
                     )
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color.Black.copy(alpha = 0.78f),
-                        contentColor = Color.White,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(8.dp)
-                    ) {
-                        Text(
-                            text = "Items at ₹${current.price.toInt()}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        topItems.forEachIndexed { i, _ ->
-                            Box(
-                                modifier = Modifier
-                                    .size(width = if (i == topItemIndex) 14.dp else 5.dp, height = 5.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(if (i == topItemIndex) Color.White else Color.White.copy(alpha = 0.55f))
-                            )
-                        }
-                    }
                 } else {
                     ProductImage(
                         url = vendor.bannerUrl,
