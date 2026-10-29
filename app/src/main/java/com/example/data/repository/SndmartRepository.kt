@@ -1406,7 +1406,10 @@ class SndmartRepository(
                     soldVendorName = vendorNameById[id] ?: vendor.name
                 )
                 if (r.effectivePrice !in 0.01..99.0) return@mapNotNull null
-                if (r.effectiveStock <= 0) return@mapNotNull null
+                // Hotel dishes aren't stock-tracked like groceries (stock_qty is routinely 0 for
+                // every item), so an effectiveStock check would wipe out every real dish.
+                // isHotelItemAvailable (active + available + within serving hours) is the real
+                // "can this be ordered" signal for food.
                 if (!r.isHotelItemAvailable(effectiveSlots)) return@mapNotNull null
                 r
             }
