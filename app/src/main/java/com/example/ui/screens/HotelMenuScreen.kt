@@ -402,6 +402,7 @@ fun HotelMenuScreen(
                         .sortedWith(
                             compareBy<ResolvedProduct> { getHotelMenuItemTier(it, isHotelOpen, effectiveSlots) }
                                 .thenByDescending { it.isFeatured }
+                                .thenBy { it.effectivePrice }
                                 .thenBy { it.name.lowercase() }
                         )
                 }
