@@ -2837,6 +2837,15 @@ class SndmartRepository(
         }
     }
 
+    /** The one coupon to advertise/auto-try: a single active, already-started, unexpired row. */
+    suspend fun getPromoCoupon(cityId: String): Coupon? {
+        val nowIso = java.time.Instant.now().toString()
+        val coupons = getCoupons(cityId).getOrNull() ?: return null
+        return coupons.firstOrNull { c ->
+            (c.startsAt == null || c.startsAt <= nowIso) && (c.expiresAt == null || c.expiresAt > nowIso)
+        }
+    }
+
     // Look up a single active coupon by code for a city (server-side filter).
     suspend fun getCouponByCode(code: String, cityId: String): Result<Coupon?> {
         if (!SupabaseClient.isKeyConfigured()) {

@@ -124,7 +124,36 @@ fun CartScreen(
     // Promotional offer (backend-driven). Vendor is paid in full; Sndmart bears the discount.
     val cartPromo = promoFor(if (isHotelCartSelected) PromoKind.FOOD else PromoKind.GROCERY)
     val promoDiscount = cartPromoDiscount(subtotal, cartPromo)
-    val payable = (subtotal - promoDiscount).coerceAtLeast(0.0)
+
+    // Auto-applied coupon preview: the city's current promo coupon is checked (real server
+    // validation, same RPC checkout uses) as soon as items are in the cart, so the discount is
+    // visible here instead of only appearing after the customer reaches Checkout.
+    var autoCouponCode by remember { mutableStateOf<String?>(null) }
+    var autoCouponDiscount by remember { mutableStateOf(0.0) }
+    LaunchedEffect(cityId, subtotal) {
+        if (cityId.isNullOrBlank() || subtotal <= 0.0) {
+            autoCouponCode = null
+            autoCouponDiscount = 0.0
+            return@LaunchedEffect
+        }
+        val coupon = repository.getPromoCoupon(cityId)
+        if (coupon == null) {
+            autoCouponCode = null
+            autoCouponDiscount = 0.0
+            return@LaunchedEffect
+        }
+        val res = repository.previewCheckoutRewards(subtotal, coupon.code, subtotal)
+        val preview = res.getOrNull()?.coupon
+        if (preview?.valid == true) {
+            autoCouponCode = preview.code
+            autoCouponDiscount = preview.discount
+        } else {
+            autoCouponCode = null
+            autoCouponDiscount = 0.0
+        }
+    }
+
+    val payable = (subtotal - promoDiscount - autoCouponDiscount).coerceAtLeast(0.0)
     val unavailableItems = freshItems.filter { !it.isPurchasable }
     val hotelClosedMessage = if (isHotelCartSelected) {
         freshItems.firstOrNull { it.stateMessage == CART_HOTEL_CLOSED_MESSAGE }?.stateMessage
@@ -205,7 +234,7 @@ fun CartScreen(
                                             isHotelCartSelected
                                         )
                                     } else {
-                                        onProceedToCheckout(isHotelCartSelected, null)
+                                        onProceedToCheckout(isHotelCartSelected, autoCouponCode)
                                     }
                                 },
                                 enabled = hotelClosedMessage == null,
@@ -593,6 +622,13 @@ fun CartScreen(
                                         color = SuccessGreen
                                     )
                                 }
+                                if (autoCouponDiscount > 0) {
+                                    BillRow(
+                                        "Coupon $autoCouponCode applied",
+                                        "−₹${"%.2f".format(autoCouponDiscount)}",
+                                        color = SuccessGreen
+                                    )
+                                }
                                 BillRow("Delivery Fee", "Calculated at checkout", color = TextSecondary)
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                                 BillRow(
@@ -602,10 +638,10 @@ fun CartScreen(
                                     fontSize = 16.sp,
                                     color = NaturalPrimary
                                 )
-                                if (promoDiscount > 0) {
+                                if (promoDiscount > 0 || autoCouponDiscount > 0) {
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "You save ₹${"%.0f".format(promoDiscount)} 🎉",
+                                        text = "You save ₹${"%.0f".format(promoDiscount + autoCouponDiscount)} 🎉",
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = SuccessGreen
