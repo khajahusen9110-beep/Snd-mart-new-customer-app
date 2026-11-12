@@ -9,6 +9,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -224,6 +225,18 @@ fun HomeScreen(
     var dishResults by remember { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
     var isDishResultsLoading by remember { mutableStateOf(false) }
 
+    // Smart Food Search: sort + filters (default sort = Price Low-High per spec; "relevance"
+    // only takes over once the customer is actually typing a query).
+    var foodSort by remember { mutableStateOf("price_asc") }
+    var foodVeg by remember { mutableStateOf("all") }
+    var foodBudgetOnly by remember { mutableStateOf(false) }
+    var foodRatingOnly by remember { mutableStateOf(false) }
+    var foodOffersOnly by remember { mutableStateOf(false) }
+    var showFoodFilters by remember { mutableStateOf(false) }
+    var trendingSearches by remember { mutableStateOf<List<String>>(emptyList()) }
+    var recentSearches by remember { mutableStateOf<List<String>>(emptyList()) }
+    var loggedQuery by remember { mutableStateOf("") }
+
     // "What's on your mind?" rotating category picker (Food Delivery hotel listing only).
     var hotelCategoriesPool by remember { mutableStateOf<List<Category>>(emptyList()) }
     var displayedFoodCategories by remember { mutableStateOf<List<Category>>(emptyList()) }
@@ -333,6 +346,8 @@ fun HomeScreen(
 
     val context = LocalContext.current
     val sessionManager = repository.sessionManager
+    val recentSearchesPrefs = remember { com.example.data.local.RecentSearchesPrefs(context) }
+    LaunchedEffect(Unit) { recentSearches = recentSearchesPrefs.getRecent() }
 
     // Swiggy-Style Promotional Coupon Popup (shown once per app session on cold start)
     var showCouponPopup by remember { mutableStateOf(false) }
@@ -659,17 +674,27 @@ fun HomeScreen(
         loadHotelsData(cityId, searchQuery)
     }
 
-    // Food search: fetch matching dishes directly (shown above the hotels list).
-    LaunchedEffect(searchQuery, browsingMode, selectedCity?.id) {
+    // Smart Food Search: fetch matching dishes directly (shown above the hotels list) —
+    // typo-tolerant + partial-word matched + ranked server-side, with Veg/Budget/Rating/Offers
+    // filters and 5 sort modes. Every result is already "open + available right now".
+    LaunchedEffect(searchQuery, browsingMode, selectedCity?.id, foodSort, foodVeg, foodBudgetOnly, foodRatingOnly, foodOffersOnly) {
         val cityId = selectedCity?.id
         if (browsingMode != BrowsingMode.HOTELS || cityId == null || searchQuery.isBlank()) {
             dishResults = emptyList()
             isDishResultsLoading = false
             return@LaunchedEffect
         }
-        delay(350)
+        delay(280)
         isDishResultsLoading = true
-        dishResults = repository.searchHotelDishes(cityId, searchQuery).getOrDefault(emptyList())
+        dishResults = repository.searchFoodItems(
+            cityId = cityId,
+            query = searchQuery,
+            sort = foodSort,
+            vegFilter = foodVeg,
+            maxPrice = if (foodBudgetOnly) 149.0 else null,
+            minRating = if (foodRatingOnly) 4.0 else null,
+            offersOnly = foodOffersOnly
+        ).getOrDefault(emptyList())
         isDishResultsLoading = false
         Analytics.trackEvent(
             "search",
@@ -679,6 +704,21 @@ fun HomeScreen(
                 "zero_result" to dishResults.isEmpty()
             )
         )
+        // Log once per settled query (not every keystroke) so Trending Searches stays meaningful.
+        if (loggedQuery != searchQuery) {
+            loggedQuery = searchQuery
+            repository.logFoodSearch(cityId, searchQuery, dishResults.size)
+            recentSearchesPrefs.addRecent(searchQuery)
+            recentSearches = recentSearchesPrefs.getRecent()
+        }
+    }
+
+    // Trending searches (server) + Recent searches (this device) — shown before the customer
+    // has typed anything, so they always have a one-tap starting point.
+    LaunchedEffect(selectedCity?.id) {
+        val cityId = selectedCity?.id ?: return@LaunchedEffect
+        recentSearches = recentSearchesPrefs.getRecent()
+        trendingSearches = repository.getTrendingFoodSearches(cityId).getOrDefault(emptyList())
     }
 
     // Handle single-hotel rule conflict dialog
@@ -989,6 +1029,16 @@ fun HomeScreen(
             }
 
             Spacer(modifier = Modifier.height(6.dp))
+
+            if (browsingMode == BrowsingMode.HOTELS && searchQuery.isBlank() &&
+                (recentSearches.isNotEmpty() || trendingSearches.isNotEmpty())
+            ) {
+                SearchSuggestRow(
+                    recentSearches = recentSearches,
+                    trendingSearches = trendingSearches,
+                    onPick = { searchQuery = it }
+                )
+            }
 
             if (selectedCity == null) {
                 Box(
@@ -1331,7 +1381,33 @@ fun HomeScreen(
                                     }
                                 } else if (dishResults.isNotEmpty()) {
                                     item(key = "dish_results_header") {
-                                        HotelSectionHeader(title = "Dishes matching \"${searchQuery.trim()}\"")
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            HotelSectionHeader(title = "Dishes matching \"${searchQuery.trim()}\"")
+                                            FoodFilterToggleButton(
+                                                active = showFoodFilters,
+                                                onClick = { showFoodFilters = !showFoodFilters }
+                                            )
+                                        }
+                                    }
+                                    if (showFoodFilters) {
+                                        item(key = "dish_results_filters") {
+                                            FoodSearchFiltersBar(
+                                                sort = foodSort,
+                                                onSortChange = { foodSort = it },
+                                                veg = foodVeg,
+                                                onVegChange = { foodVeg = it },
+                                                budgetOnly = foodBudgetOnly,
+                                                onBudgetToggle = { foodBudgetOnly = !foodBudgetOnly },
+                                                ratingOnly = foodRatingOnly,
+                                                onRatingToggle = { foodRatingOnly = !foodRatingOnly },
+                                                offersOnly = foodOffersOnly,
+                                                onOffersToggle = { foodOffersOnly = !foodOffersOnly }
+                                            )
+                                        }
                                     }
                                     items(dishResults, key = { "dish_${it.id}" }) { dish ->
                                         val qty = hotelCart.find { it.productId == dish.id }?.quantity ?: 0
@@ -1362,6 +1438,15 @@ fun HomeScreen(
                                         item(key = "restaurants_header") {
                                             HotelSectionHeader(title = "Restaurants")
                                         }
+                                    }
+                                } else if (foodVeg != "all" || foodBudgetOnly || foodRatingOnly || foodOffersOnly) {
+                                    item(key = "dish_results_empty_filtered") {
+                                        Text(
+                                            "No dishes match these filters — try loosening them.",
+                                            color = TextSecondary,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                                        )
                                     }
                                 }
                             }
@@ -1743,7 +1828,7 @@ fun SearchDishCard(
     onOpenHotel: () -> Unit,
     onAdd: (Int) -> Unit
 ) {
-    val orderable = product.hotelOpen && product.isHotelItemAvailable
+    val orderable = product.guaranteedAvailable || (product.hotelOpen && product.isHotelItemAvailable)
     val fPromo = promoFor(PromoKind.FOOD)
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1771,6 +1856,38 @@ fun SearchDishCard(
                         )
                     }
                 }
+                product.isVeg?.let { veg ->
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(4.dp)
+                            .size(12.dp)
+                            .background(Color.White, RoundedCornerShape(3.dp))
+                            .border(1.5.dp, if (veg) Color(0xFF0F8A3F) else Color(0xFFB91C1C), RoundedCornerShape(3.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .background(if (veg) Color(0xFF0F8A3F) else Color(0xFFB91C1C), CircleShape)
+                        )
+                    }
+                }
+                product.discountPercent?.takeIf { it > 0 }?.let { pct ->
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopStart).padding(4.dp),
+                        shape = RoundedCornerShape(5.dp),
+                        color = Color(0xFF15803D)
+                    ) {
+                        Text(
+                            "${pct.toInt()}% OFF",
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -1782,15 +1899,28 @@ fun SearchDishCard(
                     overflow = TextOverflow.Ellipsis,
                     color = TextPrimary
                 )
-                product.soldVendorName?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable { onOpenHotel() }
-                    )
+                if (product.soldVendorName != null || product.vendorRating != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onOpenHotel() }) {
+                        product.soldVendorName?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        product.vendorRating?.let { rating ->
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(11.dp))
+                            Text(
+                                text = "%.1f".format(rating),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFB45309)
+                            )
+                        }
+                    }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 if (fPromo != null && fPromo.percent > 0) {
@@ -1841,6 +1971,204 @@ fun SearchDishCard(
                 }
             }
         }
+    }
+}
+
+// Smart Food Search: Recent / Trending pills (below the search bar, shown when empty).
+@Composable
+fun SearchSuggestRow(
+    recentSearches: List<String>,
+    trendingSearches: List<String>,
+    onPick: (String) -> Unit
+) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        if (recentSearches.isNotEmpty()) {
+            Text(
+                "RECENT",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = TextMuted,
+                letterSpacing = 0.5.sp
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            FlowRowPills {
+                recentSearches.take(5).forEach { q ->
+                    SearchPill(text = q, trending = false, onClick = { onPick(q) })
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+        if (trendingSearches.isNotEmpty()) {
+            Text(
+                "TRENDING",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = TextMuted,
+                letterSpacing = 0.5.sp
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            FlowRowPills {
+                trendingSearches.take(6).forEach { q ->
+                    SearchPill(text = q, trending = true, onClick = { onPick(q) })
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FlowRowPills(content: @Composable () -> Unit) {
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) { content() }
+}
+
+@Composable
+private fun SearchPill(text: String, trending: Boolean, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = if (trending) Color(0xFFFFEDD5) else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, if (trending) Color(0xFFFDBA74) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        shadowElevation = 2.dp,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (trending) {
+                Text("🔥", fontSize = 11.sp)
+                Spacer(modifier = Modifier.width(5.dp))
+            }
+            Text(
+                text,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (trending) Color(0xFF9A3412) else TextPrimary
+            )
+        }
+    }
+}
+
+@Composable
+fun FoodFilterToggleButton(active: Boolean, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (active) NaturalPrimary else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, if (active) NaturalPrimary else MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 1.dp,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Tune,
+                contentDescription = null,
+                tint = if (active) Color.White else TextPrimary,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text("Filters", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = if (active) Color.White else TextPrimary)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun FoodSearchFiltersBar(
+    sort: String,
+    onSortChange: (String) -> Unit,
+    veg: String,
+    onVegChange: (String) -> Unit,
+    budgetOnly: Boolean,
+    onBudgetToggle: () -> Unit,
+    ratingOnly: Boolean,
+    onRatingToggle: () -> Unit,
+    offersOnly: Boolean,
+    onOffersToggle: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                FoodChip(label = "All", selected = veg == "all", onClick = { onVegChange("all") })
+                FoodChip(label = "🟢 Veg", selected = veg == "veg", activeColor = Color(0xFF0F8A3F), onClick = { onVegChange("veg") })
+                FoodChip(label = "🔴 Non-Veg", selected = veg == "nonveg", activeColor = Color(0xFFB91C1C), onClick = { onVegChange("nonveg") })
+                FoodChip(label = "Under ₹149", selected = budgetOnly, onClick = onBudgetToggle)
+                FoodChip(label = "⭐ 4.0+", selected = ratingOnly, onClick = onRatingToggle)
+                FoodChip(label = "% Offers", selected = offersOnly, onClick = onOffersToggle)
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Sort by", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+                Spacer(modifier = Modifier.width(10.dp))
+                var expanded by remember { mutableStateOf(false) }
+                val sortLabels = mapOf(
+                    "price_asc" to "Price: Low to High",
+                    "price_desc" to "Price: High to Low",
+                    "popular" to "Popular",
+                    "rating" to "Best Rated",
+                    "relevance" to "Best Match"
+                )
+                Box(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth().clickable { expanded = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp).fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(sortLabels[sort] ?: sort, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = TextMuted)
+                        }
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        sortLabels.forEach { (key, label) ->
+                            DropdownMenuItem(text = { Text(label) }, onClick = { onSortChange(key); expanded = false })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FoodChip(
+    label: String,
+    selected: Boolean,
+    activeColor: Color = NaturalPrimary,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) activeColor else MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (selected) Color.White else TextPrimary
+        )
     }
 }
 

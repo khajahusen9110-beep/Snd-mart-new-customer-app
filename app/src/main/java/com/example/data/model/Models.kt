@@ -194,7 +194,13 @@ data class ResolvedProduct(
     // "Most Ordered" food row + dish-search only: the hotel this dish belongs to.
     val soldVendorName: String? = null,
     // Dish-search results only: whether the dish's hotel is currently open.
-    val hotelOpen: Boolean = true
+    val hotelOpen: Boolean = true,
+    // Smart Food Search results only: backend already filtered to open+available — skip the
+    // client-side isHotelItemAvailable check.
+    val guaranteedAvailable: Boolean = false,
+    val vendorRating: Double? = null,
+    val vendorReviewCount: Long = 0,
+    val discountPercent: Double? = null
 ) {
     val id: String get() = baseProduct.id
     val name: String get() = baseProduct.name
@@ -395,6 +401,31 @@ data class ActivePromoRow(
 data class TopGroceryRow(
     @Json(name = "product_id") val productId: String = "",
     @Json(name = "units_sold") val unitsSold: Long = 0
+)
+
+// Row from public.search_food_items: a full dish row, already filtered to open+available.
+@JsonClass(generateAdapter = true)
+data class SearchFoodItemRow(
+    val id: String = "",
+    val name: String = "",
+    val price: Double = 0.0,
+    val mrp: Double? = null,
+    @Json(name = "discount_percent") val discountPercent: Double? = null,
+    @Json(name = "image_url") val imageUrl: String? = null,
+    @Json(name = "is_veg") val isVeg: Boolean? = null,
+    @Json(name = "vendor_id") val vendorId: String = "",
+    @Json(name = "vendor_name") val vendorName: String? = null,
+    @Json(name = "vendor_rating") val vendorRating: Double? = null,
+    @Json(name = "vendor_review_count") val vendorReviewCount: Long = 0,
+    @Json(name = "units_sold") val unitsSold: Long = 0,
+    @Json(name = "total_count") val totalCount: Long = 0
+)
+
+// Row from public.get_trending_food_searches: a search term and how many times it was searched.
+@JsonClass(generateAdapter = true)
+data class TrendingSearchRow(
+    val query: String = "",
+    @Json(name = "search_count") val searchCount: Long = 0
 )
 
 // Row from public.get_top_food_products: a hotel dish, its hotel, and total units sold.

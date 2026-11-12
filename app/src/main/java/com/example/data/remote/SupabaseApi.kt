@@ -304,6 +304,26 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<List<Map<String, @JvmSuppressWildcards Any?>>>
 
+    // Smart Food Search: typo-tolerant + partial-word matched (pg_trgm), exact match first,
+    // Veg/Non-Veg/Budget/Rating/Offers filters, 5 sort modes. Every row is already filtered to
+    // "open + available right now". Returns full dish rows directly (no second products request).
+    @POST("rest/v1/rpc/search_food_items")
+    suspend fun searchFoodItems(
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<List<SearchFoodItemRow>>
+
+    // Top searched terms in this city over the last 14 days. Returns [{ query, search_count }].
+    @POST("rest/v1/rpc/get_trending_food_searches")
+    suspend fun getTrendingFoodSearches(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<List<TrendingSearchRow>>
+
+    // Logs a "committed" search (debounce settled) — used only to build Trending Searches.
+    @POST("rest/v1/rpc/log_food_search")
+    suspend fun logFoodSearch(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
     // Active promotional offer for a section ("food" / "grocery"). Returns [] when no offer runs.
     @POST("rest/v1/rpc/get_active_promo")
     suspend fun getActivePromo(

@@ -1286,6 +1286,100 @@ class SndmartRepository(
         }
     }
 
+    /**
+     * Smart Food Search: typo-tolerant + partial-word matched (server-side pg_trgm), exact match
+     * first, Veg/Non-Veg/Budget/Rating/Offers filters, 5 sort modes. Every row is already
+     * filtered to "open + available right now" (see ResolvedProduct.guaranteedAvailable).
+     */
+    suspend fun searchFoodItems(
+        cityId: String,
+        query: String,
+        sort: String = "relevance",
+        vegFilter: String = "all",
+        maxPrice: Double? = null,
+        minRating: Double? = null,
+        offersOnly: Boolean = false
+    ): Result<List<ResolvedProduct>> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.success(emptyList())
+        return try {
+            val body = mapOf(
+                "p_city_id" to cityId,
+                "p_query" to query,
+                "p_sort" to sort,
+                "p_veg_filter" to vegFilter,
+                "p_max_price" to maxPrice,
+                "p_min_rating" to minRating,
+                "p_offers_only" to offersOnly,
+                "p_limit" to 40,
+                "p_offset" to 0
+            )
+            val res = api.searchFoodItems(body)
+            val rows = res.body().orEmpty()
+            if (!res.isSuccessful) return Result.success(emptyList())
+            val resolved = rows.map { r ->
+                ResolvedProduct(
+                    baseProduct = Product(
+                        id = r.id,
+                        name = r.name,
+                        price = r.price,
+                        mrp = r.mrp,
+                        vendorId = r.vendorId,
+                        imageUrl = r.imageUrl,
+                        isVeg = r.isVeg,
+                        isActive = true,
+                        isAvailable = true
+                    ),
+                    effectivePrice = r.price,
+                    effectiveMrp = r.mrp,
+                    effectiveStock = 1,
+                    effectiveIsAvailable = true,
+                    soldCount = r.unitsSold.toInt(),
+                    soldVendorName = r.vendorName,
+                    hotelOpen = true,
+                    guaranteedAvailable = true,
+                    vendorRating = r.vendorRating,
+                    vendorReviewCount = r.vendorReviewCount,
+                    discountPercent = r.discountPercent
+                )
+            }
+            Result.success(resolved)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception in smart food search: ${e.message}")
+            Result.success(emptyList())
+        }
+    }
+
+    /** Top searched terms in this city over the last 14 days. */
+    suspend fun getTrendingFoodSearches(cityId: String): Result<List<String>> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.success(emptyList())
+        return try {
+            val res = api.getTrendingFoodSearches(mapOf("p_city_id" to cityId, "p_limit" to 8))
+            val rows = res.body().orEmpty()
+            if (!res.isSuccessful) return Result.success(emptyList())
+            Result.success(rows.map { it.query })
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.success(emptyList())
+        }
+    }
+
+    /** Logs a "committed" search (debounce settled) — used only to build Trending Searches. */
+    fun logFoodSearch(cityId: String, query: String, resultsCount: Int) {
+        if (!SupabaseClient.isKeyConfigured()) return
+        cartSyncScope.launch {
+            try {
+                api.logFoodSearch(mapOf("p_city_id" to cityId, "p_query" to query, "p_results_count" to resultsCount))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Exception logging food search: ${e.message}")
+            }
+        }
+    }
+
     suspend fun getTopSellingFoodProducts(cityId: String, forceRefresh: Boolean = false): Result<List<ResolvedProduct>> {
         if (!forceRefresh) {
             val cached = topFoodCache[cityId]
