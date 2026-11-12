@@ -15,8 +15,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.content.Intent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Fastfood
 import androidx.compose.material.icons.outlined.Restaurant
@@ -27,7 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +47,7 @@ import com.example.data.repository.SndmartRepository
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.util.CategoryTabState
+import com.example.util.clockLabel
 import com.example.util.isVendorWithinOperatingHours
 import com.example.util.isWithinAnySlot
 import com.example.util.orderHotelCategoryTabs
@@ -61,6 +66,10 @@ private fun getHotelMenuItemTier(prod: ResolvedProduct, isHotelActive: Boolean, 
     }
 }
 
+// Synthetic tab id: not a real category, shows this hotel's real top-selling items (by sales,
+// not just featured/recent) instead of filtering allProducts by a real category id.
+private const val RECOMMENDED_TAB_ID = "__recommended__"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HotelMenuScreen(
@@ -74,6 +83,7 @@ fun HotelMenuScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     var vendor by remember { mutableStateOf<Vendor?>(null) }
     var operatingSlots by remember { mutableStateOf<List<OperatingSlot>>(emptyList()) }
@@ -245,8 +255,23 @@ fun HotelMenuScreen(
 
     // Category tab ordering/availability (spec rules 1-2): recomputed whenever the underlying
     // data, hotel-open state, or timeTick (minute tick / resume) changes.
-    val orderedTabs = remember(categories, allProducts, effectiveSlots, isHotelOpen, timeTick) {
+    val realTabs = remember(categories, allProducts, effectiveSlots, isHotelOpen, timeTick) {
         orderHotelCategoryTabs(categories, allProducts, effectiveSlots, isHotelOpen)
+    }
+    // This hotel's real top-selling items (by sales), for the "Recommended" tab — sits first,
+    // ahead of the real categories, and only appears once there's real sales data to show.
+    var vendorTopProducts by remember(vendorId) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    LaunchedEffect(vendorId, cityId) {
+        vendorTopProducts = repository.getVendorTopProducts(vendorId, cityId).getOrNull() ?: emptyList()
+    }
+    val orderedTabs = remember(realTabs, vendorTopProducts, isHotelOpen) {
+        if (vendorTopProducts.isEmpty()) realTabs
+        else listOf(
+            CategoryTabState(
+                category = Category(id = RECOMMENDED_TAB_ID, name = "Recommended", sortOrder = -1),
+                isAvailableNow = isHotelOpen
+            )
+        ) + realTabs
     }
 
     // Default-selection (spec rule 3): only while the customer hasn't tapped a tab themselves.
@@ -310,18 +335,41 @@ fun HotelMenuScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(
-                            text = vendorName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "Hotel Menu",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = vendorName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                Icons.Default.Verified,
+                                contentDescription = "Verified",
+                                tint = NaturalPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        val openCloseLabel = clockLabel(vendor?.openingTime)?.let { open ->
+                            clockLabel(vendor?.closingTime)?.let { close -> "$open - $close" }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (isHotelOpen) "Open Now" else "Closed",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isHotelOpen) SuccessGreen else Color(0xFFD92D20)
+                            )
+                            if (openCloseLabel != null) {
+                                Text(
+                                    text = " · $openCloseLabel",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
                     }
                 },
                 navigationIcon = {
@@ -333,6 +381,18 @@ fun HotelMenuScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            val url = "https://sndmart.in/hotel/$vendorId?name=${java.net.URLEncoder.encode(vendorName, "UTF-8")}"
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, "Order from $vendorName on Sndmart!\n$url")
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Share $vendorName"))
+                        }
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Share hotel")
+                    }
                     IconButton(
                         onClick = {
                             loadInitialData(forceRefresh = true)
@@ -396,15 +456,21 @@ fun HotelMenuScreen(
                 // Filter items reacting to the selected category (Swiggy-style)
                 // The item grid should always be filtered to whichever category is currently selected - never show all of this hotel's items unfiltered.
                 // Preserving existing sort logic: available+featured first, unavailable last
-                val categoryProducts = remember(allProducts, selectedCategoryId, isHotelOpen, effectiveSlots) {
-                    allProducts
-                        .filter { it.categoryId == selectedCategoryId }
-                        .sortedWith(
-                            compareBy<ResolvedProduct> { getHotelMenuItemTier(it, isHotelOpen, effectiveSlots) }
-                                .thenByDescending { it.isFeatured }
-                                .thenBy { it.effectivePrice }
-                                .thenBy { it.name.lowercase() }
-                        )
+                val categoryProducts = remember(allProducts, selectedCategoryId, isHotelOpen, effectiveSlots, vendorTopProducts) {
+                    if (selectedCategoryId == RECOMMENDED_TAB_ID) {
+                        // Recommended's whole point is sales ranking — keep it in that order
+                        // instead of re-sorting by price/name; only the availability tier wins.
+                        vendorTopProducts.sortedBy { getHotelMenuItemTier(it, isHotelOpen, effectiveSlots) }
+                    } else {
+                        allProducts
+                            .filter { it.categoryId == selectedCategoryId }
+                            .sortedWith(
+                                compareBy<ResolvedProduct> { getHotelMenuItemTier(it, isHotelOpen, effectiveSlots) }
+                                    .thenByDescending { it.isFeatured }
+                                    .thenBy { it.effectivePrice }
+                                    .thenBy { it.name.lowercase() }
+                            )
+                    }
                 }
                 // Filters the already-loaded category's items for THIS hotel only — no server
                 // round trip, the category's menu is small enough to filter on every keystroke.
@@ -667,6 +733,7 @@ fun HotelCategoryTabsRow(
                     imageUrl = tab.category.imageUrl,
                     isSelected = selectedCategoryId == tab.category.id,
                     isAvailable = tab.isAvailableNow,
+                    isRecommended = tab.category.id == RECOMMENDED_TAB_ID,
                     hint = tab.availableFromHint,
                     onClick = { onCategorySelected(tab.category.id) },
                     testTag = "hotel_category_tab_${tab.category.id}"
@@ -690,10 +757,11 @@ fun HotelCategoryCircleTab(
     modifier: Modifier = Modifier,
     isAllOption: Boolean = false,
     isAvailable: Boolean = true,
+    isRecommended: Boolean = false,
     hint: String? = null,
     testTag: String = ""
 ) {
-    val activeColor = NaturalPrimary
+    val activeColor = if (isRecommended) Color(0xFFC2410C) else NaturalPrimary
     val ringColor = if (isSelected) activeColor else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
     val ringWidth = if (isSelected) 2.5.dp else 1.dp
 
@@ -716,13 +784,21 @@ fun HotelCategoryCircleTab(
                 .padding(if (isSelected) 2.5.dp else 0.dp)
                 .clip(CircleShape)
                 .background(
-                    if (isAllOption && isSelected) activeColor.copy(alpha = 0.14f)
-                    else if (isAllOption) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                    if (isRecommended) Brush.linearGradient(listOf(Color(0xFFFFEDD5), Color(0xFFFED7AA)))
+                    else if (isAllOption && isSelected) SolidColor(activeColor.copy(alpha = 0.14f))
+                    else if (isAllOption) SolidColor(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    else SolidColor(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
                 ),
             contentAlignment = Alignment.Center
         ) {
-            if (isAllOption) {
+            if (isRecommended) {
+                Icon(
+                    imageVector = Icons.Default.Whatshot,
+                    contentDescription = "Recommended",
+                    tint = activeColor,
+                    modifier = Modifier.size(26.dp)
+                )
+            } else if (isAllOption) {
                 Icon(
                     imageVector = Icons.Outlined.RestaurantMenu,
                     contentDescription = "All items",

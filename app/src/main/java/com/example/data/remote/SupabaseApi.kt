@@ -318,6 +318,12 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<List<TrendingSearchRow>>
 
+    // Real top-selling items for ONE hotel (by units sold), for the hotel menu's "Recommended" tab.
+    @POST("rest/v1/rpc/get_vendor_top_products")
+    suspend fun getVendorTopProducts(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<List<TopGroceryRow>>
+
     // Logs a "committed" search (debounce settled) — used only to build Trending Searches.
     @POST("rest/v1/rpc/log_food_search")
     suspend fun logFoodSearch(

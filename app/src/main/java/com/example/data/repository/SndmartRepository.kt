@@ -1380,6 +1380,56 @@ class SndmartRepository(
         }
     }
 
+    /**
+     * Real top-selling items for ONE hotel (by units sold), for the hotel menu's "Recommended"
+     * tab. Unlike heroTopItems (which is really just featured/recent dishes for the banner
+     * carousel), this is genuine sales data.
+     */
+    suspend fun getVendorTopProducts(vendorId: String, cityId: String, limit: Int = 10): Result<List<ResolvedProduct>> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.success(emptyList())
+        return try {
+            val rankRes = api.getVendorTopProducts(mapOf("p_vendor_id" to vendorId, "p_city_id" to cityId, "p_limit" to limit))
+            val ranked = rankRes.body().orEmpty()
+            if (!rankRes.isSuccessful || ranked.isEmpty()) return Result.success(emptyList())
+            val soldById = ranked.associateBy({ it.productId }, { it.unitsSold })
+            val ids = ranked.map { it.productId }.filter { it.isNotBlank() }
+            if (ids.isEmpty()) return Result.success(emptyList())
+
+            val prodRes = api.getProductsByIds(
+                idInQuery = "in.(${ids.joinToString(",")})",
+                select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,available_from,available_until,product_variants(id,label,is_active,product_variant_city_stock(price,stock_qty,is_available,city_id))"
+            )
+            val products = (prodRes.body().orEmpty()).filter { it.vendorId != null }
+            val stockRes = api.getProductCityStockBatch(
+                cityId = "eq.$cityId",
+                productIdsQuery = "in.(${ids.joinToString(",")})",
+                select = "product_id,price,mrp,stock_qty,is_available"
+            )
+            val stockMap = if (stockRes.isSuccessful) stockRes.body().orEmpty().associateBy { it.productId } else emptyMap()
+
+            val resolved = products.mapNotNull { prod ->
+                if (prod.isActive != true) return@mapNotNull null
+                val override = stockMap[prod.id]
+                ResolvedProduct(
+                    baseProduct = prod,
+                    effectivePrice = override?.price ?: prod.price,
+                    effectiveMrp = override?.mrp ?: prod.mrp,
+                    effectiveStock = override?.stockQty ?: (prod.stockQty ?: (prod.stockQuantity ?: 0)),
+                    effectiveIsAvailable = override?.isAvailable ?: prod.isAvailable,
+                    variants = resolveProductVariants(prod, cityId),
+                    soldCount = (soldById[prod.id] ?: 0L).toInt()
+                )
+            }.sortedByDescending { it.soldCount }
+
+            Result.success(resolved)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception loading vendor top products: ${e.message}")
+            Result.success(emptyList())
+        }
+    }
+
     suspend fun getTopSellingFoodProducts(cityId: String, forceRefresh: Boolean = false): Result<List<ResolvedProduct>> {
         if (!forceRefresh) {
             val cached = topFoodCache[cityId]

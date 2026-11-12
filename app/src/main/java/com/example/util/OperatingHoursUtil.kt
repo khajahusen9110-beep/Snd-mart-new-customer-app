@@ -88,3 +88,12 @@ fun parseTimeString(timeStr: String): LocalTime? {
     }
     return null
 }
+
+private val CLOCK_LABEL_FORMAT = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+
+/** "09:00:00" / "9:00 AM" -> "9:00 AM". Returns null if the string can't be parsed. */
+fun clockLabel(timeStr: String?): String? {
+    if (timeStr.isNullOrBlank()) return null
+    val t = parseTimeString(timeStr) ?: return null
+    return t.format(CLOCK_LABEL_FORMAT)
+}
