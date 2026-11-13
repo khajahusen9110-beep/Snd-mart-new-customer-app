@@ -147,7 +147,7 @@ fun SndmartTopBar(
                     .testTag("city_selector_topbar")
             ) {
                 HeaderCircle(Icons.Default.LocationOn, "Delivery location")
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         text = "DELIVER TO",
@@ -213,7 +213,7 @@ fun SndmartTopBar(
             if (onRefresh != null) {
                 IconButton(
                     onClick = onRefresh,
-                    modifier = Modifier.testTag("topbar_refresh_button")
+                    modifier = Modifier.size(42.dp).testTag("topbar_refresh_button")
                 ) {
                     HeaderCircle(Icons.Default.Refresh, "Refresh")
                 }
@@ -221,7 +221,7 @@ fun SndmartTopBar(
             if (onNotificationsClick != null) {
                 IconButton(
                     onClick = onNotificationsClick,
-                    modifier = Modifier.testTag("topbar_notifications_button")
+                    modifier = Modifier.size(42.dp).testTag("topbar_notifications_button")
                 ) {
                     Box {
                         HeaderCircle(Icons.Outlined.Notifications, "Notifications")
@@ -243,7 +243,7 @@ fun SndmartTopBar(
             }
             IconButton(
                 onClick = onCartClick,
-                modifier = Modifier.testTag("topbar_cart_button")
+                modifier = Modifier.size(42.dp).testTag("topbar_cart_button")
             ) {
                 Box {
                     HeaderCircle(Icons.Outlined.ShoppingCart, "Cart")
