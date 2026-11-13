@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -656,51 +657,127 @@ fun FloatingCartButton(
     totalPrice: Double,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    testTag: String = "floating_cart_button"
+    testTag: String = "floating_cart_button",
+    /** City's free-delivery order amount; shows a progress strip towards it when set (same as the website). */
+    freeDeliveryAt: Double? = null
 ) {
     if (itemCount <= 0) return
 
+    val goal = freeDeliveryAt?.takeIf { it > 0.0 }
+    val left = if (goal != null) kotlin.math.max(0.0, kotlin.math.ceil(goal - totalPrice)) else 0.0
+    val pct by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (goal != null) (totalPrice / goal).toFloat().coerceIn(0f, 1f) else 0f,
+        animationSpec = androidx.compose.animation.core.tween(450),
+        label = "freeDeliveryProgress"
+    )
+    // The count "bumps" every time it changes.
+    val bump = remember { androidx.compose.animation.core.Animatable(1f) }
+    androidx.compose.runtime.LaunchedEffect(itemCount) {
+        bump.snapTo(1.18f)
+        bump.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 500f))
+    }
+
     Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(28.dp),
-        color = NaturalPrimary,
-        contentColor = Color.White,
-        shadowElevation = 8.dp,
+        shape = RoundedCornerShape(18.dp),
+        color = if (goal != null) Color.White else Color.Transparent,
+        shadowElevation = if (goal != null) 10.dp else 0.dp,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .height(54.dp)
-            .testTag(testTag)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "$itemCount item${if (itemCount > 1) "s" else ""} • ₹${"%.0f".format(totalPrice)}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically
+        Column {
+            if (goal != null) {
+                Column(
+                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 9.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (left <= 0.0) {
+                        Text(
+                            "🎉 FREE delivery amount reached",
+                            color = Color(0xFF15803D),
+                            fontWeight = FontWeight.ExtraBold,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    } else {
+                        Text(
+                            androidx.compose.ui.text.buildAnnotatedString {
+                                append("Add ")
+                                pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.ExtraBold, color = TextPrimary))
+                                append("₹${"%.0f".format(left)}")
+                                pop()
+                                append(" more for FREE delivery")
+                            },
+                            color = TextSecondary,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(pct)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(
+                                    if (left <= 0.0) androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xFF22C55E), Color(0xFF22C55E)))
+                                    else androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Color(0xFFF59E0B), Color(0xFF22C55E)))
+                                )
+                        )
+                    }
+                }
+            }
+            Surface(
+                onClick = onClick,
+                shape = RoundedCornerShape(16.dp),
+                color = Color.Transparent,
+                contentColor = Color.White,
+                shadowElevation = 10.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .testTag(testTag)
             ) {
-                Text(
-                    text = "Checkout",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "Proceed to Checkout",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(androidx.compose.ui.graphics.lerp(NaturalPrimary, Color.White, 0.12f), NaturalPrimary)
+                            )
+                        )
+                        .padding(horizontal = 22.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "$itemCount item${if (itemCount > 1) "s" else ""} • ₹${"%.0f".format(totalPrice)}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        modifier = Modifier.graphicsLayer { scaleX = bump.value; scaleY = bump.value }
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Checkout",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Proceed to Checkout",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
         }
     }
