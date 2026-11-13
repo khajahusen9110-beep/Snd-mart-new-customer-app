@@ -100,14 +100,14 @@ fun ReferEarnScreen(
             } else if (error != null) {
                 Text(error!!, color = NaturalBadgeRed)
             } else {
-                Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder, elevation = appCardElevation()) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(Icons.Outlined.CardGiftcard, contentDescription = null, tint = NaturalPrimary, modifier = Modifier.size(36.dp))
-                        Text("Refer friends, earn wallet cash", fontWeight = FontWeight.Bold, fontSize = 18.sp, textAlign = TextAlign.Center)
+                        Text("Refer friends, earn wallet cash", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, textAlign = TextAlign.Center)
                         Text(
                             "Share your code — your friend gets ₹${friendReward.toInt()} on their first order, and you get ₹${referrerReward.toInt()} in your Sndmart wallet.",
                             color = TextSecondary, fontSize = 13.sp, textAlign = TextAlign.Center
@@ -115,7 +115,7 @@ fun ReferEarnScreen(
                     }
                 }
 
-                Card(shape = RoundedCornerShape(20.dp)) {
+                Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder, elevation = appCardElevation()) {
                     Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Your referral code", color = TextSecondary, fontSize = 12.sp)
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -181,7 +181,7 @@ fun ReferEarnScreen(
                     }
                 }
 
-                Card(shape = RoundedCornerShape(20.dp)) {
+                Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder, elevation = appCardElevation()) {
                     Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Outlined.People, contentDescription = null, tint = NaturalPrimary)
@@ -197,7 +197,7 @@ fun ReferEarnScreen(
                 }
 
                 if (totalReferred == 0) {
-                    Card(shape = RoundedCornerShape(20.dp)) {
+                    Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder, elevation = appCardElevation()) {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Got a friend's code?", color = TextSecondary, fontSize = 12.sp)
                             if (applied) {
@@ -209,6 +209,8 @@ fun ReferEarnScreen(
                                         onValueChange = { applyCode = it.uppercase() },
                                         placeholder = { Text("Enter referral code") },
                                         singleLine = true,
+                                        shape = AppFieldShape,
+                                        colors = appFieldColors(),
                                         modifier = Modifier.weight(1f)
                                     )
                                     Button(
@@ -240,9 +242,9 @@ fun ReferEarnScreen(
                     }
                 }
 
-                Card(shape = RoundedCornerShape(20.dp)) {
+                Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder, elevation = appCardElevation()) {
                     Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("How it works", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("How it works", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                         Text("1. Share your code with a friend who hasn't ordered on Sndmart yet.", color = TextSecondary, fontSize = 13.sp)
                         Text("2. They enter it on this page before placing their first order.", color = TextSecondary, fontSize = 13.sp)
                         Text("3. When their first order (₹${minOrderAmount.toInt()}+) is delivered, you both get wallet cash.", color = TextSecondary, fontSize = 13.sp)

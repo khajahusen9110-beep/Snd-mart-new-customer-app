@@ -487,6 +487,43 @@ fun HotelMenuScreen(
                     else categoryProducts.filter { it.name.contains(trimmedQuery, ignoreCase = true) }
                 }
 
+                // Same add / remove / view behaviour for the dish grid and the Featured row.
+                val addProduct: (ResolvedProduct) -> Unit = { product ->
+                    val res = repository.addToCart(
+                        productId = product.id,
+                        vendorId = vendorId,
+                        cityId = cityId,
+                        quantityDelta = 1,
+                        isHotel = true,
+                        productForSnapshot = product
+                    )
+                    if (res is AddToCartResult.HotelConflict) {
+                        pendingConflict = res
+                    }
+                }
+                val removeProduct: (ResolvedProduct) -> Unit = { product ->
+                    repository.addToCart(
+                        productId = product.id,
+                        vendorId = vendorId,
+                        cityId = cityId,
+                        quantityDelta = -1,
+                        isHotel = true
+                    )
+                }
+                val viewProduct: (ResolvedProduct) -> Unit = { product ->
+                    Analytics.trackEvent(
+                        "product_view",
+                        mapOf("product_id" to product.id, "category" to "hotel")
+                    )
+                }
+
+                // "Featured": this hotel's featured items that can be ordered right now (max 10), from
+                // the already loaded menu (same rule as the website's featuredNow).
+                val featuredNow = remember(allProducts, isHotelOpen, effectiveSlots, timeTick) {
+                    if (!isHotelOpen) emptyList()
+                    else allProducts.filter { it.isFeatured && it.isHotelItemAvailable(effectiveSlots) }.take(10)
+                }
+
                 Column(modifier = Modifier.fillMaxSize()) {
                     if (!isHotelOpen) {
                         Surface(
@@ -645,6 +682,38 @@ fun HotelMenuScreen(
                                 OfferBanner(kind = PromoKind.FOOD)
                             }
 
+                            if (featuredNow.isNotEmpty()) {
+                                item(key = "hotel_featured_row") {
+                                    Column(modifier = Modifier.testTag("hotel_featured_row")) {
+                                        Text(
+                                            text = "Featured",
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = TextPrimary
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            contentPadding = PaddingValues(vertical = 4.dp)
+                                        ) {
+                                            items(featuredNow, key = { "featured_${it.id}" }) { product ->
+                                                MenuGridCard(
+                                                    product = product,
+                                                    quantityInCart = hotelCart.find { it.productId == product.id }?.quantity ?: 0,
+                                                    isHotelActive = isHotelOpen,
+                                                    vendorSlots = effectiveSlots,
+                                                    modifier = Modifier.width(158.dp),
+                                                    tagPrefix = "featured_",
+                                                    onIncrease = { addProduct(product) },
+                                                    onDecrease = { removeProduct(product) },
+                                                    onView = { viewProduct(product) }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             // Swiggy-style 2-column dish grid — a plain chunked-row grid (not a
                             // nested LazyVerticalGrid) since this already sits inside the outer
                             // LazyColumn, matching the pattern used for grocery category chips.
@@ -662,34 +731,9 @@ fun HotelMenuScreen(
                                             isHotelActive = isHotelOpen,
                                             vendorSlots = effectiveSlots,
                                             modifier = Modifier.weight(1f),
-                                            onIncrease = {
-                                                val res = repository.addToCart(
-                                                    productId = product.id,
-                                                    vendorId = vendorId,
-                                                    cityId = cityId,
-                                                    quantityDelta = 1,
-                                                    isHotel = true,
-                                                    productForSnapshot = product
-                                                )
-                                                if (res is AddToCartResult.HotelConflict) {
-                                                    pendingConflict = res
-                                                }
-                                            },
-                                            onDecrease = {
-                                                repository.addToCart(
-                                                    productId = product.id,
-                                                    vendorId = vendorId,
-                                                    cityId = cityId,
-                                                    quantityDelta = -1,
-                                                    isHotel = true
-                                                )
-                                            },
-                                            onView = {
-                                                Analytics.trackEvent(
-                                                    "product_view",
-                                                    mapOf("product_id" to product.id, "category" to "hotel")
-                                                )
-                                            }
+                                            onIncrease = { addProduct(product) },
+                                            onDecrease = { removeProduct(product) },
+                                            onView = { viewProduct(product) }
                                         )
                                     }
                                     // Pad an odd-sized last row so the single card keeps half width.
@@ -864,6 +908,8 @@ fun MenuGridCard(
     isHotelActive: Boolean = true,
     vendorSlots: List<OperatingSlot> = emptyList(),
     modifier: Modifier = Modifier,
+    /** Distinguishes test tags when the same dish is shown twice (Featured row + grid). */
+    tagPrefix: String = "",
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
     onView: () -> Unit = {}
@@ -875,7 +921,7 @@ fun MenuGridCard(
             .fillMaxWidth()
             .alpha(if (isAvailable) 1f else 0.65f)
             .clickable(onClick = onView)
-            .testTag("menu_item_${product.id}"),
+            .testTag("${tagPrefix}menu_item_${product.id}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isAvailable) MaterialTheme.colorScheme.surface
@@ -979,7 +1025,7 @@ fun MenuGridCard(
                     onIncrease = onIncrease,
                     onDecrease = onDecrease,
                     modifier = Modifier.fillMaxWidth(),
-                    testTagPrefix = "hotel_item_${product.id}"
+                    testTagPrefix = "${tagPrefix}hotel_item_${product.id}"
                 )
             } else {
                 Surface(

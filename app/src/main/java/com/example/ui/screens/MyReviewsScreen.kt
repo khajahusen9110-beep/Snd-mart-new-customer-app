@@ -142,10 +142,10 @@ fun MyReviewsScreen(
 private fun ReviewCard(review: ReviewRow) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = AppCardShape,
+        colors = appCardColors(),
+        border = AppCardBorder,
+        elevation = appCardElevation()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(

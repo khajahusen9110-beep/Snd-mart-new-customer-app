@@ -535,7 +535,8 @@ fun AuthScreen(
                                 }
                             }
                         ),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = AppFieldShape,
+                        colors = appFieldColors(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("auth_phone_input")
@@ -552,7 +553,7 @@ fun AuthScreen(
                             .testTag("auth_submit_button"),
                         colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary),
                         enabled = mobileNumber.length == 10 && !isLoading,
-                        shape = RoundedCornerShape(26.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
@@ -707,7 +708,7 @@ fun AuthScreen(
                             .testTag("verify_otp_button"),
                         colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary),
                         enabled = otpCode.length == 6 && !isLoading,
-                        shape = RoundedCornerShape(26.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
@@ -792,7 +793,8 @@ fun AuthScreen(
                                 }
                             }
                         ),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = AppFieldShape,
+                        colors = appFieldColors(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("auth_name_input")
@@ -808,7 +810,7 @@ fun AuthScreen(
                             .testTag("save_name_button"),
                         colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary),
                         enabled = fullName.trim().isNotBlank() && !isLoading,
-                        shape = RoundedCornerShape(26.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(

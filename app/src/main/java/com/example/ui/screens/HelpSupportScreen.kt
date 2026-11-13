@@ -140,23 +140,23 @@ private fun SupportOptionCard(
             .fillMaxWidth()
             .clickable { onClick() }
             .testTag(testTag),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = AppCardShape,
+        colors = appCardColors(),
+        border = AppCardBorder,
+        elevation = appCardElevation()
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(shape = CircleShape, color = iconBg, modifier = Modifier.size(44.dp)) {
+            Surface(shape = CircleShape, color = iconBg, border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft), modifier = Modifier.size(44.dp)) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(icon, contentDescription = null, tint = iconTint)
                 }
             }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp))

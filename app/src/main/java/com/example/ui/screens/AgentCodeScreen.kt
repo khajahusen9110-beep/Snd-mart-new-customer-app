@@ -51,14 +51,14 @@ fun AgentCodeScreen(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Card(shape = RoundedCornerShape(20.dp)) {
+            Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder, elevation = appCardElevation()) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(Icons.Outlined.Work, contentDescription = null, tint = NaturalPrimary, modifier = Modifier.size(32.dp))
-                    Text("Were you referred by a Sndmart Agent?", fontWeight = FontWeight.Bold, fontSize = 17.sp, textAlign = TextAlign.Center)
+                    Text("Were you referred by a Sndmart Agent?", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, textAlign = TextAlign.Center)
                     Text(
                         "If a Sndmart Agent gave you a code (not a friend's referral code), enter it here. This is a one-time, permanent link.",
                         color = TextSecondary, fontSize = 13.sp, textAlign = TextAlign.Center
@@ -66,7 +66,7 @@ fun AgentCodeScreen(
                 }
             }
 
-            Card(shape = RoundedCornerShape(20.dp)) {
+            Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder, elevation = appCardElevation()) {
                 Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (applied) {
                         Text("Agent code applied — thanks!", color = SuccessGreen, fontSize = 14.sp)
@@ -77,6 +77,8 @@ fun AgentCodeScreen(
                                 onValueChange = { code = it.uppercase() },
                                 placeholder = { Text("Enter agent code") },
                                 singleLine = true,
+                                shape = AppFieldShape,
+                                colors = appFieldColors(),
                                 modifier = Modifier.weight(1f)
                             )
                             Button(

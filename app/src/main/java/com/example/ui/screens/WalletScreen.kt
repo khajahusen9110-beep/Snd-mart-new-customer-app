@@ -155,7 +155,7 @@ fun WalletScreen(
                         item {
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
@@ -175,10 +175,14 @@ fun WalletScreen(
                                 .fillMaxWidth()
                                 .testTag("wallet_balance_card"),
                             shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = NaturalPrimary, contentColor = Color.White),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            colors = CardDefaults.cardColors(containerColor = Color.Transparent, contentColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
                         ) {
-                            Column(modifier = Modifier.padding(22.dp)) {
+                            Column(
+                                modifier = Modifier
+                                    .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(NaturalPrimary, NaturalPrimaryDark)))
+                                    .padding(22.dp)
+                            ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Outlined.AccountBalanceWallet, contentDescription = null, tint = PastelMint, modifier = Modifier.size(22.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -295,7 +299,7 @@ fun WalletScreen(
                     }
 
                     item {
-                        Text("History", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("History", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                     }
 
                     if (history.isEmpty()) {
@@ -315,9 +319,10 @@ fun WalletScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable(enabled = !e.orderId.isNullOrBlank()) { e.orderId?.let(onOpenOrder) },
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
+                                shape = AppCardShape,
+                                colors = appCardColors(),
+                                elevation = appCardElevation(),
+                                border = AppCardBorder
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -398,9 +403,10 @@ private fun WalletSectionCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
+        shape = AppCardShape,
+        colors = appCardColors(),
+        elevation = appCardElevation(),
+        border = AppCardBorder
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             if (title != null) {
@@ -411,7 +417,7 @@ private fun WalletSectionCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text(title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
                     trailing?.invoke()
                 }
             }
