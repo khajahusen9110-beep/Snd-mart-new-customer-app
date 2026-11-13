@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +37,9 @@ enum class PromoKind { FOOD, GROCERY }
 data class PromoState(val food: ActivePromoRow? = null, val grocery: ActivePromoRow? = null)
 
 val LocalActivePromo = staticCompositionLocalOf { PromoState() }
+
+/** City Admin accent colors + banner photos for everything below (provided by HomeScreen). */
+val LocalCityTheme = staticCompositionLocalOf { CityTheme() }
 
 @Composable
 fun promoFor(kind: PromoKind): ActivePromoRow? {
@@ -112,21 +116,25 @@ fun OfferBanner(kind: PromoKind, modifier: Modifier = Modifier) {
     if (promo.percent <= 0) return
 
     val isGrocery = kind == PromoKind.GROCERY
-    val gradient = if (isGrocery) {
-        Brush.linearGradient(listOf(Color(0xFF15803D), Color(0xFF166534)))
-    } else {
-        Brush.linearGradient(listOf(Color(0xFFE11D48), Color(0xFFB91C3C)))
-    }
+    val theme = LocalCityTheme.current
+    val gradient = if (isGrocery) theme.groceryBannerBrush else theme.foodPromoBrush
+    val photo = if (isGrocery) theme.offerBannerGroceryImageUrl else theme.offerBannerFoodImageUrl
     val pct = Math.round(promo.percent).toInt()
     val title = promo.bannerNote?.takeIf { it.isNotBlank() } ?: "$pct% OFF"
     val timeLeft = if (promo.showCountdown) rememberTimeLeft(promo.endsAt) else null
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
+            .shadow(8.dp, RoundedCornerShape(16.dp), clip = false)
             .clip(RoundedCornerShape(16.dp))
             .background(gradient)
     ) {
+    if (photo != null) {
+        ProductImage(url = photo, contentDescription = null, modifier = Modifier.matchParentSize())
+        Box(Modifier.matchParentSize().background(Brush.linearGradient(listOf(Color.Black.copy(alpha = 0.5f), Color.Black.copy(alpha = 0.28f)))))
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -189,6 +197,7 @@ fun OfferBanner(kind: PromoKind, modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
     }
 }
 

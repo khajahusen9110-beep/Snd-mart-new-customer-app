@@ -71,7 +71,7 @@ fun ScratchCardDialog(amount: Double, onRevealed: () -> Unit, onDismiss: () -> U
                         .fillMaxWidth()
                         .height(140.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Brush.linearGradient(listOf(NaturalPrimary, Color(0xFF8B5CF6))))
+                        .background(Brush.linearGradient(listOf(NaturalPrimary, Color(0xFF9C7FCF))))
                 ) {
                     Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Outlined.CardGiftcard, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
