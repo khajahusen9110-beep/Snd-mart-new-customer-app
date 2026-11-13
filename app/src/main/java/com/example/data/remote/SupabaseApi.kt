@@ -146,6 +146,17 @@ interface SupabaseApi {
         @Query("offset") offset: Int? = null
     ): Response<List<Product>>
 
+    // Featured grocery products (admin-starred), for the home "Featured Products" row.
+    @GET("rest/v1/products")
+    suspend fun getFeaturedGroceryProducts(
+        @Query("is_active") isActive: String = "eq.true",
+        @Query("is_featured") isFeatured: String = "eq.true",
+        @Query("vendor_id") vendorId: String = "is.null",
+        @Query("select") select: String,
+        @Query("order") order: String = "name.asc",
+        @Query("limit") limit: Int = 40
+    ): Response<List<Product>>
+
     @GET("rest/v1/products")
     suspend fun getProductById(
         @Query("id") idQuery: String
