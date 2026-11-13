@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -92,6 +93,11 @@ fun HotelMenuScreen(
     var heroTopItems by remember(vendorId) { mutableStateOf<List<Product>>(emptyList()) }
     LaunchedEffect(vendorId) {
         heroTopItems = repository.getHotelTopItems(vendorId).getOrNull() ?: emptyList()
+    }
+    // City's free-delivery order amount, for the cart bar's progress strip.
+    var freeDeliveryAt by remember(cityId) { mutableStateOf<Double?>(null) }
+    LaunchedEffect(cityId) {
+        freeDeliveryAt = repository.getFreeDeliveryThreshold(cityId)
     }
     // City Admin's Operating Hours / Emergency Close — caps this hotel's own hours.
     var city by remember(cityId) { mutableStateOf<com.example.data.model.City?>(null) }
@@ -430,7 +436,8 @@ fun HotelMenuScreen(
                     itemCount = thisHotelItemCount,
                     totalPrice = thisHotelTotalPrice,
                     onClick = { onProceedToCheckout(true) },
-                    testTag = "hotel_floating_checkout_button"
+                    testTag = "hotel_floating_checkout_button",
+                    freeDeliveryAt = freeDeliveryAt
                 )
             }
         }
@@ -546,12 +553,12 @@ fun HotelMenuScreen(
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(24.dp),
+                            shape = RoundedCornerShape(14.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = SurfaceVariantLight,
+                                focusedContainerColor = Color.White,
                                 unfocusedContainerColor = SurfaceVariantLight,
                                 focusedBorderColor = NaturalPrimary,
-                                unfocusedBorderColor = OutlineBorder
+                                unfocusedBorderColor = Color.Transparent
                             ),
                             singleLine = true
                         )
@@ -570,10 +577,7 @@ fun HotelMenuScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                            thickness = 1.dp
-                        )
+                        HorizontalDivider(color = OutlineSoft, thickness = 1.dp)
                     }
 
                     // 3 & 4: Single scrollable grid/list of items below reacting to the selected tab
@@ -606,20 +610,17 @@ fun HotelMenuScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .testTag("hotel_menu_items_list"),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 110.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            item(key = "hotel_menu_offer_banner") {
-                                OfferBanner(kind = PromoKind.FOOD)
-                            }
-
                             if (!vendor?.bannerUrl.isNullOrBlank()) {
                                 item(key = "hotel_banner_header") {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .aspectRatio(16f / 9f)
-                                            .clip(RoundedCornerShape(16.dp))
+                                            .shadow(8.dp, RoundedCornerShape(18.dp))
+                                            .clip(RoundedCornerShape(18.dp))
                                     ) {
                                         if (heroTopItems.isNotEmpty()) {
                                             HotelItemsCarousel(
@@ -638,6 +639,10 @@ fun HotelMenuScreen(
                                         }
                                     }
                                 }
+                            }
+
+                            item(key = "hotel_menu_offer_banner") {
+                                OfferBanner(kind = PromoKind.FOOD)
                             }
 
                             // Swiggy-style 2-column dish grid — a plain chunked-row grid (not a
@@ -871,20 +876,20 @@ fun MenuGridCard(
             .alpha(if (isAvailable) 1f else 0.65f)
             .clickable(onClick = onView)
             .testTag("menu_item_${product.id}"),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isAvailable) MaterialTheme.colorScheme.surface
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        border = BorderStroke(1.dp, OutlineSoft),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(10.dp)) {
+        Column(modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 10.dp)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(118.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .height(126.dp)
+                    .clip(RoundedCornerShape(12.dp))
             ) {
                 ProductImage(
                     url = product.imageUrl,
@@ -937,10 +942,11 @@ fun MenuGridCard(
 
             Text(
                 text = product.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
+                fontSize = 13.5.sp,
+                lineHeight = 17.5.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = if (isAvailable) TextPrimary else TextMuted,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
 
@@ -977,9 +983,9 @@ fun MenuGridCard(
                 )
             } else {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(10.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, OutlineSoft),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(34.dp)

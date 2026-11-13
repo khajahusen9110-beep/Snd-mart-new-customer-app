@@ -25,6 +25,8 @@ import com.example.data.repository.SndmartRepository
 import com.example.SndmartApp
 import com.example.data.session.UserSessionManager
 import com.example.service.PushTokenManager
+import com.example.ui.components.noTapFeedback
+import com.example.util.AppFeedback
 import com.example.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -68,7 +70,7 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Account", fontWeight = FontWeight.Bold) },
+                title = { Text("My Account", fontWeight = FontWeight.ExtraBold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -88,8 +90,8 @@ fun ProfileScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    border = androidx.compose.foundation.BorderStroke(1.dp, OutlineSoft),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
@@ -167,7 +169,8 @@ fun ProfileScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, OutlineSoft),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column {
                         ProfileMenuItem(
@@ -262,6 +265,17 @@ fun ProfileScreen(
                             subtitle = "Call, WhatsApp or email us",
                             onClick = onNavigateToHelp,
                             testTag = "menu_item_help"
+                        )
+                        HorizontalDivider(color = OutlineSoft)
+                        var soundsOn by remember { mutableStateOf(AppFeedback.soundsEnabled()) }
+                        AppSoundsRow(
+                            checked = soundsOn,
+                            onToggle = {
+                                val next = !soundsOn
+                                AppFeedback.setSoundsEnabled(next)
+                                soundsOn = next
+                                if (next) AppFeedback.add()
+                            }
                         )
                     }
                 }
@@ -372,5 +386,50 @@ fun ProfileMenuItem(
             tint = TextMuted,
             modifier = Modifier.size(18.dp)
         )
+    }
+}
+
+
+/** "App Sounds" row with an on/off switch (tap + order sounds); the row does its own feedback. */
+@Composable
+fun AppSoundsRow(checked: Boolean, onToggle: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .noTapFeedback()
+            .clickable { onToggle() }
+            .padding(16.dp)
+            .testTag("menu_item_sounds"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (checked) Icons.Outlined.VolumeUp else Icons.Outlined.VolumeOff,
+            contentDescription = null,
+            tint = if (checked) NaturalPrimary else TextMuted,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("App Sounds", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(
+                "Tap and order sounds are ${if (checked) "on" else "off"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
+        }
+        val knob by androidx.compose.animation.core.animateDpAsState(if (checked) 18.dp else 0.dp, label = "soundKnob")
+        Box(
+            modifier = Modifier
+                .size(width = 44.dp, height = 26.dp)
+                .background(if (checked) NaturalPrimary else OutlineBorder, RoundedCornerShape(13.dp))
+                .padding(3.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .offset(x = knob)
+                    .size(20.dp)
+                    .background(Color.White, CircleShape)
+            )
+        }
     }
 }

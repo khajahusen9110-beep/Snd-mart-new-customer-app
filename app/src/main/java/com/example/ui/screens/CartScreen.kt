@@ -165,7 +165,7 @@ fun CartScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Cart", fontWeight = FontWeight.Bold) },
+                title = { Text("My Cart", fontWeight = FontWeight.ExtraBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -605,7 +605,7 @@ fun CartScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                            border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
@@ -681,7 +681,7 @@ fun CartItemRow(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (!isPurchasable) NaturalBadgeRed.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            if (!isPurchasable) NaturalBadgeRed.copy(alpha = 0.4f) else com.example.ui.theme.OutlineSoft
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -765,7 +765,7 @@ private fun RecommendedFoodCard(product: ResolvedProduct, onAdd: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft),
         modifier = Modifier.width(132.dp)
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
