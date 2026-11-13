@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,18 +62,21 @@ fun EditProfileScreen(
         ) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                shape = AppCardShape,
+                colors = appCardColors(),
+                elevation = appCardElevation(),
+                border = AppCardBorder
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Personal Details", fontWeight = FontWeight.Bold)
+                    Text("Personal Details", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
                         label = { Text("Full Name") },
                         singleLine = true,
                         leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                        shape = AppFieldShape,
+                        colors = appFieldColors(),
                         modifier = Modifier.fillMaxWidth().testTag("edit_name_field")
                     )
                     OutlinedTextField(
@@ -81,6 +85,8 @@ fun EditProfileScreen(
                         label = { Text("Phone Number") },
                         singleLine = true,
                         leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                        shape = AppFieldShape,
+                        colors = appFieldColors(),
                         modifier = Modifier.fillMaxWidth().testTag("edit_phone_field")
                     )
                 }
@@ -113,7 +119,7 @@ fun EditProfileScreen(
                     .height(50.dp)
                     .testTag("save_profile_button"),
                 colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary),
-                shape = RoundedCornerShape(24.dp)
+                shape = RoundedCornerShape(16.dp)
             ) {
                 if (saving) {
                     CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(20.dp))

@@ -246,7 +246,7 @@ fun NotificationsScreen(
                                     } else {
                                         OutlinedButton(
                                             onClick = { loadNotifications(reset = false) },
-                                            shape = RoundedCornerShape(20.dp),
+                                            shape = RoundedCornerShape(14.dp),
                                             modifier = Modifier.testTag("load_more_notifications_button")
                                         ) {
                                             Text("Load More Notifications (20)")
@@ -276,11 +276,12 @@ private fun NotificationCardItem(
             .fillMaxWidth()
             .clickable { onClick() }
             .testTag("notification_item_${notification.id}"),
-        shape = RoundedCornerShape(16.dp),
+        shape = AppCardShape,
+        border = AppCardBorder,
         colors = CardDefaults.cardColors(
-            containerColor = if (!notification.isRead) NaturalPrimaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
+            containerColor = if (!notification.isRead) NaturalPrimaryContainer.copy(alpha = 0.6f) else Color.White
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (!notification.isRead) 1.5.dp else 0.5.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier

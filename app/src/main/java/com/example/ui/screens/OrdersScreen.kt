@@ -192,7 +192,7 @@ fun OrdersScreen(
                         Button(
                             onClick = onRequireLogin,
                             colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary),
-                            shape = RoundedCornerShape(20.dp),
+                            shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.testTag("orders_signin_button")
                         ) {
                             Text("Sign In Now")
@@ -267,7 +267,7 @@ fun OrdersScreen(
                                 } else {
                                     OutlinedButton(
                                         onClick = { loadOrders(reset = false) },
-                                        shape = RoundedCornerShape(20.dp),
+                                        shape = RoundedCornerShape(14.dp),
                                         modifier = Modifier.testTag("load_more_orders_button")
                                     ) {
                                         Text("Load More Orders (20)")
@@ -340,10 +340,10 @@ fun OrderCardItem(
             .fillMaxWidth()
             .clickable { onClick() }
             .testTag("order_card_${order.orderNumber}"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = AppCardShape,
+        colors = appCardColors(),
+        border = AppCardBorder,
+        elevation = appCardElevation()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(

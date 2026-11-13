@@ -232,13 +232,13 @@ private fun AddressCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = AppCardShape,
+        colors = appCardColors(),
+        elevation = appCardElevation(),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (address.isDefault) NaturalPrimary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            if (address.isDefault) NaturalPrimary else com.example.ui.theme.OutlineSoft
+        )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -287,11 +287,11 @@ private fun AddressCard(
             Spacer(modifier = Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (!address.isDefault) {
-                    OutlinedButton(onClick = onSetDefault, shape = RoundedCornerShape(16.dp), modifier = Modifier.testTag("set_default_button")) {
+                    OutlinedButton(onClick = onSetDefault, shape = RoundedCornerShape(14.dp), modifier = Modifier.testTag("set_default_button")) {
                         Text("Set Default", fontSize = 12.sp)
                     }
                 }
-                OutlinedButton(onClick = onEdit, shape = RoundedCornerShape(16.dp), modifier = Modifier.testTag("edit_address_button")) {
+                OutlinedButton(onClick = onEdit, shape = RoundedCornerShape(14.dp), modifier = Modifier.testTag("edit_address_button")) {
                     Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Edit on Map", fontSize = 12.sp)
