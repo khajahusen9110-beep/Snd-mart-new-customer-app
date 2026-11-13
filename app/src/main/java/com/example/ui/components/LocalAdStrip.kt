@@ -39,7 +39,7 @@ fun LocalAdStrip(
                     .then(if (ad.isClickable) Modifier.clickable { onOpen(ad) } else Modifier)
             ) {
                 ProductImage(
-                    url = ad.imageUrl,
+                    url = ad.imageUrl.orEmpty(),
                     contentDescription = ad.advertiserName,
                     modifier = Modifier.fillMaxSize()
                 )

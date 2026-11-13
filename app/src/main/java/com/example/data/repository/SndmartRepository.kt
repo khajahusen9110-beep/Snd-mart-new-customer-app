@@ -2573,6 +2573,63 @@ class SndmartRepository(
         }
     }
 
+
+    // --- CITY CONFIG (platform fee, home switches, theme) ---
+
+    private val homeSectionsCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, HomeSectionSettings>>()
+    private val cityThemeCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, CityThemeRow>>()
+
+    /** Flat per-order Platform Fee set by City Admin (Delivery Pricing). 0 when none is set or on any failure. */
+    suspend fun getPlatformFee(cityId: String): Double {
+        val cleanCityId = cityId.removePrefix("eq.")
+        if (!SupabaseClient.isKeyConfigured()) return 0.0
+        return try {
+            val response = api.getCityDeliverySettings(cityId = "eq.$cleanCityId")
+            if (response.isSuccessful) response.body()?.firstOrNull()?.platformFee ?: 0.0 else 0.0
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception getting platform fee: ${e.message}")
+            0.0
+        }
+    }
+
+    /** City Admin's home-page switches. No row / any failure = everything on (same as the website). */
+    suspend fun getHomeSectionSettings(cityId: String, force: Boolean = false): HomeSectionSettings {
+        val hit = homeSectionsCache[cityId]
+        if (!force && hit != null && System.currentTimeMillis() - hit.first < 5 * 60_000L) return hit.second
+        if (!SupabaseClient.isKeyConfigured()) return HomeSectionSettings()
+        return try {
+            val res = api.getHomeSectionSettings(cityIdEq = "eq.$cityId")
+            if (res.isSuccessful) {
+                val value = res.body()?.firstOrNull() ?: HomeSectionSettings()
+                homeSectionsCache[cityId] = System.currentTimeMillis() to value
+                value
+            } else hit?.second ?: HomeSectionSettings()
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            hit?.second ?: HomeSectionSettings()
+        }
+    }
+
+    /** City Admin accent colors and banner photos; an empty row (all null) means "use the built-in look". */
+    suspend fun getCityTheme(cityId: String, force: Boolean = false): CityThemeRow {
+        val hit = cityThemeCache[cityId]
+        if (!force && hit != null && System.currentTimeMillis() - hit.first < 30 * 60_000L) return hit.second
+        if (!SupabaseClient.isKeyConfigured()) return CityThemeRow()
+        return try {
+            val res = api.getCityTheme(cityIdEq = "eq.$cityId")
+            if (res.isSuccessful) {
+                val value = res.body()?.firstOrNull() ?: CityThemeRow()
+                cityThemeCache[cityId] = System.currentTimeMillis() to value
+                value
+            } else hit?.second ?: CityThemeRow()
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            hit?.second ?: CityThemeRow()
+        }
+    }
+
     suspend fun getHandlingFee(cityId: String): Result<Double> {
         val cleanCityId = cityId.removePrefix("eq.")
         if (!SupabaseClient.isKeyConfigured()) {
@@ -3282,6 +3339,7 @@ class SndmartRepository(
                     discountAmount = obj.optDouble("discount_amount", 0.0),
                     deliveryFee = obj.optDouble("delivery_fee", 0.0),
                     handlingFee = obj.optDouble("handling_fee", 0.0),
+                    platformFee = obj.optDouble("platform_fee", 0.0),
                     totalAmount = obj.optDouble("total_amount", 0.0),
                     walletUsedAmount = obj.optDouble("wallet_used_amount", 0.0),
                     cashbackAmount = obj.optDouble("cashback_amount", 0.0),
@@ -4109,7 +4167,8 @@ class SndmartRepository(
         return list.filter { a ->
             val starts = parseIsoTime(a.startsAt)
             val ends = parseIsoTime(a.endsAt)
-            (starts == null || starts <= now) && (ends == null || ends > now) && a.imageUrl.startsWith("https://")
+            (starts == null || starts <= now) && (ends == null || ends > now) &&
+                (a.isVideo && a.videoUrl.orEmpty().startsWith("https://") || a.imageUrl.orEmpty().startsWith("https://"))
         }
     }
 

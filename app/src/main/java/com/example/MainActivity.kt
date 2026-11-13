@@ -578,25 +578,11 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                         )
                     }
                     null -> {
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            color = MaterialTheme.colorScheme.background
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    color = NaturalPrimary,
-                                    modifier = Modifier.size(36.dp),
-                                    strokeWidth = 3.dp
-                                )
-                            }
-                        }
+                        com.example.ui.components.BrandSplash()
                     }
                     is StartupCheckResult.Passed -> {
                         Scaffold(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().then(com.example.ui.components.globalTapFeedbackModifier),
                             contentWindowInsets = WindowInsets.safeDrawing,
                             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                             bottomBar = {
@@ -732,21 +718,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                         }
 
                         if (sessionManager.hasSavedSession() && verifiedHasAddress == null) {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MaterialTheme.colorScheme.background
-                            ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        color = NaturalPrimary,
-                                        modifier = Modifier.size(36.dp),
-                                        strokeWidth = 3.dp
-                                    )
-                                }
-                            }
+                            com.example.ui.components.BrandSplash()
                         } else {
                             val startDestination = remember(verifiedHasAddress) {
                                 if (!sessionManager.hasSavedSession()) {
@@ -1126,6 +1098,9 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                 }
                             )
                         }
+
+                        // "Order placed" celebration (full-screen dialog; shown via OrderCelebration.show())
+                        com.example.ui.components.OrderSuccessHost()
 
                         // Supabase Settings Dialog (debug only)
                         if (com.example.BuildConfig.DEBUG && showSupabaseSettings) {

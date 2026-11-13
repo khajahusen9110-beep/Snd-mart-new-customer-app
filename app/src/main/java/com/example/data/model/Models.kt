@@ -338,6 +338,8 @@ data class CityDeliverySettings(
     @Json(name = "city_id") val cityId: String = "",
     @Json(name = "free_delivery_min_order_amount") val freeDeliveryMinOrderAmount: Double? = null,
     @Json(name = "free_delivery_min_order") val freeDeliveryMinOrder: Double? = null,
+    @Json(name = "handling_fee") val handlingFee: Double? = null,
+    @Json(name = "platform_fee") val platformFee: Double? = null,
     @Json(name = "express_delivery_minutes") val expressDeliveryMinutes: Int? = 30,
     @Json(name = "is_active") val isActive: Boolean? = true
 ) {
@@ -482,6 +484,8 @@ data class Order(
     @Json(name = "discount_amount") val discountAmount: Double = 0.0,
     @Json(name = "delivery_fee") val deliveryFee: Double = 0.0,
     @Json(name = "handling_fee") val handlingFee: Double = 0.0,
+    // Flat per-order Platform Fee charged by the server (city_delivery_settings.platform_fee at order time)
+    @Json(name = "platform_fee") val platformFee: Double? = 0.0,
     @Json(name = "total_amount") val totalAmount: Double = 0.0,
     // Paid from the Sndmart Wallet (already taken off total_amount)
     @Json(name = "wallet_used_amount") val walletUsedAmount: Double? = 0.0,
@@ -823,7 +827,9 @@ data class LocalAd(
     val id: String = "",
     @Json(name = "city_id") val cityId: String = "",
     @Json(name = "advertiser_name") val advertiserName: String = "",
-    @Json(name = "image_url") val imageUrl: String = "",
+    @Json(name = "image_url") val imageUrl: String? = "",
+    @Json(name = "video_url") val videoUrl: String? = null,
+    @Json(name = "media_type") val mediaType: String? = "image", // image / video (one or the other, never both)
     val placement: String = "home", // home / food_bottom / grocery_bottom / all
     @Json(name = "ad_type") val adType: String = "fixed", // fixed / clickable
     @Json(name = "link_type") val linkType: String? = null, // website / whatsapp / call / map
@@ -834,4 +840,35 @@ data class LocalAd(
 ) {
     val isClickable: Boolean
         get() = adType == "clickable" && !linkValue.isNullOrBlank()
+    val isVideo: Boolean
+        get() = mediaType == "video" && !videoUrl.isNullOrBlank()
 }
+
+/** City Admin on/off switches for the home page (table city_home_section_settings). No row = all defaults. */
+@JsonClass(generateAdapter = true)
+data class HomeSectionSettings(
+    @Json(name = "show_most_selling") val showMostSelling: Boolean? = true,
+    @Json(name = "show_recently_viewed") val showRecentlyViewed: Boolean? = true,
+    // Food home: show the banner carousel before (true) or after (false) the dish categories
+    @Json(name = "food_banner_before_categories") val foodBannerBeforeCategories: Boolean? = true
+) {
+    val mostSelling: Boolean get() = showMostSelling != false
+    val recentlyViewed: Boolean get() = showRecentlyViewed != false
+    val foodBannerFirst: Boolean get() = foodBannerBeforeCategories != false
+}
+
+/** One row of city_theme_settings: accent colors (#rrggbb) and optional banner background photos. */
+@JsonClass(generateAdapter = true)
+data class CityThemeRow(
+    @Json(name = "food_promo_color_start") val foodPromoColorStart: String? = null,
+    @Json(name = "food_promo_color_end") val foodPromoColorEnd: String? = null,
+    @Json(name = "grocery_banner_color_start") val groceryBannerColorStart: String? = null,
+    @Json(name = "grocery_banner_color_end") val groceryBannerColorEnd: String? = null,
+    @Json(name = "sold_badge_color_start") val soldBadgeColorStart: String? = null,
+    @Json(name = "sold_badge_color_end") val soldBadgeColorEnd: String? = null,
+    @Json(name = "ocean_color") val oceanColor: String? = null,
+    @Json(name = "offer_banner_grocery_image_url") val offerBannerGroceryImageUrl: String? = null,
+    @Json(name = "offer_banner_food_image_url") val offerBannerFoodImageUrl: String? = null,
+    @Json(name = "deals_banner_image_url") val dealsBannerImageUrl: String? = null,
+    @Json(name = "food_promo_banner_image_url") val foodPromoBannerImageUrl: String? = null
+)

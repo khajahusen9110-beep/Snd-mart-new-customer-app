@@ -261,6 +261,22 @@ interface SupabaseApi {
         @Query("city_id") cityId: String
     ): Response<List<CityDeliverySettings>>
 
+    // City Admin home-page switches (Most Selling / Recently Viewed / food banner order).
+    @GET("rest/v1/city_home_section_settings")
+    suspend fun getHomeSectionSettings(
+        @Query("city_id") cityIdEq: String,
+        @Query("select") select: String = "show_most_selling,show_recently_viewed,food_banner_before_categories",
+        @Query("limit") limit: Int = 1
+    ): Response<List<HomeSectionSettings>>
+
+    // City Admin accent colors + optional banner photos (one row per city).
+    @GET("rest/v1/city_theme_settings")
+    suspend fun getCityTheme(
+        @Query("city_id") cityIdEq: String,
+        @Query("select") select: String = "*",
+        @Query("limit") limit: Int = 1
+    ): Response<List<CityThemeRow>>
+
     @GET("rest/v1/delivery_zones")
     suspend fun getDeliveryZones(
         @Query("city_id") cityId: String,
@@ -515,7 +531,7 @@ interface SupabaseApi {
     suspend fun getLocalAds(
         @Query("city_id") cityIdEq: String,
         @Query("placement") placementIn: String,
-        @Query("select") select: String = "id,city_id,advertiser_name,image_url,placement,ad_type,link_type,link_value,sort_order,starts_at,ends_at",
+        @Query("select") select: String = "id,city_id,advertiser_name,image_url,video_url,media_type,placement,ad_type,link_type,link_value,sort_order,starts_at,ends_at",
         @Query("order") order: String = "sort_order.asc",
         @Query("limit") limit: Int = 5
     ): Response<List<LocalAd>>
