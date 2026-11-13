@@ -33,6 +33,75 @@ import com.example.data.model.City
 import com.example.service.InAppNotification
 import com.example.ui.theme.*
 
+
+private val OffBadgeBg = Color(0xFFE6F6EC)
+private val OffBadgeText = Color(0xFF15803D)
+
+/** White card surface used app-wide (website: .card): hairline border, 16dp radius, soft shadow. */
+@Composable
+fun AppCard(
+    modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(16.dp),
+    containerColor: Color = Color.White,
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val border = androidx.compose.foundation.BorderStroke(1.dp, OutlineSoft)
+    if (onClick != null) {
+        Surface(
+            onClick = onClick, modifier = modifier, shape = shape, color = containerColor,
+            border = border, shadowElevation = 1.5.dp
+        ) { Column(content = content) }
+    } else {
+        Surface(
+            modifier = modifier, shape = shape, color = containerColor,
+            border = border, shadowElevation = 1.5.dp
+        ) { Column(content = content) }
+    }
+}
+
+/** Count badge: white ring around the red pill, pops in when it appears or changes. */
+@Composable
+fun AppBadgeCount(count: Int, modifier: Modifier = Modifier) {
+    if (count <= 0) return
+    val scale = remember { androidx.compose.animation.core.Animatable(0.4f) }
+    LaunchedEffect(count) {
+        scale.snapTo(0.4f)
+        scale.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 500f))
+    }
+    Text(
+        text = if (count > 99) "99+" else "$count",
+        color = Color.White,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        modifier = modifier
+            .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
+            .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
+            .background(Color.White, CircleShape)
+            .padding(1.5.dp)
+            .background(NaturalBadgeRed, CircleShape)
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+    )
+}
+
+/** Round header action button: white with a hairline border (website: .icon-circle-btn). */
+@Composable
+private fun HeaderCircle(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String) {
+    Surface(
+        shape = CircleShape,
+        color = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, OutlineSoft),
+        shadowElevation = 1.dp,
+        modifier = Modifier.size(38.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = description, tint = TextPrimary, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SndmartTopBar(
@@ -59,6 +128,7 @@ fun SndmartTopBar(
         }
     }
 
+    Column {
     TopAppBar(
         navigationIcon = {
             navigationIcon?.invoke()
@@ -72,22 +142,9 @@ fun SndmartTopBar(
                     .padding(horizontal = 4.dp, vertical = 4.dp)
                     .testTag("city_selector_topbar")
             ) {
-                Surface(
-                    shape = CircleShape,
-                    color = NaturalPrimaryContainer,
-                    modifier = Modifier.size(38.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = NaturalPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
+                HeaderCircle(Icons.Default.LocationOn, "Delivery location")
                 Spacer(modifier = Modifier.width(10.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         text = "DELIVER TO",
                         style = MaterialTheme.typography.labelSmall,
@@ -99,10 +156,11 @@ fun SndmartTopBar(
                         Text(
                             text = displayDeliverTo,
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = TextPrimary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
@@ -119,7 +177,7 @@ fun SndmartTopBar(
             if (walletBalance != null && walletBalance > 0.0 && onWalletClick != null) {
                 Surface(
                     shape = RoundedCornerShape(17.dp),
-                    color = PastelMint,
+                    color = PastelSage,
                     modifier = Modifier
                         .padding(end = 2.dp)
                         .clip(RoundedCornerShape(17.dp))
@@ -153,20 +211,7 @@ fun SndmartTopBar(
                     onClick = onRefresh,
                     modifier = Modifier.testTag("topbar_refresh_button")
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = NaturalPrimaryContainer,
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Refresh",
-                                tint = NaturalPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
+                    HeaderCircle(Icons.Default.Refresh, "Refresh")
                 }
             }
             if (onNotificationsClick != null) {
@@ -174,36 +219,8 @@ fun SndmartTopBar(
                     onClick = onNotificationsClick,
                     modifier = Modifier.testTag("topbar_notifications_button")
                 ) {
-                    BadgedBox(
-                        badge = {
-                            if (unreadNotificationCount > 0) {
-                                Badge(
-                                    containerColor = NaturalBadgeRed,
-                                    contentColor = Color.White
-                                ) {
-                                    Text(
-                                        text = if (unreadNotificationCount > 99) "99+" else "$unreadNotificationCount",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 10.sp
-                                    )
-                                }
-                            }
-                        }
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = NaturalPrimaryContainer,
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Notifications,
-                                    contentDescription = "Notifications",
-                                    tint = NaturalPrimary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
+                    BadgedBox(badge = { AppBadgeCount(unreadNotificationCount) }) {
+                        HeaderCircle(Icons.Outlined.Notifications, "Notifications")
                     }
                 }
             }
@@ -223,41 +240,24 @@ fun SndmartTopBar(
                 onClick = onCartClick,
                 modifier = Modifier.testTag("topbar_cart_button")
             ) {
-                BadgedBox(
-                    badge = {
-                        if (cartCount > 0) {
-                            Badge(
-                                containerColor = NaturalBadgeRed,
-                                contentColor = Color.White
-                            ) {
-                                Text("$cartCount", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = NaturalPrimaryContainer,
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Outlined.ShoppingCart,
-                                contentDescription = "Cart",
-                                tint = NaturalPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
+                BadgedBox(badge = { AppBadgeCount(cartCount) }) {
+                    HeaderCircle(Icons.Outlined.ShoppingCart, "Cart")
                 }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background
+            containerColor = Color.White
         )
     )
+    HorizontalDivider(color = OutlineSoft, thickness = 1.dp)
+    }
 }
 
+/**
+ * ADD / quantity stepper (website: .stepper-add -> .stepper). Outlined white "ADD +" that turns into
+ * a filled primary stepper; the quantity pops on change. Plays the add/remove sound + vibration
+ * itself, so the global tap tick is switched off for it (noTapFeedback).
+ */
 @Composable
 fun QuantityStepper(
     quantity: Int,
@@ -266,75 +266,120 @@ fun QuantityStepper(
     modifier: Modifier = Modifier,
     testTagPrefix: String = "qty"
 ) {
+    val inc = {
+        com.example.util.AppFeedback.add()
+        onIncrease()
+    }
+    val dec = {
+        com.example.util.AppFeedback.remove()
+        onDecrease()
+    }
     if (quantity == 0) {
-        Button(
-            onClick = onIncrease,
-            modifier = modifier
-                .height(36.dp)
-                .testTag("${testTagPrefix}_add"),
-            shape = RoundedCornerShape(20.dp),
-            contentPadding = PaddingValues(horizontal = 14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = NaturalPrimary,
-                contentColor = Color.White
-            )
-        ) {
-            Icon(
-                Icons.Default.Add,
-                contentDescription = "Add",
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("ADD", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-        }
-    } else {
         Surface(
-            modifier = modifier.height(36.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = NaturalPrimary,
-            contentColor = Color.White,
-            tonalElevation = 2.dp
+            onClick = inc,
+            modifier = modifier
+                .height(34.dp)
+                .noTapFeedback()
+                .testTag("${testTagPrefix}_add"),
+            shape = RoundedCornerShape(10.dp),
+            color = Color.White,
+            contentColor = NaturalPrimary,
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, NaturalPrimary.copy(alpha = 0.4f)),
+            shadowElevation = 1.dp
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(horizontal = 14.dp)
+            ) {
+                Text("ADD", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, letterSpacing = 0.4.sp)
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(15.dp))
+            }
+        }
+    } else {
+        val popped = remember { androidx.compose.animation.core.Animatable(1f) }
+        LaunchedEffect(quantity) {
+            popped.snapTo(1.5f)
+            popped.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = 500f))
+        }
+        Surface(
+            modifier = modifier
+                .height(34.dp)
+                .noTapFeedback(),
+            shape = RoundedCornerShape(10.dp),
+            color = NaturalPrimary,
+            contentColor = Color.White,
+            shadowElevation = 3.dp
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.padding(horizontal = 4.dp)
             ) {
                 IconButton(
-                    onClick = onDecrease,
+                    onClick = dec,
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(30.dp)
                         .testTag("${testTagPrefix}_minus")
                 ) {
-                    Icon(
-                        Icons.Default.Remove,
-                        contentDescription = "Decrease",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Icon(Icons.Default.Remove, contentDescription = "Decrease", tint = Color.White, modifier = Modifier.size(16.dp))
                 }
                 Text(
                     text = "$quantity",
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     fontSize = 14.sp,
                     modifier = Modifier
                         .padding(horizontal = 8.dp)
+                        .graphicsLayer { scaleX = popped.value; scaleY = popped.value }
                         .testTag("${testTagPrefix}_count")
                 )
                 IconButton(
-                    onClick = onIncrease,
+                    onClick = inc,
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(30.dp)
                         .testTag("${testTagPrefix}_plus")
                 ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "Increase",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Icon(Icons.Default.Add, contentDescription = "Increase", tint = Color.White, modifier = Modifier.size(16.dp))
                 }
             }
+        }
+    }
+}
+
+/**
+ * ADD button for products with sizes/variants: outlined "ADD ⌄", or "N in cart" (tinted) once
+ * something is in the cart. Opens the size picker; the picker itself handles add/remove feedback.
+ */
+@Composable
+fun VariantAddButton(
+    quantityInCart: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String = "variant_add"
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(34.dp).testTag(testTag),
+        shape = RoundedCornerShape(10.dp),
+        color = if (quantityInCart > 0) NaturalPrimaryContainer else Color.White,
+        contentColor = NaturalPrimary,
+        border = androidx.compose.foundation.BorderStroke(
+            1.5.dp, if (quantityInCart > 0) NaturalPrimary else NaturalPrimary.copy(alpha = 0.4f)
+        ),
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 12.dp)
+        ) {
+            Text(
+                if (quantityInCart > 0) "$quantityInCart in cart" else "ADD",
+                fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, letterSpacing = 0.3.sp
+            )
+            Spacer(modifier = Modifier.width(3.dp))
+            Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -357,9 +402,9 @@ fun PriceDisplay(
         Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "₹${"%.0f".format(discounted)}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = OfferRed
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = TextPrimary
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
@@ -371,17 +416,13 @@ fun PriceDisplay(
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = "$pct% OFF",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White,
+                fontSize = 10.5.sp,
+                color = OffBadgeText,
                 fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(
-                        androidx.compose.ui.graphics.Brush.linearGradient(
-                            listOf(Color(0xFFF43F5E), Color(0xFFE11D48))
-                        )
-                    )
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(OffBadgeBg)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
             )
             if (!unit.isNullOrBlank()) {
                 Spacer(modifier = Modifier.width(4.dp))
@@ -401,9 +442,9 @@ fun PriceDisplay(
     ) {
         Text(
             text = "₹${"%.0f".format(price)}",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = PriceGreen
+            fontSize = 15.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = TextPrimary
         )
         if (mrp != null && mrp > price) {
             Spacer(modifier = Modifier.width(6.dp))
@@ -417,15 +458,15 @@ fun PriceDisplay(
             if (discountPercent > 0) {
                 Spacer(modifier = Modifier.width(6.dp))
                 Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = TangerineOrange.copy(alpha = 0.15f)
+                    shape = RoundedCornerShape(6.dp),
+                    color = OffBadgeBg
                 ) {
                     Text(
                         text = "$discountPercent% OFF",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TangerineOrange,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        fontSize = 10.5.sp,
+                        color = OffBadgeText,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }
