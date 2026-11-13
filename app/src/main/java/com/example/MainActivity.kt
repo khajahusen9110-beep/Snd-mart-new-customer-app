@@ -587,8 +587,10 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                             bottomBar = {
                                 if (isTopLevelDestination) {
+                                    Column {
+                                    HorizontalDivider(color = com.example.ui.theme.OutlineSoft, thickness = 1.dp)
                                     NavigationBar(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        containerColor = Color.White,
                                         tonalElevation = 0.dp
                                     ) {
                                         val groceryCart by repository.groceryCart.collectAsState()
@@ -596,8 +598,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                         val cartCount = groceryCart.sumOf { it.quantity } + hotelCart.sumOf { it.quantity }
 
                                         val navItemColors = NavigationBarItemDefaults.colors(
-                                            selectedIconColor = NaturalOnPrimaryContainer,
-                                            selectedTextColor = NaturalOnPrimaryContainer,
+                                            selectedIconColor = NaturalPrimary,
+                                            selectedTextColor = NaturalPrimary,
                                             indicatorColor = NaturalPrimaryContainer,
                                             unselectedIconColor = TextSecondary,
                                             unselectedTextColor = TextSecondary
@@ -693,6 +695,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                     modifier = Modifier.testTag("nav_item_profile")
                                 )
                             }
+                                    }
                         }
                     }
                 ) { innerPadding ->

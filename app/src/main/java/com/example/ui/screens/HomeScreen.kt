@@ -12,6 +12,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -36,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -84,6 +88,16 @@ fun HomeScreen(
     onNavigateToWallet: (() -> Unit)? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val cityTheme = rememberCityTheme(repository, selectedCity?.id)
+    val homeSections = rememberHomeSections(repository, selectedCity?.id)
+    // Rotating example in the search box (hint only; typing searches everything as before)
+    var searchHintIndex by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(2600)
+            searchHintIndex += 1
+        }
+    }
     val unreadNotificationCount by repository.sessionManager.unreadNotificationCount.collectAsState()
 
     // Launch Mode (set by City Admin): a new city can go live Food-only or Grocery-only
@@ -851,6 +865,7 @@ fun HomeScreen(
         runCatching { uriHandler.openUri(target) }
     }
 
+    CompositionLocalProvider(LocalCityTheme provides cityTheme) {
     Scaffold(
         topBar = {
             SndmartTopBar(
@@ -902,6 +917,7 @@ fun HomeScreen(
                     itemCount = activeCartCount,
                     totalPrice = activeCartTotal,
                     onClick = { onProceedToCheckout(activeIsHotel) },
+                    freeDeliveryAt = freeDeliveryThreshold,
                     testTag = if (activeIsHotel) "hotel_floating_checkout_button" else "grocery_floating_checkout_button"
                 )
             }
@@ -922,9 +938,11 @@ fun HomeScreen(
                     .padding(horizontal = 16.dp, vertical = 6.dp)
                     .testTag("home_search_input"),
                 placeholder = {
+                    val hints = if (browsingMode == BrowsingMode.GROCERY)
+                        listOf("tomato", "onion", "fruits", "vegetables")
+                    else listOf("biryani", "dosa", "roti", "fried rice")
                     Text(
-                        if (browsingMode == BrowsingMode.GROCERY) "Search groceries or hotels..."
-                        else "Search hotels, restaurants, cuisines...",
+                        "Search \"${hints[searchHintIndex % hints.size]}\"",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
@@ -939,20 +957,20 @@ fun HomeScreen(
                         }
                     }
                 },
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = SurfaceVariantLight,
+                    focusedContainerColor = Color.White,
                     unfocusedContainerColor = SurfaceVariantLight,
                     focusedBorderColor = NaturalPrimary,
-                    unfocusedBorderColor = OutlineBorder
+                    unfocusedBorderColor = Color.Transparent
                 ),
                 singleLine = true
             )
 
             // Natural Tones Segmented Mode Pill
             Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = NaturalPrimaryContainer,
+                shape = RoundedCornerShape(14.dp),
+                color = SurfaceVariantLight,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
@@ -967,11 +985,12 @@ fun HomeScreen(
                     val isGrocery = browsingMode == BrowsingMode.GROCERY
                     val groceryAvailable = serviceMode != "food_only"
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (isGrocery) NaturalPrimary else Color.Transparent,
+                        shape = RoundedCornerShape(11.dp),
+                        color = if (isGrocery) Color.White else Color.Transparent,
+                        shadowElevation = if (isGrocery) 3.dp else 0.dp,
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(11.dp))
                             .clickable(enabled = groceryAvailable) { browsingMode = BrowsingMode.GROCERY }
                             .testTag("toggle_grocery")
                     ) {
@@ -986,7 +1005,7 @@ fun HomeScreen(
                                     fontSize = 13.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    color = if (!groceryAvailable) TextSecondary.copy(alpha = 0.5f) else if (isGrocery) Color.White else TextSecondary
+                                    color = if (!groceryAvailable) TextSecondary.copy(alpha = 0.5f) else if (isGrocery) NaturalPrimary else TextSecondary
                                 )
                                 if (!groceryAvailable) {
                                     Text("Coming Soon", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = NaturalPrimary)
@@ -998,11 +1017,12 @@ fun HomeScreen(
                     val isHotel = browsingMode == BrowsingMode.HOTELS
                     val hotelsAvailable = serviceMode != "grocery_only"
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (isHotel) NaturalPrimary else Color.Transparent,
+                        shape = RoundedCornerShape(11.dp),
+                        color = if (isHotel) Color.White else Color.Transparent,
+                        shadowElevation = if (isHotel) 3.dp else 0.dp,
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(11.dp))
                             .clickable(enabled = hotelsAvailable) { browsingMode = BrowsingMode.HOTELS }
                             .testTag("toggle_hotels")
                     ) {
@@ -1017,7 +1037,7 @@ fun HomeScreen(
                                     fontSize = 13.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    color = if (!hotelsAvailable) TextSecondary.copy(alpha = 0.5f) else if (isHotel) Color.White else TextSecondary
+                                    color = if (!hotelsAvailable) TextSecondary.copy(alpha = 0.5f) else if (isHotel) NaturalPrimary else TextSecondary
                                 )
                                 if (!hotelsAvailable) {
                                     Text("Coming Soon", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = NaturalPrimary)
@@ -1116,10 +1136,16 @@ fun HomeScreen(
                         state = groceryGridState,
                         columns = GridCells.Fixed(2),
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        freeDeliveryThreshold?.let { threshold ->
+                            item(span = { GridItemSpan(2) }) {
+                                FreeDeliveryBanner(threshold = threshold)
+                            }
+                        }
+
                         if (searchQuery.isBlank() && homeAds.isNotEmpty()) {
                             item(span = { GridItemSpan(2) }) {
                                 LocalAdStrip(ads = homeAds, onOpen = { a -> openLocalAd(a) }, modifier = Modifier.padding(top = 6.dp))
@@ -1127,19 +1153,32 @@ fun HomeScreen(
                         }
 
                         if (searchQuery.isBlank()) {
+                            // City Admin banners, else the default Deals banner (with its optional admin photo)
                             item(span = { GridItemSpan(2) }) {
-                                OfferBanner(kind = PromoKind.GROCERY, modifier = Modifier.padding(top = 6.dp))
+                                if (promoBanners.isNotEmpty()) {
+                                    PromoBannerCarousel(
+                                        banners = promoBanners,
+                                        onOpen = { b -> openPromoBanner(b) },
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+                                } else {
+                                    NaturalFeaturedDealsBanner(
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+                                }
+                            }
+                            item(span = { GridItemSpan(2) }) {
+                                OfferBanner(kind = PromoKind.GROCERY, modifier = Modifier.padding(top = 2.dp))
                             }
                         }
 
-                        if (searchQuery.isBlank() && recentGrocery.isNotEmpty()) {
+                        if (searchQuery.isBlank() && homeSections.recentlyViewed && recentGrocery.isNotEmpty()) {
                             item(span = { GridItemSpan(2) }) {
                                 MostSellingRow(
                                     products = recentGrocery,
                                     groceryCart = groceryCart,
                                     cityOpen = cityIsOpen,
                                     title = "👀 Recently Viewed",
-                                    tint = PastelSky,
                                     onIncrease = { prod ->
                                         repository.addToCart(
                                             productId = prod.id, vendorId = null, cityId = selectedCity.id,
@@ -1163,7 +1202,7 @@ fun HomeScreen(
                             }
                         }
 
-                        if (searchQuery.isBlank() && topSelling.isNotEmpty()) {
+                        if (searchQuery.isBlank() && homeSections.mostSelling && topSelling.isNotEmpty()) {
                             item(span = { GridItemSpan(2) }) {
                                 MostSellingRow(
                                     products = topSelling,
@@ -1192,29 +1231,8 @@ fun HomeScreen(
                             }
                         }
 
-                        freeDeliveryThreshold?.let { threshold ->
-                            item(span = { GridItemSpan(2) }) {
-                                FreeDeliveryBanner(threshold = threshold)
-                            }
-                        }
-
                         if (searchQuery.isBlank()) {
-                            // Super-Admin banners, else the default banner
-                            item(span = { GridItemSpan(2) }) {
-                                if (promoBanners.isNotEmpty()) {
-                                    PromoBannerCarousel(
-                                        banners = promoBanners,
-                                        onOpen = { b -> openPromoBanner(b) },
-                                        modifier = Modifier.padding(vertical = 4.dp)
-                                    )
-                                } else {
-                                    NaturalFeaturedDealsBanner(
-                                        modifier = Modifier.padding(vertical = 4.dp)
-                                    )
-                                }
-                            }
-
-                            // Horizontal scroll of grocery category image cards (image_url + name)
+                            // Shop by Category: pill tabs
                             item(span = { GridItemSpan(2) }) {
                                 GroceryCategoryList(
                                     categories = categories,
@@ -1451,18 +1469,59 @@ fun HomeScreen(
                                 }
                             }
 
+                            freeDeliveryThreshold?.let { threshold ->
+                                item(key = "food_free_delivery") {
+                                    FreeDeliveryBanner(threshold = threshold)
+                                }
+                            }
+
+                            // Banner carousel and "What's on your mind?": City Admin chooses which comes first.
+                            val bannerBlock: LazyListScope.() -> Unit = {
+                                if (searchQuery.isBlank() && promoBanners.isNotEmpty()) {
+                                    item(key = "food_promo_banners") {
+                                        PromoBannerCarousel(
+                                            banners = promoBanners,
+                                            onOpen = { b -> openPromoBanner(b) }
+                                        )
+                                    }
+                                }
+                            }
+                            val categoryBlock: LazyListScope.() -> Unit = {
+                                if (searchQuery.isBlank() && displayedFoodCategories.isNotEmpty()) {
+                                    item(key = "food_dish_categories") {
+                                        FoodCategoryGrid(
+                                            categories = displayedFoodCategories,
+                                            selectedCategoryName = selectedFoodCategoryName,
+                                            onCategoryClick = { name ->
+                                                selectedFoodCategoryName =
+                                                    if (selectedFoodCategoryName == name) null else name
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            if (homeSections.foodBannerFirst) { bannerBlock(); categoryBlock() } else { categoryBlock(); bannerBlock() }
+
+                            selectedFoodCategoryName?.let { name ->
+                                item(key = "active_food_category_filter") {
+                                    ActiveCategoryFilterChip(
+                                        categoryName = name,
+                                        onClear = { selectedFoodCategoryName = null }
+                                    )
+                                }
+                            }
+
                             if (searchQuery.isBlank()) {
                                 item(key = "food_offer_banner") {
                                     OfferBanner(kind = PromoKind.FOOD)
                                 }
                             }
 
-                            if (searchQuery.isBlank() && recentFood.isNotEmpty()) {
+                            if (searchQuery.isBlank() && homeSections.recentlyViewed && recentFood.isNotEmpty()) {
                                 item(key = "food_recently_viewed") {
                                     MostOrderedFoodRow(
                                         products = recentFood,
                                         title = "👀 Recently Viewed",
-                                        tint = PastelSky,
                                         onOpenHotel = { prod ->
                                             onNavigateToHotelMenu(prod.vendorId ?: "", prod.soldVendorName ?: "Hotel")
                                         }
@@ -1470,7 +1529,7 @@ fun HomeScreen(
                                 }
                             }
 
-                            if (searchQuery.isBlank() && topFood.isNotEmpty()) {
+                            if (searchQuery.isBlank() && homeSections.mostSelling && topFood.isNotEmpty()) {
                                 item(key = "food_most_ordered") {
                                     MostOrderedFoodRow(
                                         products = topFood,
@@ -1486,7 +1545,6 @@ fun HomeScreen(
                                     MostOrderedFoodRow(
                                         products = budgetFood,
                                         title = "💸 99 Store",
-                                        tint = PastelMint,
                                         onOpenHotel = { prod ->
                                             onNavigateToHotelMenu(prod.vendorId ?: "", prod.soldVendorName ?: "Hotel")
                                         }
@@ -1494,40 +1552,16 @@ fun HomeScreen(
                                 }
                             }
 
-                            if (searchQuery.isBlank() && promoBanners.isNotEmpty()) {
-                                item(key = "food_promo_banners") {
-                                    PromoBannerCarousel(
-                                        banners = promoBanners,
-                                        onOpen = { b -> openPromoBanner(b) }
-                                    )
-                                }
-                            }
-
-                            if (searchQuery.isBlank() && displayedFoodCategories.isNotEmpty()) {
-                                item {
-                                    FoodCategoryGrid(
-                                        categories = displayedFoodCategories,
-                                        selectedCategoryName = selectedFoodCategoryName,
-                                        onCategoryClick = { name ->
-                                            selectedFoodCategoryName =
-                                                if (selectedFoodCategoryName == name) null else name
+                            // Plain promotion card when City Admin has no image banners for the food tab.
+                            if (searchQuery.isBlank() && promoBanners.isEmpty()) {
+                                item(key = "food_promo_card") {
+                                    FoodPromoBanner(
+                                        threshold = freeDeliveryThreshold,
+                                        dishImageUrl = displayedFoodCategories.firstOrNull { it.imageUrl != null }?.imageUrl,
+                                        onOrder = {
+                                            coroutineScope.launch { hotelsListState.animateScrollBy(900f) }
                                         }
                                     )
-                                }
-                            }
-
-                            selectedFoodCategoryName?.let { name ->
-                                item(key = "active_food_category_filter") {
-                                    ActiveCategoryFilterChip(
-                                        categoryName = name,
-                                        onClear = { selectedFoodCategoryName = null }
-                                    )
-                                }
-                            }
-
-                            freeDeliveryThreshold?.let { threshold ->
-                                item {
-                                    FreeDeliveryBanner(threshold = threshold)
                                 }
                             }
 
@@ -1597,75 +1631,137 @@ fun HomeScreen(
             }
         }
     }
+    }
 }
 
 @Composable
 fun NaturalFeaturedDealsBanner(
     modifier: Modifier = Modifier
 ) {
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = NaturalOceanBlue),
+    val theme = LocalCityTheme.current
+    val photo = theme.dealsBannerImageUrl
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(130.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .height(140.dp)
+            .shadow(8.dp, RoundedCornerShape(18.dp), clip = false)
+            .clip(RoundedCornerShape(18.dp))
+            .background(theme.ocean)
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Silhouette decorations from Natural Tones design
+        if (photo != null) {
+            ProductImage(url = photo, contentDescription = null, modifier = Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Black.copy(alpha = 0.2f)))))
+        } else {
+            // Silhouette decorations (only without an admin photo)
             Text(
                 text = "🥬",
                 fontSize = 58.sp,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .offset(x = 10.dp, y = 8.dp)
-                    .alpha(0.25f)
+                modifier = Modifier.align(Alignment.BottomEnd).offset(x = 10.dp, y = 8.dp).alpha(0.25f)
             )
             Text(
                 text = "🍅",
                 fontSize = 44.sp,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = (-36).dp, y = 4.dp)
-                    .alpha(0.20f)
+                modifier = Modifier.align(Alignment.TopEnd).offset(x = (-36).dp, y = 4.dp).alpha(0.20f)
             )
+        }
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = "FARM FRESH DAILY",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Organic Farm\nFresh Picks",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 22.sp
+                )
+            }
+            Surface(shape = RoundedCornerShape(16.dp), color = Color.White) {
+                Text(
+                    text = "SHOP NOW",
+                    color = theme.ocean,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.SpaceBetween
+/**
+ * Always-visible food promotion card (food gradient, optional photo: the admin's own, else a dish
+ * photo). Honest copy only: the city's free-delivery amount, else a plain invitation.
+ */
+@Composable
+fun FoodPromoBanner(
+    threshold: Double?,
+    dishImageUrl: String?,
+    onOrder: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val theme = LocalCityTheme.current
+    val photo = theme.foodPromoBannerImageUrl ?: dishImageUrl
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 150.dp)
+            .shadow(8.dp, RoundedCornerShape(18.dp), clip = false)
+            .clip(RoundedCornerShape(18.dp))
+            .background(theme.foodPromoBrush)
+    ) {
+        if (!photo.isNullOrBlank()) {
+            ProductImage(url = photo, contentDescription = null, modifier = Modifier.matchParentSize())
+            Box(
+                Modifier.matchParentSize().background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFF140C06).copy(alpha = 0.88f), Color(0xFF140C06).copy(alpha = 0.55f), Color(0xFF140C06).copy(alpha = 0.1f))
+                    )
+                )
+            )
+        }
+        Column(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text("HOT & FRESH", color = Color(0xFFFFE2BB), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+            Text(
+                text = if (threshold != null) "FREE delivery\nabove ₹${threshold.toInt()}" else "Your favourite hotels, delivered",
+                color = Color.White,
+                fontSize = 24.sp,
+                lineHeight = 27.sp,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier.fillMaxWidth(0.72f)
+            )
+            Text(
+                "Biryani, meals, snacks & more from local hotels",
+                color = Color.White.copy(alpha = 0.92f),
+                fontSize = 13.sp,
+                modifier = Modifier.fillMaxWidth(0.75f)
+            )
+            Spacer(Modifier.height(6.dp))
+            Surface(
+                onClick = onOrder,
+                shape = RoundedCornerShape(10.dp),
+                color = androidx.compose.ui.graphics.lerp(theme.foodPromoStart, Color.Black, 0.14f)
             ) {
-                Column {
-                    Text(
-                        text = "FARM FRESH DAILY",
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Organic Farm\nFresh Picks",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = 22.sp
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color.White
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = "SHOP NOW",
-                        color = NaturalOceanBlue,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                    )
+                    Text("ORDER NOW", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.6.sp)
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                 }
             }
         }
@@ -1683,25 +1779,28 @@ fun MostSellingRow(
     onSelectSize: (ResolvedProduct) -> Unit,
     cityOpen: Boolean = true,
     title: String = "🔥 Most Selling",
-    tint: Color = PastelSage
+    tint: Color = Color.Transparent
 ) {
+    // Flat section (no tinted box): a strong title, then a row of 146dp cards.
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(tint.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
-            .padding(top = 10.dp, bottom = 8.dp, start = 4.dp, end = 4.dp)
+            .padding(top = 8.dp, bottom = 6.dp)
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
+            fontSize = 18.sp,
             fontWeight = FontWeight.ExtraBold,
             color = TextPrimary,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
         )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp)
+        ) {
             items(products, key = { it.id }) { product ->
                 val qty = groceryCart.filter { it.productId == product.id }.sumOf { it.quantity }
-                Box(modifier = Modifier.width(158.dp)) {
+                Box(modifier = Modifier.width(146.dp)) {
                     GroceryProductCard(
                         product = product,
                         quantityInCart = qty,
@@ -1722,39 +1821,41 @@ fun MostOrderedFoodRow(
     products: List<ResolvedProduct>,
     onOpenHotel: (ResolvedProduct) -> Unit,
     title: String = "🔥 Most Ordered",
-    tint: Color = PastelPeach
+    tint: Color = Color.Transparent
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(tint.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
-            .padding(top = 10.dp, bottom = 8.dp, start = 4.dp, end = 4.dp)
+            .padding(top = 8.dp, bottom = 6.dp)
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
+            fontSize = 18.sp,
             fontWeight = FontWeight.ExtraBold,
             color = TextPrimary,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
         )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp)
+        ) {
             items(products, key = { it.id }) { product ->
                 val fPromo = promoFor(PromoKind.FOOD)
                 Card(
                     modifier = Modifier
-                        .width(158.dp)
+                        .width(146.dp)
                         .clickable { onOpenHotel(product) },
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, OutlineSoft),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
                 ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
+                    Column(modifier = Modifier.padding(8.dp)) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(104.dp)
-                                .clip(RoundedCornerShape(16.dp))
+                                .clip(RoundedCornerShape(12.dp))
                         ) {
                             ProductImage(url = product.imageUrl, contentDescription = product.name, modifier = Modifier.fillMaxSize())
                             if (product.soldCount > 0) {
@@ -1762,8 +1863,8 @@ fun MostOrderedFoodRow(
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
                                         .padding(6.dp)
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .background(OfferRed)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(LocalCityTheme.current.soldBadgeBrush)
                                         .padding(horizontal = 7.dp, vertical = 3.dp)
                                 ) {
                                     Text("🔥 ${product.soldCount} sold", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1787,9 +1888,9 @@ fun MostOrderedFoodRow(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = "₹${"%.0f".format(offerPrice(product.effectivePrice, fPromo.percent))}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = OfferRed,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = TextPrimary,
                                     maxLines = 1,
                                     softWrap = false,
                                     overflow = TextOverflow.Ellipsis
@@ -1808,9 +1909,9 @@ fun MostOrderedFoodRow(
                         } else {
                             Text(
                                 text = "₹${"%.0f".format(product.effectivePrice)}",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = PriceGreen
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = TextPrimary
                             )
                         }
                     }
@@ -2183,47 +2284,43 @@ fun GroceryProductCard(
 ) {
     val isInStockAndActive = cityOpen && product.isInStockAndActive
 
+    val theme = LocalCityTheme.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (isInStockAndActive) 1f else 0.65f)
             .testTag("product_card_${product.id}"),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isInStockAndActive) MaterialTheme.colorScheme.surface
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, OutlineSoft),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
     ) {
-        Column(modifier = Modifier.padding(10.dp)) {
+        Column(modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 10.dp)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(118.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .height(126.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 ProductImage(
                     url = product.imageUrl,
                     contentDescription = product.name,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .alpha(if (isInStockAndActive) 1f else 0.7f)
+                    modifier = Modifier.fillMaxSize()
                 )
                 if (isInStockAndActive && product.isFeatured) {
                     Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(6.dp),
+                        modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
                         shape = RoundedCornerShape(6.dp),
-                        color = NaturalOceanBlue,
-                        contentColor = Color.White
+                        color = theme.ocean,
+                        contentColor = Color.White,
+                        shadowElevation = 2.dp
                     ) {
                         Text(
                             text = "FEATURED",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.4.sp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                         )
                     }
                 }
@@ -2232,14 +2329,14 @@ fun GroceryProductCard(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(6.dp)
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(OfferRed)
-                            .padding(horizontal = 7.dp, vertical = 3.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(theme.soldBadgeBrush)
+                            .padding(horizontal = 6.dp, vertical = 3.dp)
                     ) {
                         Text(
                             text = "🔥 ${product.soldCount} sold",
                             color = Color.White,
-                            fontSize = 9.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.ExtraBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -2247,25 +2344,17 @@ fun GroceryProductCard(
                     }
                 }
                 if (!isInStockAndActive) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.45f)),
-                        color = Color.Transparent
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = NaturalBadgeRed,
-                                contentColor = Color.White
-                            ) {
-                                Text(
-                                    text = "OUT OF STOCK",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                )
-                            }
+                        Surface(shape = RoundedCornerShape(6.dp), color = NaturalBadgeRed, contentColor = Color.White) {
+                            Text(
+                                text = "OUT OF STOCK",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
                         }
                     }
                 }
@@ -2275,51 +2364,43 @@ fun GroceryProductCard(
 
             Text(
                 text = product.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
+                fontSize = 13.5.sp,
+                lineHeight = 17.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 color = if (isInStockAndActive) TextPrimary else TextMuted
             )
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             if (product.hasVariants) {
                 val startingPrice = product.startingPrice ?: product.effectivePrice
                 val gPromo = promoFor(PromoKind.GROCERY)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .padding(vertical = 4.dp)
-                        .alpha(if (isInStockAndActive) 1f else 0.7f)
+                    modifier = Modifier.alpha(if (isInStockAndActive) 1f else 0.7f)
                 ) {
+                    Text("From", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextMuted)
+                    Spacer(modifier = Modifier.width(4.dp))
                     if (gPromo != null && gPromo.percent > 0) {
                         Text(
-                            text = "From ₹${"%.0f".format(offerPrice(startingPrice, gPromo.percent))}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = OfferRed,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
+                            text = "₹${"%.0f".format(offerPrice(startingPrice, gPromo.percent))}",
+                            fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary,
+                            maxLines = 1, softWrap = false
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
                         Text(
                             text = "₹${"%.0f".format(startingPrice)}",
                             style = MaterialTheme.typography.bodySmall,
                             textDecoration = TextDecoration.LineThrough,
-                            color = TextMuted,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
+                            color = TextMuted, maxLines = 1, softWrap = false
                         )
                     } else {
                         Text(
-                            text = "Starting from ₹${"%.0f".format(startingPrice)}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = PriceGreen,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
+                            text = "₹${"%.0f".format(startingPrice)}",
+                            fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary,
+                            maxLines = 1, softWrap = false
                         )
                     }
                 }
@@ -2329,35 +2410,20 @@ fun GroceryProductCard(
                     mrp = product.effectiveMrp,
                     unit = product.unit,
                     kind = PromoKind.GROCERY,
-                    modifier = Modifier
-                        .padding(vertical = 4.dp)
-                        .alpha(if (isInStockAndActive) 1f else 0.7f)
+                    modifier = Modifier.alpha(if (isInStockAndActive) 1f else 0.7f)
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (isInStockAndActive) {
                 if (product.hasVariants) {
-                    Button(
+                    VariantAddButton(
+                        quantityInCart = quantityInCart,
                         onClick = onSelectSize,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(34.dp)
-                            .testTag("select_size_${product.id}"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (quantityInCart > 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primary,
-                            contentColor = if (quantityInCart > 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onPrimary
-                        ),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) {
-                        Text(
-                            text = if (quantityInCart > 0) "Select Size ($quantityInCart)" else "Select Size",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "select_size_${product.id}"
+                    )
                 } else {
                     QuantityStepper(
                         quantity = quantityInCart,
@@ -2369,20 +2435,13 @@ fun GroceryProductCard(
                 }
             } else {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(34.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, OutlineSoft),
+                    modifier = Modifier.fillMaxWidth().height(34.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "Out of Stock",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextMuted
-                        )
+                        Text("Out of Stock", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextMuted)
                     }
                 }
             }
@@ -2573,8 +2632,8 @@ private fun FoodCategoryGrid(
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "What's on your mind?",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.ExtraBold,
             color = TextPrimary,
             modifier = Modifier.padding(bottom = 10.dp)
         )
@@ -2622,9 +2681,9 @@ private fun FoodCategoryTile(
         Surface(
             shape = CircleShape,
             modifier = Modifier.size(60.dp),
-            color = if (isSelected) PastelSage else MaterialTheme.colorScheme.surfaceVariant,
-            border = if (isSelected) BorderStroke(2.5.dp, NaturalPrimary)
-            else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shadowElevation = 3.dp,
+            border = BorderStroke(3.dp, if (isSelected) Color(0xFFFC8019) else Color.Transparent)
         ) {
             ProductImage(
                 url = category.imageUrl,
@@ -2637,7 +2696,7 @@ private fun FoodCategoryTile(
             text = category.name,
             fontSize = 11.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) NaturalPrimary else TextPrimary,
+            color = if (isSelected) Color(0xFFFC8019) else TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
@@ -2660,8 +2719,8 @@ private val HotelListSections = listOf(
 private fun HotelSectionHeader(title: String) {
     Text(
         text = title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.ExtraBold,
         color = TextPrimary,
         modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
     )
@@ -2794,13 +2853,10 @@ fun HotelCard(
             .alpha(if (isOpen) 1f else 0.75f)
             .clickable { onClick() }
             .testTag("hotel_card_${vendor.id}"),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isOpen) MaterialTheme.colorScheme.surface
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, OutlineSoft),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
     ) {
         Column {
             Box(
@@ -2863,7 +2919,7 @@ fun HotelCard(
                 }
             }
 
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 14.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -2871,9 +2927,12 @@ fun HotelCard(
                 ) {
                     Text(
                         text = vendor.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (vendor.isActive) TextPrimary else TextMuted
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (vendor.isActive) TextPrimary else TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
                     Icon(
                         imageVector = Icons.Default.ChevronRight,
@@ -2883,20 +2942,27 @@ fun HotelCard(
                 }
 
                 if (avgRating > 0) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(modifier = Modifier.height(5.dp))
+                    // Green rating pill (website: .rating-pill)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(SuccessGreen)
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
-                            tint = TangerineOrange,
-                            modifier = Modifier.size(14.dp)
+                            tint = Color.White,
+                            modifier = Modifier.size(11.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = "%.1f".format(avgRating),
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
-                            color = TextPrimary
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp,
+                            color = Color.White
                         )
                     }
                 }
@@ -2921,11 +2987,13 @@ fun HotelCard(
                     }
                 }
 
+                // "7:00 AM - 10:00 PM" (formatted like the website), not the raw "07:00:00"
+                fun pretty(t: String?) = com.example.util.clockLabel(t) ?: t.orEmpty()
                 val hoursText = when {
                     operatingSlots.isNotEmpty() ->
-                        "Hours: " + operatingSlots.joinToString(", ") { "${it.startTime}-${it.endTime}" }
+                        operatingSlots.joinToString(", ") { "${pretty(it.startTime)} - ${pretty(it.endTime)}" }
                     !vendor.openingTime.isNullOrBlank() && !vendor.closingTime.isNullOrBlank() ->
-                        "Hours: ${vendor.openingTime} - ${vendor.closingTime}"
+                        "${pretty(vendor.openingTime)} - ${pretty(vendor.closingTime)}"
                     else -> null
                 }
 
@@ -3022,64 +3090,32 @@ fun ActiveCategoryFilterChip(
 
 @Composable
 fun FreeDeliveryBanner(threshold: Double, modifier: Modifier = Modifier) {
-    Box(
+    val dash = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(18f, 12f), 0f)
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .padding(vertical = 6.dp)
             .testTag("free_delivery_banner")
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(Color(0xFFFF9800), Color(0xFFFF5722))
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFFFFF6E5))
+            .drawBehind {
+                drawRoundRect(
+                    color = Color(0xFFF5C57A),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx()),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx(), pathEffect = dash)
                 )
-            )
+            }
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Decorative translucent circle, Swiggy-style banner touch.
-        Box(
-            modifier = Modifier
-                .size(90.dp)
-                .align(Alignment.CenterEnd)
-                .offset(x = 24.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.10f))
+        Icon(Icons.Default.LocalShipping, contentDescription = null, tint = Color(0xFFB45309), modifier = Modifier.size(20.dp))
+        Text(
+            text = "FREE Delivery on orders above Rs ${threshold.toInt()}!",
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.5.sp,
+            color = Color(0xFFB45309)
         )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.22f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.LocalShipping,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = "FREE DELIVERY",
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 15.sp,
-                    color = Color.White
-                )
-                Text(
-                    text = "On orders above ₹${threshold.toInt()}",
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.92f)
-                )
-            }
-        }
     }
 }
 

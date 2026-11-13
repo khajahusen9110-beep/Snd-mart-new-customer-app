@@ -69,21 +69,25 @@ fun AppBadgeCount(count: Int, modifier: Modifier = Modifier) {
         scale.snapTo(0.4f)
         scale.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 500f))
     }
-    Text(
-        text = if (count > 99) "99+" else "$count",
-        color = Color.White,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
-        maxLines = 1,
-        modifier = modifier
-            .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
-            .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
-            .background(Color.White, CircleShape)
-            .padding(1.5.dp)
-            .background(NaturalBadgeRed, CircleShape)
-            .padding(horizontal = 4.dp, vertical = 2.dp),
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-    )
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = NaturalBadgeRed,
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White),
+        modifier = modifier.graphicsLayer { scaleX = scale.value; scaleY = scale.value }
+    ) {
+        Box(
+            modifier = Modifier.defaultMinSize(minWidth = 19.dp, minHeight = 19.dp).padding(horizontal = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (count > 99) "99+" else "$count",
+                color = Color.White,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+        }
+    }
 }
 
 /** Round header action button: white with a hairline border (website: .icon-circle-btn). */
@@ -219,8 +223,9 @@ fun SndmartTopBar(
                     onClick = onNotificationsClick,
                     modifier = Modifier.testTag("topbar_notifications_button")
                 ) {
-                    BadgedBox(badge = { AppBadgeCount(unreadNotificationCount) }) {
+                    Box {
                         HeaderCircle(Icons.Outlined.Notifications, "Notifications")
+                        AppBadgeCount(unreadNotificationCount, Modifier.align(Alignment.TopEnd).offset(x = 1.dp, y = (-4).dp))
                     }
                 }
             }
@@ -240,8 +245,9 @@ fun SndmartTopBar(
                 onClick = onCartClick,
                 modifier = Modifier.testTag("topbar_cart_button")
             ) {
-                BadgedBox(badge = { AppBadgeCount(cartCount) }) {
+                Box {
                     HeaderCircle(Icons.Outlined.ShoppingCart, "Cart")
+                    AppBadgeCount(cartCount, Modifier.align(Alignment.TopEnd).offset(x = 1.dp, y = (-4).dp))
                 }
             }
         },

@@ -72,7 +72,7 @@ fun ProductCardSkeleton(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            com.example.ui.theme.OutlineSoft
         ),
         modifier = modifier.fillMaxWidth()
     ) {
@@ -153,7 +153,7 @@ fun HotelCardSkeleton(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            com.example.ui.theme.OutlineSoft
         ),
         modifier = modifier.fillMaxWidth()
     ) {
@@ -235,7 +235,7 @@ fun OrderCardSkeleton(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            com.example.ui.theme.OutlineSoft
         ),
         modifier = modifier.fillMaxWidth()
     ) {
@@ -317,7 +317,7 @@ fun NotificationCardSkeleton(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            com.example.ui.theme.OutlineSoft
         ),
         modifier = modifier.fillMaxWidth()
     ) {
