@@ -105,6 +105,8 @@ fun CheckoutScreen(
     var isLoadingDeliveryFee by remember { mutableStateOf(false) }
     var deliveryFeeError by remember { mutableStateOf<String?>(null) }
     var handlingFee by remember { mutableStateOf(5.0) }
+    // Flat per-order Platform Fee (City Admin). The server charges it, so the estimate must include it.
+    var platformFee by remember { mutableStateOf(0.0) }
     var cityDeliverySettings by remember { mutableStateOf<CityDeliverySettings?>(null) }
     var isCityActive by remember { mutableStateOf(true) }
 
@@ -168,7 +170,11 @@ fun CheckoutScreen(
                     activePaymentOrder = null
                     activePaymentRpData = null
                     coroutineScope.launch {
-                        repository.syncRazorpayPayment(orderId)
+                        // The payment may still have gone through in the UPI app: only then celebrate.
+                        val synced = repository.syncRazorpayPayment(orderId).getOrNull()
+                        if (synced?.paymentStatus.equals("paid", ignoreCase = true)) {
+                            com.example.util.OrderCelebration.show()
+                        }
                     }
                     val isDismissOrCancelled = result.code == 0 ||
                         result.response?.contains("cancelled", ignoreCase = true) == true
@@ -210,15 +216,18 @@ fun CheckoutScreen(
                         )
                         isVerified = verifyResult.isSuccess && verifyResult.getOrNull()?.success == true
                     }
-                    repository.syncRazorpayPayment(orderId)
+                    val synced = repository.syncRazorpayPayment(orderId).getOrNull()
+                    val syncedPaid = synced?.paymentStatus.equals("paid", ignoreCase = true)
 
                     isPlacingOrder = false
                     activePaymentOrder = null
                     activePaymentRpData = null
 
-                    if (!isVerified) {
+                    if (!isVerified && !syncedPaid) {
                         Analytics.trackEvent("payment_failed", mapOf("method" to "upi", "reason" to "upi_verification_failed"))
                         snackbarHostState.showSnackbar("Payment received, confirming with your bank... you can check status from your order.")
+                    } else {
+                        com.example.util.OrderCelebration.show()
                     }
                     onOrderPlacedSuccess(orderId, currentOrder.totalAmount)
                 }
@@ -338,7 +347,7 @@ fun CheckoutScreen(
         coroutineScope.launch {
             isValidatingCoupon = true
             couponErrorMessage = null
-            val payable = ((subtotal - authoritativeDiscount).coerceAtLeast(0.0) + (calculatedDeliveryFee ?: 0.0) + handlingFee)
+            val payable = ((subtotal - authoritativeDiscount).coerceAtLeast(0.0) + (calculatedDeliveryFee ?: 0.0) + handlingFee + platformFee)
                 .coerceAtLeast(0.0)
             val res = repository.previewCheckoutRewards(subtotal, code, payable)
             if (res.isSuccess) {
@@ -412,6 +421,7 @@ fun CheckoutScreen(
             if (handlingRes.isSuccess) {
                 handlingFee = handlingRes.getOrNull() ?: 5.0
             }
+            platformFee = repository.getPlatformFee(cid)
 
             val feeRes = repository.calculateDeliveryFee(
                 cityId = cid,
@@ -439,14 +449,14 @@ fun CheckoutScreen(
     }
 
     // Items - instant discount + delivery + handling, before the wallet.
-    val payableBeforeWallet = (subtotalAfterDiscount + (calculatedDeliveryFee ?: 0.0) + handlingFee).coerceAtLeast(0.0)
+    val payableBeforeWallet = (subtotalAfterDiscount + (calculatedDeliveryFee ?: 0.0) + handlingFee + platformFee).coerceAtLeast(0.0)
     val wallet = walletInfo
     val showWalletRow = wallet != null && wallet.enabled && wallet.balance > 0.0
     val walletApplied = if (wallet != null && showWalletRow && useWallet) minOf(wallet.usable, payableBeforeWallet) else 0.0
 
     // Estimate only: after placing, the server's order.totalAmount is what is charged.
     val totalAmount = if (calculatedDeliveryFee != null && isDeliveryAvailable) {
-        (subtotalAfterDiscount + calculatedDeliveryFee!! + handlingFee - walletApplied).coerceAtLeast(0.0)
+        (subtotalAfterDiscount + calculatedDeliveryFee!! + handlingFee + platformFee - walletApplied).coerceAtLeast(0.0)
     } else null
 
     // Refresh the coupon/wallet preview when the cart, coupon or bill changes (debounced 400 ms).
@@ -661,6 +671,7 @@ fun CheckoutScreen(
                                         startUpiPayment(order)
                                     } else {
                                         isPlacingOrder = false
+                                        com.example.util.OrderCelebration.show()
                                         onOrderPlacedSuccess(order.id ?: "", order.totalAmount)
                                     }
                                 } else {
@@ -846,7 +857,7 @@ fun CheckoutScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
@@ -962,7 +973,7 @@ fun CheckoutScreen(
                         .testTag("delivery_method_section"),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
@@ -1178,7 +1189,7 @@ fun CheckoutScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -1302,7 +1313,7 @@ fun CheckoutScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -1342,7 +1353,7 @@ fun CheckoutScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -1399,7 +1410,7 @@ fun CheckoutScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                     ) {
                         Row(
                             modifier = Modifier
@@ -1458,7 +1469,7 @@ fun CheckoutScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -1525,13 +1536,7 @@ fun CheckoutScreen(
                         }
 
                         Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Handling Fee", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                            Text("₹${"%.0f".format(handlingFee)}", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                        }
+                        TaxesChargesRow(handlingFee = handlingFee, platformFee = platformFee)
 
                         if (walletApplied > 0.0) {
                             Spacer(modifier = Modifier.height(6.dp))

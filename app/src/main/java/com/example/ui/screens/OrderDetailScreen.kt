@@ -744,7 +744,7 @@ fun OrderDetailScreen(
                                             .testTag("live_tracking_loading_card"),
                                         shape = RoundedCornerShape(16.dp),
                                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                                     ) {
                                         Row(
                                             modifier = Modifier
@@ -772,7 +772,7 @@ fun OrderDetailScreen(
                                             .testTag("live_tracking_card"),
                                         shape = RoundedCornerShape(16.dp),
                                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                                     ) {
                                         Column(modifier = Modifier.padding(16.dp)) {
                                             // A. Live ETA countdown
@@ -818,7 +818,7 @@ fun OrderDetailScreen(
                                 .testTag("order_stepper_card"),
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                            border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
@@ -842,7 +842,7 @@ fun OrderDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                            border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
@@ -893,7 +893,7 @@ fun OrderDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                            border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text("Payment Summary", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
@@ -914,7 +914,11 @@ fun OrderDetailScreen(
                                     BillRow("Discount", "-₹${"%.2f".format(currentOrder.discountAmount)}", color = SuccessGreen)
                                 }
                                 BillRow("Delivery Fee", "₹${"%.2f".format(currentOrder.deliveryFee)}")
-                                BillRow("Handling Fee", "₹${"%.2f".format(currentOrder.handlingFee)}")
+                                TaxesChargesRow(
+                                    handlingFee = currentOrder.handlingFee,
+                                    platformFee = currentOrder.platformFee ?: 0.0,
+                                    decimals = 2
+                                )
                                 if ((currentOrder.walletUsedAmount ?: 0.0) > 0.0) {
                                     BillRow("Wallet used", "−₹${"%.2f".format(currentOrder.walletUsedAmount ?: 0.0)}", color = SuccessGreen)
                                 }
@@ -993,7 +997,7 @@ fun OrderDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                            border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text("Need Help with this Order?", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
@@ -1452,7 +1456,7 @@ fun FindingDeliveryPartnerCard() {
             .testTag("finding_partner_card"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft)
     ) {
         Row(
             modifier = Modifier
@@ -1665,7 +1669,7 @@ fun LiveDeliveryMap(
         Surface(
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft),
             shadowElevation = 2.dp,
             modifier = Modifier
                 .fillMaxWidth()

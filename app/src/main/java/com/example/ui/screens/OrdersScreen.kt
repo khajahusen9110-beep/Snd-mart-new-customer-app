@@ -342,7 +342,7 @@ fun OrderCardItem(
             .testTag("order_card_${order.orderNumber}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.OutlineSoft),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
