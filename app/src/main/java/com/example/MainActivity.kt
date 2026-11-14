@@ -47,6 +47,8 @@ import com.example.ui.components.LocalActivePromo
 import com.example.ui.components.LocationDetectionState
 import com.example.ui.components.LocationRequirementDialog
 import com.example.ui.components.OfferRibbon
+import com.example.ui.components.navIconScale
+import com.example.ui.components.navTopIndicator
 import com.example.ui.components.PromoState
 import com.example.ui.screens.*
 import com.example.ui.theme.*
@@ -615,14 +617,16 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                         }
                                     },
                                     icon = {
+Box(Modifier.navIconScale(currentDestination == Screen.Home.route)) {
                                         Icon(
                                             if (currentDestination == Screen.Home.route) Icons.Filled.Storefront else Icons.Outlined.Storefront,
                                             contentDescription = "Home"
                                         )
+                                    }
                                     },
-                                    label = { Text("Home", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+                                    label = { Text("Home", fontWeight = if (currentDestination == Screen.Home.route) FontWeight.Bold else FontWeight.Medium, fontSize = 11.sp) },
                                     colors = navItemColors,
-                                    modifier = Modifier.testTag("nav_item_home")
+                                    modifier = Modifier.navTopIndicator(currentDestination == Screen.Home.route).testTag("nav_item_home")
                                 )
 
                                 NavigationBarItem(
@@ -635,6 +639,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                         }
                                     },
                                     icon = {
+Box(Modifier.navIconScale(currentDestination == Screen.Cart.route)) {
                                         BadgedBox(
                                             badge = {
                                                 if (cartCount > 0) {
@@ -649,10 +654,11 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                                 contentDescription = "Cart"
                                             )
                                         }
+                                    }
                                     },
-                                    label = { Text("Cart", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                                    label = { Text("Cart", fontWeight = if (currentDestination == Screen.Cart.route) FontWeight.Bold else FontWeight.Medium, fontSize = 11.sp) },
                                     colors = navItemColors,
-                                    modifier = Modifier.testTag("nav_item_cart")
+                                    modifier = Modifier.navTopIndicator(currentDestination == Screen.Cart.route).testTag("nav_item_cart")
                                 )
 
                                 NavigationBarItem(
@@ -665,14 +671,16 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                         }
                                     },
                                     icon = {
+Box(Modifier.navIconScale(currentDestination == Screen.Orders.route)) {
                                         Icon(
                                             if (currentDestination == Screen.Orders.route) Icons.Filled.ReceiptLong else Icons.Outlined.ReceiptLong,
                                             contentDescription = "Orders"
                                         )
+                                    }
                                     },
-                                    label = { Text("Orders", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                                    label = { Text("Orders", fontWeight = if (currentDestination == Screen.Orders.route) FontWeight.Bold else FontWeight.Medium, fontSize = 11.sp) },
                                     colors = navItemColors,
-                                    modifier = Modifier.testTag("nav_item_orders")
+                                    modifier = Modifier.navTopIndicator(currentDestination == Screen.Orders.route).testTag("nav_item_orders")
                                 )
 
                                 NavigationBarItem(
@@ -685,14 +693,16 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                         }
                                     },
                                     icon = {
+Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                         Icon(
                                             if (currentDestination == Screen.Profile.route) Icons.Filled.Person else Icons.Outlined.Person,
                                             contentDescription = "Profile"
                                         )
+                                    }
                                     },
-                                    label = { Text("Profile", fontWeight = FontWeight.Medium, fontSize = 11.sp) },
+                                    label = { Text("Profile", fontWeight = if (currentDestination == Screen.Profile.route) FontWeight.Bold else FontWeight.Medium, fontSize = 11.sp) },
                                     colors = navItemColors,
-                                    modifier = Modifier.testTag("nav_item_profile")
+                                    modifier = Modifier.navTopIndicator(currentDestination == Screen.Profile.route).testTag("nav_item_profile")
                                 )
                             }
                                     }
