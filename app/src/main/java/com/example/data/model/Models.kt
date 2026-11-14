@@ -68,7 +68,9 @@ data class Vendor(
     // City admin-set default category tab for this hotel's menu (e.g. "Tiffins"), used to
     // pick which tab is selected when the menu opens. Null if unset, or if the backend
     // doesn't have this column yet — callers fall back to the first available-now category.
-    @Json(name = "default_category_id") val defaultCategoryId: String? = null
+    @Json(name = "default_category_id") val defaultCategoryId: String? = null,
+    // "luxury" | "medium" | "low_budget": from the hotel's median dish price, or set by the City Admin.
+    @Json(name = "effective_price_tier") val effectivePriceTier: String? = null
 ) {
     // Compatibility alias: wherever imageUrl is referenced for a vendor/hotel, resolve to bannerUrl
     val imageUrl: String? get() = bannerUrl
@@ -428,6 +430,29 @@ data class SearchFoodItemRow(
 data class TrendingSearchRow(
     val query: String = "",
     @Json(name = "search_count") val searchCount: Long = 0
+)
+
+// Result of public.get_food_home_meta: the city's price-tier bands, hotels per tier, and the
+// hotels customers order from most (real order counts, best first).
+@JsonClass(generateAdapter = true)
+data class FoodHomeMeta(
+    @Json(name = "low_threshold") val lowThreshold: Double = 100.0,
+    @Json(name = "high_threshold") val highThreshold: Double = 200.0,
+    @Json(name = "tier_counts") val tierCounts: TierCounts = TierCounts(),
+    @Json(name = "top_hotels") val topHotels: List<TopHotelRank> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class TierCounts(
+    val luxury: Int = 0,
+    val medium: Int = 0,
+    @Json(name = "low_budget") val lowBudget: Int = 0
+)
+
+@JsonClass(generateAdapter = true)
+data class TopHotelRank(
+    @Json(name = "vendor_id") val vendorId: String = "",
+    val orders: Int = 0
 )
 
 // Row from public.get_top_food_products: a hotel dish, its hotel, and total units sold.

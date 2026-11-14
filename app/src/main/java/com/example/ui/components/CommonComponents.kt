@@ -730,6 +730,7 @@ fun FloatingCartButton(
         shape = RoundedCornerShape(18.dp),
         color = if (goal != null) Color.White else Color.Transparent,
         shadowElevation = if (goal != null) 10.dp else 0.dp,
+        border = if (goal != null) androidx.compose.foundation.BorderStroke(1.dp, OutlineSoft) else null,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -737,7 +738,10 @@ fun FloatingCartButton(
         Column {
             if (goal != null) {
                 Column(
-                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 9.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(if (left <= 0.0) Color(0xFFF0FDF4) else Color.White)
+                        .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 11.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (left <= 0.0) {
@@ -781,15 +785,16 @@ fun FloatingCartButton(
                     }
                 }
             }
+            // With the strip above, the button is the bottom half of one card: flush, square, no shadow of its own.
             Surface(
                 onClick = onClick,
-                shape = RoundedCornerShape(16.dp),
+                shape = if (goal != null) RoundedCornerShape(0.dp) else RoundedCornerShape(16.dp),
                 color = Color.Transparent,
                 contentColor = Color.White,
-                shadowElevation = 10.dp,
+                shadowElevation = if (goal != null) 0.dp else 10.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(if (goal != null) 52.dp else 56.dp)
                     .testTag(testTag)
             ) {
                 Row(

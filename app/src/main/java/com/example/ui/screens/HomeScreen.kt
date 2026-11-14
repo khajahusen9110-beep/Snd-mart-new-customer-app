@@ -252,13 +252,20 @@ fun HomeScreen(
     var foodOffersOnly by remember { mutableStateOf(false) }
     var showFoodFilters by remember { mutableStateOf(false) }
     var trendingSearches by remember { mutableStateOf<List<String>>(emptyList()) }
-    var recentSearches by remember { mutableStateOf<List<String>>(emptyList()) }
     var loggedQuery by remember { mutableStateOf("") }
 
     // "What's on your mind?" rotating category picker (Food Delivery hotel listing only).
     var hotelCategoriesPool by remember { mutableStateOf<List<Category>>(emptyList()) }
     var displayedFoodCategories by remember { mutableStateOf<List<Category>>(emptyList()) }
     var selectedFoodCategoryName by remember { mutableStateOf<String?>(null) }
+    // Price tier chosen from the "Restaurants for every budget" cards (null = all hotels).
+    var selectedTierKey by rememberSaveable(selectedCity?.id) { mutableStateOf<String?>(null) }
+    val tierUi = rememberFoodTierUi(repository, selectedCity?.id, selectedTierKey, searchQuery.isBlank())
+    // Back leaves a chosen price tier or dish category and returns to the food home (registered after
+    // the groceries handler above, so it wins while a filter is open).
+    BackHandler(enabled = browsingMode == BrowsingMode.HOTELS && (tierUi.open || !selectedFoodCategoryName.isNullOrEmpty())) {
+        if (tierUi.open) selectedTierKey = null else selectedFoodCategoryName = null
+    }
 
     // Tracking state to prevent duplicate/redundant fetches for same city + category
     var lastLoadedCityId by remember { mutableStateOf<String?>(null) }
@@ -364,8 +371,8 @@ fun HomeScreen(
 
     val context = LocalContext.current
     val sessionManager = repository.sessionManager
-    val recentSearchesPrefs = remember { com.example.data.local.RecentSearchesPrefs(context) }
-    LaunchedEffect(Unit) { recentSearches = recentSearchesPrefs.getRecent() }
+    // Search history is no longer kept: clear what older versions saved on this device.
+    LaunchedEffect(Unit) { com.example.data.local.RecentSearchesPrefs(context).clearRecent() }
 
     // Swiggy-Style Promotional Coupon Popup (shown once per app session on cold start)
     var showCouponPopup by remember { mutableStateOf(false) }
@@ -726,8 +733,6 @@ fun HomeScreen(
         if (loggedQuery != searchQuery) {
             loggedQuery = searchQuery
             repository.logFoodSearch(cityId, searchQuery, dishResults.size)
-            recentSearchesPrefs.addRecent(searchQuery)
-            recentSearches = recentSearchesPrefs.getRecent()
         }
     }
 
@@ -735,7 +740,6 @@ fun HomeScreen(
     // has typed anything, so they always have a one-tap starting point.
     LaunchedEffect(selectedCity?.id) {
         val cityId = selectedCity?.id ?: return@LaunchedEffect
-        recentSearches = recentSearchesPrefs.getRecent()
         trendingSearches = repository.getTrendingFoodSearches(cityId).getOrDefault(emptyList())
     }
 
@@ -877,15 +881,21 @@ fun HomeScreen(
                 cartCount = totalCartCount,
                 deliveryAddressLabel = deliveryAddressLabel,
                 unreadNotificationCount = unreadNotificationCount,
-                navigationIcon = if (browsingMode == BrowsingMode.HOTELS && serviceMode != "food_only") {
+                navigationIcon = if (browsingMode == BrowsingMode.HOTELS &&
+                    (serviceMode != "food_only" || tierUi.open || !selectedFoodCategoryName.isNullOrEmpty())
+                ) {
                     {
                         IconButton(
-                            onClick = { browsingMode = BrowsingMode.GROCERY },
+                            onClick = {
+                                if (tierUi.open) selectedTierKey = null
+                                else if (!selectedFoodCategoryName.isNullOrEmpty()) selectedFoodCategoryName = null
+                                else browsingMode = BrowsingMode.GROCERY
+                            },
                             modifier = Modifier.testTag("hotels_back_button")
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back to Groceries"
+                                contentDescription = if (tierUi.open || !selectedFoodCategoryName.isNullOrEmpty()) "Back to food home" else "Back to Groceries"
                             )
                         }
                     }
@@ -1054,11 +1064,8 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            if (browsingMode == BrowsingMode.HOTELS && searchQuery.isBlank() &&
-                (recentSearches.isNotEmpty() || trendingSearches.isNotEmpty())
-            ) {
+            if (browsingMode == BrowsingMode.HOTELS && searchQuery.isBlank() && trendingSearches.isNotEmpty()) {
                 SearchSuggestRow(
-                    recentSearches = recentSearches,
                     trendingSearches = trendingSearches,
                     onPick = { searchQuery = it }
                 )
@@ -1360,7 +1367,7 @@ fun HomeScreen(
 
             // --- HOTELS VIEW ---
             if (browsingMode == BrowsingMode.HOTELS) {
-                if (isHotelsLoading && hotels.isEmpty()) {
+                if ((isHotelsLoading && hotels.isEmpty()) || tierUi.loading) {
                     // Rule 7: Skeleton list loader instead of a single spinner
                     HotelsListSkeleton(count = 4)
                 } else if (hotelsError != null && hotels.isEmpty()) {
@@ -1373,7 +1380,7 @@ fun HomeScreen(
                 } else {
                     // Search is performed server-side (name=ilike); tapping a "What's on your
                     // mind?" category tile filters client-side by that category's hotels instead.
-                    val filteredHotels = selectedFoodCategoryName?.let { name ->
+                    val filteredHotels = if (tierUi.open) tierUi.hotels else selectedFoodCategoryName?.let { name ->
                         val matchingVendorIds = vendorIdsForCategoryName(hotelCategoriesPool, name)
                         hotels.filter { it.id in matchingVendorIds }
                     } ?: hotels
@@ -1494,17 +1501,35 @@ fun HomeScreen(
 
                             // Banner carousel and "What's on your mind?": City Admin chooses which comes first.
                             val bannerBlock: LazyListScope.() -> Unit = {
-                                if (searchQuery.isBlank() && promoBanners.isNotEmpty()) {
-                                    item(key = "food_promo_banners") {
-                                        PromoBannerCarousel(
-                                            banners = promoBanners,
-                                            onOpen = { b -> openPromoBanner(b) }
-                                        )
+                                if (searchQuery.isBlank() && !tierUi.open) {
+                                    if (promoBanners.isNotEmpty()) {
+                                        item(key = "food_promo_banners") {
+                                            PromoBannerCarousel(
+                                                banners = promoBanners,
+                                                onOpen = { b -> openPromoBanner(b) }
+                                            )
+                                        }
+                                    } else {
+                                        // No image banners from the City Admin: the built-in promo card is the banner.
+                                        item(key = "food_promo_card") {
+                                            FoodPromoBanner(
+                                                threshold = freeDeliveryThreshold,
+                                                coupon = homeExtras.coupon,
+                                                onCopyCode = { code ->
+                                                    clipboardManager.setText(AnnotatedString(code))
+                                                    coroutineScope.launch { snackbarHostState.showSnackbar("Coupon code $code copied") }
+                                                },
+                                                dishImageUrl = displayedFoodCategories.firstOrNull { it.imageUrl != null }?.imageUrl,
+                                                onOrder = {
+                                                    coroutineScope.launch { hotelsListState.animateScrollBy(900f) }
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
                             val categoryBlock: LazyListScope.() -> Unit = {
-                                if (searchQuery.isBlank() && displayedFoodCategories.isNotEmpty()) {
+                                if (searchQuery.isBlank() && !tierUi.open && displayedFoodCategories.isNotEmpty()) {
                                     item(key = "food_dish_categories") {
                                         FoodCategoryGrid(
                                             categories = displayedFoodCategories,
@@ -1519,8 +1544,24 @@ fun HomeScreen(
                             }
                             if (homeSections.foodBannerFirst) { bannerBlock(); categoryBlock() } else { categoryBlock(); bannerBlock() }
 
+                            // Restaurants by budget -> Top Hotels; once a tier is chosen, a Luxury/Medium/Low switcher instead.
+                            foodTierSection(
+                                ui = tierUi,
+                                searchBlank = searchQuery.isBlank(),
+                                city = selectedCity,
+                                repository = repository,
+                                onSelect = { t ->
+                                    selectedTierKey = t?.key
+                                    if (t != null) {
+                                        selectedFoodCategoryName = null
+                                        coroutineScope.launch { hotelsListState.scrollToItem(0) }
+                                    }
+                                },
+                                onOpenHotel = { v -> onNavigateToHotelMenu(v.id, v.name) }
+                            )
+
                             selectedFoodCategoryName?.let { name ->
-                                item(key = "active_food_category_filter") {
+                                if (!tierUi.open) item(key = "active_food_category_filter") {
                                     ActiveCategoryFilterChip(
                                         categoryName = name,
                                         onClear = { selectedFoodCategoryName = null }
@@ -1528,13 +1569,13 @@ fun HomeScreen(
                                 }
                             }
 
-                            if (searchQuery.isBlank()) {
+                            if (searchQuery.isBlank() && !tierUi.open) {
                                 item(key = "food_offer_banner") {
                                     OfferBanner(kind = PromoKind.FOOD)
                                 }
                             }
 
-                            if (searchQuery.isBlank() && homeSections.recentlyViewed && recentFood.isNotEmpty()) {
+                            if (searchQuery.isBlank() && !tierUi.open && homeSections.recentlyViewed && recentFood.isNotEmpty()) {
                                 item(key = "food_recently_viewed") {
                                     MostOrderedFoodRow(
                                         products = recentFood,
@@ -1546,7 +1587,7 @@ fun HomeScreen(
                                 }
                             }
 
-                            if (searchQuery.isBlank() && homeSections.mostSelling && topFood.isNotEmpty()) {
+                            if (searchQuery.isBlank() && !tierUi.open && homeSections.mostSelling && topFood.isNotEmpty()) {
                                 item(key = "food_most_ordered") {
                                     MostOrderedFoodRow(
                                         products = topFood,
@@ -1557,7 +1598,7 @@ fun HomeScreen(
                                 }
                             }
 
-                            if (searchQuery.isBlank() && budgetFood.isNotEmpty()) {
+                            if (searchQuery.isBlank() && !tierUi.open && budgetFood.isNotEmpty()) {
                                 item(key = "food_99_store") {
                                     MostOrderedFoodRow(
                                         products = budgetFood,
@@ -1569,28 +1610,13 @@ fun HomeScreen(
                                 }
                             }
 
-                            // Plain promotion card when City Admin has no image banners for the food tab.
-                            if (searchQuery.isBlank() && promoBanners.isEmpty()) {
-                                item(key = "food_promo_card") {
-                                    FoodPromoBanner(
-                                        threshold = freeDeliveryThreshold,
-                                        coupon = homeExtras.coupon,
-                                        onCopyCode = { code ->
-                                            clipboardManager.setText(AnnotatedString(code))
-                                            coroutineScope.launch { snackbarHostState.showSnackbar("Coupon code $code copied") }
-                                        },
-                                        dishImageUrl = displayedFoodCategories.firstOrNull { it.imageUrl != null }?.imageUrl,
-                                        onOrder = {
-                                            coroutineScope.launch { hotelsListState.animateScrollBy(900f) }
-                                        }
-                                    )
-                                }
-                            }
-
                             // 4 sections, in this order: Featured+Open, Open, Featured+Closed,
                             // Closed. filteredHotels is already sorted by Vendor.sortTier (see
                             // HotelComparator), so grouping by tier preserves that order and the
                             // alphabetical order within each tier.
+                            if (tierUi.open) {
+                                item(key = "tier_heading") { HotelSectionHeader(title = tierUi.heading) }
+                            }
                             HotelListSections.forEach { section ->
                                 val sectionHotels = filteredHotels.filter { it.sortTier == section.tier }
                                 if (sectionHotels.isNotEmpty()) {
@@ -1609,7 +1635,7 @@ fun HomeScreen(
                                 }
                             }
 
-                            if (hasMoreHotels) {
+                            if (hasMoreHotels && !tierUi.open) {
                                 item {
                                     Box(
                                         modifier = Modifier
@@ -2209,30 +2235,13 @@ fun SearchDishCard(
     }
 }
 
-// Smart Food Search: Recent / Trending pills (below the search bar, shown when empty).
+// Smart Food Search: Trending pills (below the search bar, shown when empty).
 @Composable
 fun SearchSuggestRow(
-    recentSearches: List<String>,
     trendingSearches: List<String>,
     onPick: (String) -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        if (recentSearches.isNotEmpty()) {
-            Text(
-                "RECENT",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = TextMuted,
-                letterSpacing = 0.5.sp
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            FlowRowPills {
-                recentSearches.take(5).forEach { q ->
-                    SearchPill(text = q, trending = false, onClick = { onPick(q) })
-                }
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-        }
         if (trendingSearches.isNotEmpty()) {
             Text(
                 "TRENDING",

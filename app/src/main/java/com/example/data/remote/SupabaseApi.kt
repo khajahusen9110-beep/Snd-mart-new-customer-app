@@ -107,6 +107,7 @@ interface SupabaseApi {
         @Query("vendor_type") vendorType: String? = null,
         @Query("is_active") isActive: String? = null,
         @Query("name", encoded = true) name: String? = null,
+        @Query("effective_price_tier") priceTier: String? = null,
         @Query("select") select: String = "id,name,banner_url,is_active,is_featured,is_open,address,latitude,longitude,opening_time,closing_time",
         @Query("order") order: String = "is_active.desc,is_featured.desc.nullslast,name.asc",
         @Query("limit") limit: Int? = null,
@@ -374,6 +375,12 @@ interface SupabaseApi {
     suspend fun getTopFoodProducts(
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<List<TopFoodRow>>
+
+    // Price-tier bands, hotels per tier and the most-ordered hotels, in one request.
+    @POST("rest/v1/rpc/get_food_home_meta")
+    suspend fun getFoodHomeMeta(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<FoodHomeMeta>
 
     // Hotel dishes priced ₹99 or under across the city, for the "99 Store" row.
     @POST("rest/v1/rpc/get_budget_food_products")

@@ -1478,6 +1478,70 @@ class SndmartRepository(
         }
     }
 
+    private val foodHomeMetaCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, FoodHomeMeta>>()
+
+    /** Price-tier bands, hotels per tier and the most-ordered hotels for the food home. */
+    suspend fun getFoodHomeMeta(cityId: String, forceRefresh: Boolean = false): FoodHomeMeta? {
+        if (!forceRefresh) {
+            val hit = foodHomeMetaCache[cityId]
+            if (hit != null && System.currentTimeMillis() - hit.first < 5 * 60_000L) return hit.second
+        }
+        if (!SupabaseClient.isKeyConfigured()) return null
+        return try {
+            val res = api.getFoodHomeMeta(mapOf("p_city_id" to cityId))
+            val meta = res.body()
+            if (res.isSuccessful && meta != null) {
+                foodHomeMetaCache[cityId] = System.currentTimeMillis() to meta
+                meta
+            } else null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "getFoodHomeMeta failed: ${e.message}")
+            null
+        }
+    }
+
+    /** All approved hotels of one price tier ("luxury" | "medium" | "low_budget"), open ones first. */
+    suspend fun getHotelsByTier(cityId: String, tier: String): Result<List<Vendor>> {
+        if (!SupabaseClient.isKeyConfigured()) return Result.success(emptyList())
+        return try {
+            val res = api.getVendors(
+                cityId = "eq.$cityId",
+                vendorType = "eq.hotel",
+                approvalStatus = "eq.approved",
+                priceTier = "eq.$tier",
+                select = "id,name,banner_url,is_active,is_featured,is_open,address,latitude,longitude,opening_time,closing_time,effective_price_tier",
+                limit = 100
+            )
+            if (res.isSuccessful && res.body() != null) Result.success(res.body()!!.sortedWith(HotelComparator))
+            else Result.failure(ApiException(res.code(), SupabaseClient.parseErrorMessage(res)))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** The "Top Hotels" row: the most-ordered-from hotels, best first, with their order counts. */
+    suspend fun getTopHotels(meta: FoodHomeMeta): List<Pair<Vendor, Int>> {
+        val ranked = meta.topHotels.take(8)
+        if (ranked.size < 3 || !SupabaseClient.isKeyConfigured()) return emptyList()
+        return try {
+            val idList = ranked.joinToString(",") { it.vendorId }
+            val res = api.getVendorsByIds(
+                idInQuery = "in.($idList)",
+                select = "id,name,banner_url,is_active,is_featured,is_open,address,latitude,longitude,opening_time,closing_time"
+            )
+            val byId = res.body().orEmpty().associateBy { it.id }
+            ranked.mapNotNull { r -> byId[r.vendorId]?.takeIf { it.isActive }?.let { it to r.orders } }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     suspend fun getTopSellingFoodProducts(cityId: String, forceRefresh: Boolean = false): Result<List<ResolvedProduct>> {
         if (!forceRefresh) {
             val cached = topFoodCache[cityId]

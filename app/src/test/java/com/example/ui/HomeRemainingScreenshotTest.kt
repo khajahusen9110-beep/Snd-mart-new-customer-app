@@ -120,7 +120,7 @@ class HomeRemainingScreenshotTest {
     composeTestRule.setContent {
       SndmartTheme {
         Column(Modifier.fillMaxWidth().background(BackgroundLight).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-          SearchSuggestRow(recentSearches = listOf("biryani", "dosa"), trendingSearches = listOf("chicken biryani", "veg thali", "rolls"), onPick = {})
+          SearchSuggestRow(trendingSearches = listOf("chicken biryani", "veg thali", "rolls"), onPick = {})
           Row { FoodFilterToggleButton(active = false, onClick = {}); Spacer(Modifier.width(8.dp)); FoodFilterToggleButton(active = true, onClick = {}) }
           FoodSearchFiltersBar(sort = "relevance", onSortChange = {}, veg = "nonveg", onVegChange = {}, budgetOnly = true, onBudgetToggle = {}, ratingOnly = false, onRatingToggle = {}, offersOnly = false, onOffersToggle = {})
           SearchDishCard(product = dish, quantity = 0, onOpenHotel = {}, onAdd = {})
