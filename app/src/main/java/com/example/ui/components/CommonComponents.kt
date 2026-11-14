@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -830,3 +832,47 @@ fun FloatingCartButton(
     }
 }
 
+
+
+/**
+ * Bottom-nav active tab marker, like the website's .bottom-link.active::before: a 3dp primary bar
+ * hugging the top edge, rounded at the bottom, that grows out from the centre when selected.
+ */
+@Composable
+fun Modifier.navTopIndicator(selected: Boolean): Modifier {
+    val width by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (selected) 28.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.tween(250),
+        label = "navIndicatorWidth"
+    )
+    return this.drawBehind {
+        val w = width.toPx()
+        if (w > 0f) {
+            val r = 3.dp.toPx()
+            val left = (size.width - w) / 2f
+            val path = androidx.compose.ui.graphics.Path().apply {
+                addRoundRect(
+                    androidx.compose.ui.geometry.RoundRect(
+                        left = left, top = 0f, right = left + w, bottom = 3.dp.toPx(),
+                        topLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
+                        topRightCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
+                        bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(r),
+                        bottomRightCornerRadius = androidx.compose.ui.geometry.CornerRadius(r)
+                    )
+                )
+            }
+            drawPath(path, NaturalPrimary)
+        }
+    }
+}
+
+/** Selected bottom-nav icon scales up a little with a spring (website: translateY(-1px) scale(1.06)). */
+@Composable
+fun Modifier.navIconScale(selected: Boolean): Modifier {
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (selected) 1.12f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = 400f),
+        label = "navIconScale"
+    )
+    return this.graphicsLayer { scaleX = scale; scaleY = scale }
+}

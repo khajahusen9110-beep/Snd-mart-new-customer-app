@@ -45,6 +45,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -194,6 +196,8 @@ fun HomeScreen(
         val cid = selectedCity?.id ?: return@LaunchedEffect
         topSelling = repository.getTopSellingGroceryProducts(cid).getOrNull() ?: emptyList()
     }
+    // Featured grocery row + the city's promo coupon, loaded outside this (already very large) function.
+    val homeExtras = rememberHomeExtras(repository, selectedCity?.id)
     // "Most Ordered" food row (hotel dishes by units sold in this city).
     var topFood by remember(selectedCity?.id) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
     LaunchedEffect(selectedCity?.id) {
@@ -1231,6 +1235,19 @@ fun HomeScreen(
                             }
                         }
 
+                        if (searchQuery.isBlank() && homeExtras.featured.isNotEmpty()) {
+                            item(span = { GridItemSpan(2) }) {
+                                FeaturedGroceryRow(
+                                    products = homeExtras.featured,
+                                    groceryCart = groceryCart,
+                                    cityOpen = cityIsOpen,
+                                    cityId = selectedCity.id,
+                                    repository = repository,
+                                    onSelectSize = { prod -> variantPickerProduct = prod }
+                                )
+                            }
+                        }
+
                         if (searchQuery.isBlank()) {
                             // Shop by Category: pill tabs
                             item(span = { GridItemSpan(2) }) {
@@ -1557,6 +1574,11 @@ fun HomeScreen(
                                 item(key = "food_promo_card") {
                                     FoodPromoBanner(
                                         threshold = freeDeliveryThreshold,
+                                        coupon = homeExtras.coupon,
+                                        onCopyCode = { code ->
+                                            clipboardManager.setText(AnnotatedString(code))
+                                            coroutineScope.launch { snackbarHostState.showSnackbar("Coupon code $code copied") }
+                                        },
                                         dishImageUrl = displayedFoodCategories.firstOrNull { it.imageUrl != null }?.imageUrl,
                                         onOrder = {
                                             coroutineScope.launch { hotelsListState.animateScrollBy(900f) }
@@ -1699,6 +1721,72 @@ fun NaturalFeaturedDealsBanner(
     }
 }
 
+class HomeExtras(val featured: List<ResolvedProduct>, val coupon: Coupon?)
+
+/** "Featured Products" (admin-starred, in stock in this city) and the city's active promo coupon. */
+@Composable
+fun rememberHomeExtras(repository: SndmartRepository, cityId: String?): HomeExtras {
+    var featured by remember(cityId) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    var coupon by remember(cityId) { mutableStateOf<Coupon?>(null) }
+    LaunchedEffect(cityId) {
+        if (cityId == null) return@LaunchedEffect
+        featured = repository.getFeaturedGroceryProducts(cityId).getOrNull() ?: emptyList()
+        coupon = try {
+            repository.getPromoCoupon(cityId)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
+    return HomeExtras(featured, coupon)
+}
+
+@Composable
+fun FeaturedGroceryRow(
+    products: List<ResolvedProduct>,
+    groceryCart: List<CartItem>,
+    cityOpen: Boolean,
+    cityId: String,
+    repository: SndmartRepository,
+    onSelectSize: (ResolvedProduct) -> Unit
+) {
+    MostSellingRow(
+        products = products,
+        groceryCart = groceryCart,
+        cityOpen = cityOpen,
+        title = "Featured Products",
+        onIncrease = { prod ->
+            repository.addToCart(
+                productId = prod.id, vendorId = null, cityId = cityId,
+                quantityDelta = 1, isHotel = false, productForSnapshot = prod
+            )
+        },
+        onDecrease = { prod ->
+            repository.addToCart(
+                productId = prod.id, vendorId = null, cityId = cityId,
+                quantityDelta = -1, isHotel = false
+            )
+        },
+        onSelectSize = { prod ->
+            onSelectSize(prod)
+            Analytics.trackEvent("product_view", mapOf("product_id" to prod.id, "category" to "grocery"))
+        }
+    )
+}
+
+/** "50% OFF up to ₹100", "Flat ₹50 OFF", "50% cashback up to ₹500", "Flat ₹100 cashback" (website couponHeadline). */
+fun couponHeadline(c: com.example.data.model.Coupon): String {
+    val isPercent = c.discountType == "percent" || c.discountType == "percentage"
+    val value = c.discountValue.toInt()
+    val cap = if (c.maxDiscountAmount != null && isPercent) " up to ₹${c.maxDiscountAmount.toInt()}" else ""
+    return if (c.isCashback) {
+        if (isPercent) "$value% cashback$cap" else "Flat ₹$value cashback"
+    } else {
+        if (isPercent) "$value% OFF$cap" else "Flat ₹$value OFF"
+    }
+}
+
 /**
  * Always-visible food promotion card (food gradient, optional photo: the admin's own, else a dish
  * photo). Honest copy only: the city's free-delivery amount, else a plain invitation.
@@ -1708,7 +1796,9 @@ fun FoodPromoBanner(
     threshold: Double?,
     dishImageUrl: String?,
     onOrder: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    coupon: com.example.data.model.Coupon? = null,
+    onCopyCode: (String) -> Unit = {}
 ) {
     val theme = LocalCityTheme.current
     val photo = theme.foodPromoBannerImageUrl ?: dishImageUrl
@@ -1734,6 +1824,47 @@ fun FoodPromoBanner(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            if (coupon != null) {
+                Text("TODAY'S OFFER", color = Color(0xFFFFE2BB), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+                Text(
+                    text = couponHeadline(coupon),
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    lineHeight = 27.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.fillMaxWidth(0.72f)
+                )
+                val min = coupon.minOrderAmount?.takeIf { it > 0.0 }?.let { " on orders above ₹${it.toInt()}" }.orEmpty()
+                Text(
+                    text = buildAnnotatedString {
+                        append("Use code ")
+                        pushStyle(SpanStyle(fontWeight = FontWeight.ExtraBold))
+                        append(coupon.code)
+                        pop()
+                        append(min)
+                        if (coupon.isCashback) append(" · cashback to your wallet after delivery")
+                    },
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 13.sp,
+                    modifier = Modifier.fillMaxWidth(0.75f)
+                )
+                Spacer(Modifier.height(6.dp))
+                Surface(
+                    onClick = { onCopyCode(coupon.code) },
+                    shape = RoundedCornerShape(10.dp),
+                    color = androidx.compose.ui.graphics.lerp(theme.foodPromoStart, Color.Black, 0.14f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                        Text("COPY CODE", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.6.sp)
+                    }
+                }
+                return@Column
+            }
             Text("HOT & FRESH", color = Color(0xFFFFE2BB), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
             Text(
                 text = if (threshold != null) "FREE delivery\nabove ₹${threshold.toInt()}" else "Your favourite hotels, delivered",
@@ -1933,16 +2064,17 @@ fun SearchDishCard(
     val fPromo = promoFor(PromoKind.FOOD)
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, OutlineSoft),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
     ) {
         Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
                     .size(78.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .clickable { onOpenHotel() }
             ) {
                 ProductImage(url = product.imageUrl, contentDescription = product.name, modifier = Modifier.fillMaxSize())
@@ -1994,8 +2126,9 @@ fun SearchDishCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = product.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    lineHeight = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     color = TextPrimary
@@ -2029,8 +2162,8 @@ fun SearchDishCard(
                         Text(
                             text = "₹${"%.0f".format(offerPrice(product.effectivePrice, fPromo.percent))}",
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = OfferRed,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = TextPrimary,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis
@@ -2050,8 +2183,8 @@ fun SearchDishCard(
                     Text(
                         text = "₹${"%.0f".format(product.effectivePrice)}",
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = PriceGreen
+                        fontWeight = FontWeight.ExtraBold,
+                        color = TextPrimary
                     )
                 }
             }
@@ -2065,10 +2198,11 @@ fun SearchDishCard(
             } else {
                 OutlinedButton(
                     onClick = onOpenHotel,
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.5.dp, NaturalPrimary.copy(alpha = 0.4f)),
                     contentPadding = PaddingValues(horizontal = 12.dp)
                 ) {
-                    Text("View", maxLines = 1)
+                    Text("View", maxLines = 1, fontWeight = FontWeight.ExtraBold, color = NaturalPrimary)
                 }
             }
         }
@@ -2128,15 +2262,20 @@ private fun FlowRowPills(content: @Composable () -> Unit) {
 
 @Composable
 private fun SearchPill(text: String, trending: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(18.dp)
     Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = if (trending) Color(0xFFFFEDD5) else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, if (trending) Color(0xFFFDBA74) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        shadowElevation = 2.dp,
-        modifier = Modifier.clickable { onClick() }
+        shape = shape,
+        color = if (trending) Color.Transparent else Color.White,
+        border = BorderStroke(1.dp, if (trending) Color(0xFFFDBA74) else OutlineSoft),
+        shadowElevation = 1.dp,
+        modifier = Modifier.clip(shape).clickable { onClick() }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp),
+            modifier = Modifier
+                .then(
+                    if (trending) Modifier.background(Brush.verticalGradient(listOf(Color(0xFFFFF7ED), Color(0xFFFFEDD5)))) else Modifier
+                )
+                .padding(horizontal = 13.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (trending) {
@@ -2157,10 +2296,10 @@ private fun SearchPill(text: String, trending: Boolean, onClick: () -> Unit) {
 fun FoodFilterToggleButton(active: Boolean, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = if (active) NaturalPrimary else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, if (active) NaturalPrimary else MaterialTheme.colorScheme.outlineVariant),
+        color = if (active) NaturalPrimary else Color.White,
+        border = BorderStroke(1.dp, if (active) NaturalPrimary else com.example.ui.theme.OutlineBorder),
         shadowElevation = 1.dp,
-        modifier = Modifier.clickable { onClick() }
+        modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { onClick() }
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -2195,9 +2334,9 @@ fun FoodSearchFiltersBar(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, OutlineSoft),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             androidx.compose.foundation.layout.FlowRow(
@@ -2212,7 +2351,7 @@ fun FoodSearchFiltersBar(
                 FoodChip(label = "% Offers", selected = offersOnly, onClick = onOffersToggle)
             }
             Spacer(modifier = Modifier.height(10.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            HorizontalDivider(color = OutlineSoft)
             Spacer(modifier = Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Sort by", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = TextMuted)
@@ -2229,7 +2368,8 @@ fun FoodSearchFiltersBar(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.fillMaxWidth().clickable { expanded = true }
+                        border = BorderStroke(1.dp, com.example.ui.theme.OutlineBorder),
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { expanded = true }
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp).fillMaxWidth(),
@@ -2258,10 +2398,12 @@ private fun FoodChip(
     activeColor: Color = NaturalPrimary,
     onClick: () -> Unit
 ) {
+    val shape = RoundedCornerShape(16.dp)
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = shape,
         color = if (selected) activeColor else MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.clickable { onClick() }
+        border = BorderStroke(1.dp, if (selected) activeColor else com.example.ui.theme.OutlineBorder),
+        modifier = Modifier.clip(shape).clickable { onClick() }
     ) {
         Text(
             label,
