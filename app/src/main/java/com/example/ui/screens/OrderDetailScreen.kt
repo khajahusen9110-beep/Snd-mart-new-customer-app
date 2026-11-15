@@ -1001,51 +1001,25 @@ fun OrderDetailScreen(
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text("Need Help with this Order?", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Chat with the Sndmart assistant on WhatsApp. It will show this order and help you.",
+                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                                 Spacer(modifier = Modifier.height(10.dp))
-                                // Placeholder support contacts — swap for real ones before launch.
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                OutlinedButton(
+                                    onClick = {
+                                        val text = "Hi, I need help with my order ${currentOrder.orderNumber}"
+                                        val encoded = java.net.URLEncoder.encode(text, "UTF-8")
+                                        val url = "https://wa.me/${SupportConstants.BOT_WHATSAPP}?text=$encoded"
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    },
+                                    modifier = Modifier.fillMaxWidth().testTag("help_whatsapp_button"),
+                                    shape = RoundedCornerShape(20.dp)
                                 ) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${SupportConstants.PHONE}"))
-                                            context.startActivity(intent)
-                                        },
-                                        modifier = Modifier.weight(1f).testTag("help_call_button"),
-                                        shape = RoundedCornerShape(20.dp)
-                                    ) {
-                                        Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(16.dp), tint = NaturalPrimary)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Call", fontSize = 12.sp)
-                                    }
-                                    OutlinedButton(
-                                        onClick = {
-                                            val text = "I need help with order ${currentOrder.orderNumber}"
-                                            val encoded = java.net.URLEncoder.encode(text, "UTF-8")
-                                            val url = "https://wa.me/${SupportConstants.WHATSAPP}?text=$encoded"
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                            context.startActivity(intent)
-                                        },
-                                        modifier = Modifier.weight(1f).testTag("help_whatsapp_button"),
-                                        shape = RoundedCornerShape(20.dp)
-                                    ) {
-                                        Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(16.dp), tint = SuccessGreen)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("WhatsApp", fontSize = 12.sp)
-                                    }
-                                    OutlinedButton(
-                                        onClick = {
-                                            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${SupportConstants.EMAIL}?subject=${Uri.encode("Help with Order ${currentOrder.orderNumber}")}"))
-                                            context.startActivity(intent)
-                                        },
-                                        modifier = Modifier.weight(1f).testTag("help_email_button"),
-                                        shape = RoundedCornerShape(20.dp)
-                                    ) {
-                                        Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(16.dp), tint = NaturalPrimary)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Email", fontSize = 12.sp)
-                                    }
+                                    Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(16.dp), tint = SuccessGreen)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Chat on WhatsApp", fontSize = 13.sp)
                                 }
                             }
                         }

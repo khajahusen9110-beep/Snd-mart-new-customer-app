@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -22,6 +23,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -72,17 +74,57 @@ internal fun TiffinPictureHero(cfg: TiffinConfig) {
 
 @Composable
 internal fun TiffinTrialBanner(cfg: TiffinConfig, onClick: () -> Unit) {
-    val fallback = painterResource(R.drawable.tiffin_trial_banner)
+    val custom = cfg.trialBannerImageUrl
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        AsyncImage(
-            model = cfg.trialBannerImageUrl ?: R.drawable.tiffin_trial_banner,
-            contentDescription = tx("trialAlt", cfg.trialDays, rupees(cfg.trialPrice)),
-            placeholder = fallback, error = fallback,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1212f / 333f).clip(RoundedCornerShape(16.dp))
-                .clickable(onClick = onClick).testTag("tiffin_trial_banner")
+        if (custom != null) {
+            AsyncImage(
+                model = custom,
+                contentDescription = tx("trialAlt", cfg.trialDays, rupees(cfg.trialPrice)),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().aspectRatio(1212f / 333f).clip(RoundedCornerShape(16.dp))
+                    .clickable(onClick = onClick).testTag("tiffin_trial_banner")
+            )
+        } else {
+            TiffinOfferCard(cfg, onClick)
+        }
+        val monthly = cfg.slabs.firstOrNull()?.price ?: 0.0
+        Text(tx("offerThen", rupees(monthly)), fontSize = 12.sp, color = TextSecondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/** Big highlighted trial offer: days, the regular price struck through, the trial price, cancel any time. */
+@Composable
+private fun TiffinOfferCard(cfg: TiffinConfig, onClick: () -> Unit) {
+    val slab = cfg.slabs.firstOrNull()
+    val regular = if (slab != null && cfg.fullMonthTrips > 0) Math.round(slab.price * cfg.trialDays / cfg.fullMonthTrips) else 0L
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
+            .background(Brush.linearGradient(listOf(Color(0xFF6236D9), Color(0xFF8B4DFF), Color(0xFFFF7A45))))
+            .clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 20.dp).testTag("tiffin_trial_banner"),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            tx("offerKicker"), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF3B1D00),
+            modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFFFD23F)).padding(horizontal = 10.dp, vertical = 4.dp)
         )
-        Text(tx("trialCaption"), fontSize = 12.sp, color = TextSecondary)
+        Text(tx("offerDays", cfg.trialDays), fontSize = 30.sp, fontWeight = FontWeight.Black, color = Color.White, modifier = Modifier.padding(top = 8.dp))
+        Text(tx("offerFor"), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.9f))
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (regular > 0) Text(
+                rupees(regular.toDouble()), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.75f),
+                style = androidx.compose.ui.text.TextStyle(textDecoration = TextDecoration.LineThrough),
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Text(rupees(cfg.trialPrice), fontSize = 64.sp, fontWeight = FontWeight.Black, color = Color.White)
+        }
+        Text(
+            "✓ " + tx("offerCancel"), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White,
+            modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.18f)).padding(horizontal = 14.dp, vertical = 6.dp)
+        )
+        Text(
+            tx("offerBtn", cfg.trialDays) + " →", fontSize = 15.sp, fontWeight = FontWeight.Black, color = Color(0xFF5B2FD0),
+            modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(14.dp)).background(Color.White).padding(horizontal = 22.dp, vertical = 12.dp)
+        )
     }
 }
 
