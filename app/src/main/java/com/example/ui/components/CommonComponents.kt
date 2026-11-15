@@ -726,12 +726,20 @@ fun FloatingCartButton(
         bump.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 500f))
     }
 
+    // Soft fade behind the bar so page content does not show through next to it and blend with it.
+    val pageBg = MaterialTheme.colorScheme.background
+    Box(
+        modifier
+            .fillMaxWidth()
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, pageBg.copy(alpha = 0.94f))))
+            .padding(top = 18.dp)
+    ) {
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = if (goal != null) Color.White else Color.Transparent,
-        shadowElevation = if (goal != null) 10.dp else 0.dp,
-        border = if (goal != null) androidx.compose.foundation.BorderStroke(1.dp, OutlineSoft) else null,
-        modifier = modifier
+        shadowElevation = if (goal != null) 16.dp else 0.dp,
+        border = if (goal != null) androidx.compose.foundation.BorderStroke(1.dp, NaturalPrimary.copy(alpha = 0.25f)) else null,
+        modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
@@ -740,7 +748,7 @@ fun FloatingCartButton(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(if (left <= 0.0) Color(0xFFF0FDF4) else Color.White)
+                        .background(if (left <= 0.0) Color(0xFFECFDF3) else Color(0xFFFFF8E6))
                         .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 11.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
@@ -760,7 +768,7 @@ fun FloatingCartButton(
                                 pop()
                                 append(" more for FREE delivery")
                             },
-                            color = TextSecondary,
+                            color = Color(0xFF7A4A00),
                             fontWeight = FontWeight.SemiBold,
                             style = MaterialTheme.typography.labelLarge
                         )
@@ -768,9 +776,9 @@ fun FloatingCartButton(
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .height(5.dp)
+                            .height(6.dp)
                             .clip(RoundedCornerShape(3.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .background(Color.Black.copy(alpha = 0.10f))
                     ) {
                         Box(
                             Modifier
@@ -834,6 +842,7 @@ fun FloatingCartButton(
                 }
             }
         }
+    }
     }
 }
 
