@@ -46,10 +46,10 @@ private fun android.content.Context.findActivity(): android.app.Activity? {
 }
 
 // Text of this screen: English or Kannada, chosen by the customer (chips at the top of the screen).
-private val LocalTiffinLang = compositionLocalOf { "en" }
+internal val LocalTiffinLang = compositionLocalOf { "en" }
 
 @Composable
-private fun tx(key: String, vararg args: Any?): String {
+internal fun tx(key: String, vararg args: Any?): String {
     TiffinText.ensureLoaded(LocalContext.current)
     return TiffinText.t(LocalTiffinLang.current, key, *args)
 }
