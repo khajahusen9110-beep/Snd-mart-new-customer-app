@@ -375,7 +375,7 @@ private fun PlanCard(
             Text(plan.pickupAddress, fontSize = 12.sp, color = TextSecondary)
             Text("${plan.dropLabel?.let { "$it — " } ?: ""}${plan.dropAddress}", fontSize = 12.sp, color = TextSecondary)
             Text(
-                tx("pickupAt", TiffinRepository.timeLabel(plan.pickupTime), WEEKDAYS.filter { plan.days.contains(it) }.joinToString(", ") { tx("wd$it") }),
+                tx("pickupAt", TiffinRepository.timeLabel(plan.pickupTime), WEEKDAYS.filter { plan.days.contains(it) }.map { tx("wd$it") }.joinToString(", ")),
                 fontSize = 12.sp, color = TextSecondary
             )
             if (plan.returnTrip) Text(tx("returnLine", TiffinRepository.timeLabel(plan.returnPickupTime)), fontSize = 12.sp, color = TextSecondary)
@@ -655,18 +655,22 @@ private fun NewPlanForm(
             }
             formError?.let { Text(it, color = NaturalBadgeRed, fontSize = 13.sp) }
 
-            val q = quote
-            val btnLabel = when {
-                q?.ok == true && q.trialAvailable -> tx("btnTrial", q.trialDays, rupees(q.trialPrice))
-                q?.ok == true -> tx("btnPay", rupees(q.total))
-                else -> tx("btnStart")
-            }
+            // Plain values computed once, so the button and notes below carry no chained safe calls.
+            val good: TiffinQuote? = quote?.takeIf { it.ok }
+            val failMessage: String = quote?.message ?: hintPrice
+            val btnLabel: String = if (good == null) tx("btnStart")
+                else if (good.trialAvailable) tx("btnTrial", good.trialDays, rupees(good.trialPrice))
+                else tx("btnPay", rupees(good.total))
+            val footNote: String = if (good != null && good.trialAvailable && good.firstChargeDate != null)
+                tx("trialNote", rupees(good.trialPrice), dl(good.firstChargeDate), rupees(good.total))
+                else tx("payNote")
+            val canSubmit: Boolean = good != null && !saving && !quoting && accepted
             Button(
                 onClick = {
                     formError = null
                     if (name.isBlank()) { formError = errName; return@Button }
                     if (dropId.isBlank()) { formError = errAddr; return@Button }
-                    if (q?.ok != true) { formError = q?.message ?: hintPrice; return@Button }
+                    if (good == null) { formError = failMessage; return@Button }
                     if (!accepted) { formError = errTerms; return@Button }
                     scope.launch {
                         saving = true
@@ -677,19 +681,14 @@ private fun NewPlanForm(
                         r.onSuccess { onCreated(it) }.onFailure { formError = it.message ?: "Could not create the plan" }
                     }
                 },
-                enabled = !saving && !quoting && q?.ok == true && accepted,
+                enabled = canSubmit,
                 modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary)
             ) {
                 if (saving) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
                 else Text(btnLabel, fontWeight = FontWeight.Bold)
             }
-            Text(
-                if (q?.ok == true && q.trialAvailable && q.firstChargeDate != null)
-                    tx("trialNote", rupees(q.trialPrice), dl(q.firstChargeDate), rupees(q.total))
-                else tx("payNote"),
-                fontSize = 11.sp, color = TextMuted
-            )
+            Text(footNote, fontSize = 11.sp, color = TextMuted)
         }
     }
 }
