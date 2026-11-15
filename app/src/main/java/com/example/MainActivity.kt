@@ -767,8 +767,7 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                     onProceedToCheckout = { isHotel ->
                                         navController.navigate(Screen.Checkout.createRoute(isHotel, null))
                                     },
-                                    onNavigateToWallet = { navController.navigate(Screen.Wallet.route) },
-                                    onNavigateToTiffin = { navController.navigate(Screen.Tiffin.route) }
+                                    onNavigateToWallet = { navController.navigate(Screen.Wallet.route) }
                                 )
                             }
 

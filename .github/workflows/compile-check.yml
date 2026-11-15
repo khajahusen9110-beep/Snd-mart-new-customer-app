@@ -11,7 +11,7 @@ on:
 jobs:
   compile:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 22
 
     steps:
       - name: Checkout Source Code
