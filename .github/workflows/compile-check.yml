@@ -32,7 +32,7 @@ jobs:
           gradle-version: '9.3.1'
 
       - name: Compile Kotlin (debug)
-        run: gradle :app:compileDebugKotlin --no-daemon
+        run: gradle :app:compileDebugKotlin --no-daemon -Dorg.gradle.jvmargs="-Xmx12g -XX:+UseParallelGC -Dfile.encoding=UTF-8"
 
       - name: Unit tests (debug)
-        run: gradle :app:testDebugUnitTest --no-daemon
+        run: gradle :app:testDebugUnitTest --no-daemon -Dorg.gradle.jvmargs="-Xmx12g -XX:+UseParallelGC -Dfile.encoding=UTF-8"

@@ -72,7 +72,7 @@ jobs:
           fi
 
       - name: Build Signed Android App Bundle (AAB) and APK
-        run: gradle :app:bundleRelease :app:assembleRelease --no-daemon
+        run: gradle :app:bundleRelease :app:assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx12g -XX:+UseParallelGC -Dfile.encoding=UTF-8"
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/app/signing.keystore
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
