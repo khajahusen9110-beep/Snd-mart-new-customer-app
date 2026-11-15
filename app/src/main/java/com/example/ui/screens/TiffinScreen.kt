@@ -103,6 +103,7 @@ fun TiffinScreen(
     var plans by remember { mutableStateOf<List<TiffinPlan>>(emptyList()) }
     var addresses by remember { mutableStateOf<List<CustomerAddress>>(emptyList()) }
     var showForm by remember { mutableStateOf(false) }
+    var tab by remember { mutableIntStateOf(TAB_HOME) }
     var busyKey by remember { mutableStateOf<String?>(null) }
     // The plan being paid for while the Razorpay screen is open.
     var payingPlanId by remember { mutableStateOf<String?>(null) }
@@ -123,7 +124,6 @@ fun TiffinScreen(
         mine.onSuccess { plans = it }.onFailure { error = it.message ?: "Could not load your tiffin plans" }
         val uid = repository.sessionManager.getUserId()
         if (!uid.isNullOrBlank()) addresses = repository.getAddresses(uid).getOrNull().orEmpty().filter { !it.id.isNullOrBlank() }
-        if (plans.none { it.status != "cancelled" && it.status != "completed" }) showForm = true
         loading = false
     }
     LaunchedEffect(cityId) { load() }
@@ -224,51 +224,65 @@ fun TiffinScreen(
                 }
                 else -> {
                     val cfg = config!!
-                    TiffinHero(cfg)
-                    TiffinTiles()
                     error?.let { Text(it, color = NaturalBadgeRed) }
-
-                    plans.forEach { plan ->
-                        PlanCard(
-                            plan = plan, cutoffHour = cfg.skipCutoffHour, busyKey = busyKey,
-                            onPay = { pay(plan) },
-                            onCancelRequest = { run("cancel:${plan.id}", m("toastCancelled", emptyArray())) { TiffinRepository.cancelRequest(plan.id) } },
-                            onPause = { run("pause:${plan.id}", if (plan.status == "active") m("paused", emptyArray()) else m("resumed", emptyArray())) { TiffinRepository.setPaused(plan.id, plan.status == "active") } },
-                            onSkip = { d, skip -> run("skip:$d", if (skip) m("daySkipped", arrayOf(TiffinRepository.dayLabel(d, lang))) else m("dayBack", arrayOf(TiffinRepository.dayLabel(d, lang)))) { TiffinRepository.skipDay(plan.id, d, skip) } },
-                            onStopAutopay = { run("stop:${plan.id}", m("toastStopped", emptyArray())) { TiffinRepository.stopAutopay(plan.id) } },
-                            onOpenPhoto = { path ->
-                                scope.launch {
-                                    val url = TiffinRepository.photoUrl(path)
-                                    if (url != null) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) else snackbar.showSnackbar(m("photoFail", emptyArray()))
-                                }
+                    val usedTrial = plans.any { it.isTrial && it.status != "pending_payment" && it.status != "cancelled" }
+                    val payFor = { plan: TiffinPlan -> pay(plan) }
+                    if (showForm) {
+                        if (addresses.size < 2) {
+                            Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder) {
+                                Text(tx("saveAddressesFirst"), modifier = Modifier.padding(16.dp), color = TextSecondary)
                             }
-                        )
-                    }
-
-                    if (!showForm) {
-                        TiffinGuide(cfg)
-                        Button(
-                            onClick = { showForm = true },
-                            modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary)
-                        ) { Text(tx("createPlan") + "  →", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold) }
-                    } else if (addresses.size < 2) {
-                        Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder) {
-                            Text(tx("saveAddressesFirst"), modifier = Modifier.padding(16.dp), color = TextSecondary)
+                        } else {
+                            NewPlanForm(
+                                config = cfg, addresses = addresses, canClose = true, onClose = { showForm = false },
+                                onCreated = { id ->
+                                    scope.launch {
+                                        load()
+                                        showForm = false
+                                        tab = TAB_PLANS
+                                        plans.firstOrNull { it.id == id }?.let { payFor(it) }
+                                    }
+                                },
+                                snackbar = snackbar
+                            )
                         }
                     } else {
-                        NewPlanForm(
-                            config = cfg, addresses = addresses, canClose = plans.isNotEmpty(), onClose = { showForm = false },
-                            onCreated = { id ->
-                                scope.launch {
-                                    load()
-                                    plans.firstOrNull { it.id == id }?.let { pay(it) }
+                        TiffinTabRow(tab) { tab = it }
+                        when (tab) {
+                            TAB_PLANS -> TiffinPlansTab(
+                                plans = plans, cutoffHour = cfg.skipCutoffHour, busyKey = busyKey,
+                                onCreate = { showForm = true },
+                                onPay = payFor,
+                                onCancelRequest = { p -> run("cancel:${p.id}", m("toastCancelled", emptyArray())) { TiffinRepository.cancelRequest(p.id) } },
+                                onPause = { p -> run("pause:${p.id}", if (p.status == "active") m("paused", emptyArray()) else m("resumed", emptyArray())) { TiffinRepository.setPaused(p.id, p.status == "active") } },
+                                onSkip = { p, d, skip -> run("skip:$d", if (skip) m("daySkipped", arrayOf(TiffinRepository.dayLabel(d, lang))) else m("dayBack", arrayOf(TiffinRepository.dayLabel(d, lang)))) { TiffinRepository.skipDay(p.id, d, skip) } },
+                                onStopAutopay = { p -> run("stop:${p.id}", m("toastStopped", emptyArray())) { TiffinRepository.stopAutopay(p.id) } },
+                                onOpenPhoto = { path ->
+                                    scope.launch {
+                                        val url = TiffinRepository.photoUrl(path)
+                                        if (url != null) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) else snackbar.showSnackbar(m("photoFail", emptyArray()))
+                                    }
                                 }
-                            },
-                            snackbar = snackbar
-                        )
+                            )
+                            TAB_HELP -> {
+                                TiffinGuide(cfg)
+                                TermsCard(cfg)
+                                PriceTable(cfg)
+                            }
+                            else -> {
+                                TiffinPictureHero(cfg)
+                                if (cfg.trialEnabled && !usedTrial) TiffinTrialBanner(cfg) { showForm = true }
+                                Button(
+                                    onClick = { showForm = true },
+                                    modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary)
+                                ) { Text(tx("createPlan") + "  →", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold) }
+                                TiffinFeatures()
+                                TiffinHowItWorks { tab = TAB_HELP }
+                                PriceTable(cfg)
+                            }
+                        }
                     }
-                    PriceTable(cfg)
                 }
             }
           }
@@ -700,4 +714,55 @@ private fun NewPlanForm(
             }
         }
     }
+}
+
+// "My Plans": every plan grouped by what needs attention first.
+@Composable
+private fun TiffinPlansTab(
+    plans: List<TiffinPlan>,
+    cutoffHour: Int,
+    busyKey: String?,
+    onCreate: () -> Unit,
+    onPay: (TiffinPlan) -> Unit,
+    onCancelRequest: (TiffinPlan) -> Unit,
+    onPause: (TiffinPlan) -> Unit,
+    onSkip: (TiffinPlan, String, Boolean) -> Unit,
+    onStopAutopay: (TiffinPlan) -> Unit,
+    onOpenPhoto: (String) -> Unit
+) {
+    val today = TiffinRepository.indiaToday()
+    val groups = listOf(
+        "secPending" to plans.filter { it.status == "pending_payment" },
+        "secActive" to plans.filter { it.status == "active" && it.startDate <= today },
+        "secUpcoming" to plans.filter { it.status == "active" && it.startDate > today },
+        "secPaused" to plans.filter { it.status == "paused" },
+        "secExpired" to plans.filter { it.status == "completed" || it.status == "cancelled" }
+    )
+    if (plans.isEmpty()) {
+        Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(tx("noActivePlan"), fontWeight = FontWeight.Bold)
+                Text(tx("noActivePlanSub"), color = TextSecondary, fontSize = 13.sp)
+            }
+        }
+    }
+    groups.forEach { (key, list) ->
+        if (list.isNotEmpty()) Text(tx(key), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+        list.forEach { plan ->
+            PlanCard(
+                plan = plan, cutoffHour = cutoffHour, busyKey = busyKey,
+                onPay = { onPay(plan) },
+                onCancelRequest = { onCancelRequest(plan) },
+                onPause = { onPause(plan) },
+                onSkip = { d, skip -> onSkip(plan, d, skip) },
+                onStopAutopay = { onStopAutopay(plan) },
+                onOpenPhoto = onOpenPhoto
+            )
+        }
+    }
+    Button(
+        onClick = onCreate,
+        modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary)
+    ) { Text(tx("createPlan") + "  →", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold) }
 }

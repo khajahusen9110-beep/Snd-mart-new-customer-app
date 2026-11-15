@@ -24,7 +24,9 @@ data class TiffinConfig(
     val skipCutoffHour: Int,
     val trialEnabled: Boolean,
     val trialDays: Int,
-    val trialPrice: Double
+    val trialPrice: Double,
+    val heroImageUrl: String? = null,
+    val trialBannerImageUrl: String? = null
 ) {
     companion object {
         fun from(o: JSONObject): TiffinConfig {
@@ -44,7 +46,9 @@ data class TiffinConfig(
                 skipCutoffHour = o.int("skip_cutoff_hour", 21),
                 trialEnabled = o.flag("trial_enabled"),
                 trialDays = o.int("trial_days", 7),
-                trialPrice = o.num("trial_price", 9.0)
+                trialPrice = o.num("trial_price", 9.0),
+                heroImageUrl = o.str("hero_image_url"),
+                trialBannerImageUrl = o.str("trial_banner_image_url")
             )
         }
     }
