@@ -4250,7 +4250,8 @@ class SndmartRepository(
         if (!SupabaseClient.isKeyConfigured()) return emptyList()
         return try {
             val res = api.getPromoBanners(
-                placementIn = "in.($placement,both)",
+                // The Tiffin page only shows banners made for it; grocery/food also show "both".
+                placementIn = if (placement == "tiffin") "in.(tiffin)" else "in.($placement,both)",
                 cityFilter = "(city_id.is.null,city_id.eq.$cityId)"
             )
             if (res.isSuccessful && res.body() != null) {

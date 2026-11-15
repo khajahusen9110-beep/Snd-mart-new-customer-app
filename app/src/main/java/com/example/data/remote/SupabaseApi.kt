@@ -743,5 +743,38 @@ interface SupabaseApi {
     suspend fun insertAnalyticsEvent(
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<ResponseBody>
-}
 
+    // --- TIFFIN PICKUP ---
+
+    @POST("rest/v1/rpc/tiffin_get_config")
+    suspend fun tiffinGetConfig(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/tiffin_quote")
+    suspend fun tiffinQuote(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/tiffin_subscribe")
+    suspend fun tiffinSubscribe(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/tiffin_my_subscriptions")
+    suspend fun tiffinMySubscriptions(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/tiffin_skip_day")
+    suspend fun tiffinSkipDay(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/tiffin_set_paused")
+    suspend fun tiffinSetPaused(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/tiffin_cancel_request")
+    suspend fun tiffinCancelRequest(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    // Monthly auto-pay: create | verify | stop (server holds the Razorpay secret).
+    @POST("functions/v1/tiffin-autopay")
+    suspend fun tiffinAutopay(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    // Short-lived link to a handover photo in the private bucket.
+    @POST("storage/v1/object/sign/delivery-proof-photos/{path}")
+    suspend fun tiffinSignPhoto(
+        @Path("path", encoded = true) path: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<ResponseBody>
+}

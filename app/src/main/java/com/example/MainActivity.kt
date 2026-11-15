@@ -82,6 +82,7 @@ sealed class Screen(val route: String, val title: String) {
         fun createRoute(orderId: String) = "order_detail/$orderId"
     }
     object Wallet : Screen("wallet", "Wallet")
+    object Tiffin : Screen("tiffin", "Tiffin Pickup")
     object ReferEarn : Screen("refer_earn", "Refer & Earn")
     object AgentCode : Screen("agent_code", "Agent Code")
     object MyReviews : Screen("my_reviews", "My Reviews")
@@ -766,7 +767,8 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                     onProceedToCheckout = { isHotel ->
                                         navController.navigate(Screen.Checkout.createRoute(isHotel, null))
                                     },
-                                    onNavigateToWallet = { navController.navigate(Screen.Wallet.route) }
+                                    onNavigateToWallet = { navController.navigate(Screen.Wallet.route) },
+                                    onNavigateToTiffin = { navController.navigate(Screen.Tiffin.route) }
                                 )
                             }
 
@@ -906,6 +908,19 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                     },
                                     onBack = { navController.popBackStack() },
                                     onNavigateToWallet = { navController.navigate(Screen.Wallet.route) }
+                                )
+                            }
+
+                            composable(Screen.Tiffin.route) {
+                                val tiffinPhone by sessionManager.userPhone.collectAsState()
+                                val tiffinEmail by sessionManager.userEmail.collectAsState()
+                                TiffinScreen(
+                                    repository = repository,
+                                    cityId = selectedCity?.id,
+                                    userPhone = tiffinPhone,
+                                    userEmail = tiffinEmail,
+                                    onOpenHotel = { vendorId -> navController.navigate(Screen.HotelMenu.createRoute(vendorId, "Hotel")) },
+                                    onBack = { navController.popBackStack() }
                                 )
                             }
 

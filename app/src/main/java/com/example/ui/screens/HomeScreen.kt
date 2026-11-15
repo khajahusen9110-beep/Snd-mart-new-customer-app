@@ -87,11 +87,13 @@ fun HomeScreen(
     onOpenSettings: (() -> Unit)? = null,
     onNavigateToNotifications: (() -> Unit)? = null,
     onProceedToCheckout: (isHotel: Boolean) -> Unit = {},
-    onNavigateToWallet: (() -> Unit)? = null
+    onNavigateToWallet: (() -> Unit)? = null,
+    onNavigateToTiffin: (() -> Unit)? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val cityTheme = rememberCityTheme(repository, selectedCity?.id)
     val homeSections = rememberHomeSections(repository, selectedCity?.id)
+    val tiffinOn = rememberTiffinEnabled(selectedCity?.id) && onNavigateToTiffin != null
     // Rotating example in the search box (hint only; typing searches everything as before)
     var searchHintIndex by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) {
@@ -981,86 +983,13 @@ fun HomeScreen(
                 singleLine = true
             )
 
-            // Natural Tones Segmented Mode Pill
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = SurfaceVariantLight,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .testTag("home_mode_toggle")
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val isGrocery = browsingMode == BrowsingMode.GROCERY
-                    val groceryAvailable = serviceMode != "food_only"
-                    Surface(
-                        shape = RoundedCornerShape(11.dp),
-                        color = if (isGrocery) Color.White else Color.Transparent,
-                        shadowElevation = if (isGrocery) 3.dp else 0.dp,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(11.dp))
-                            .clickable(enabled = groceryAvailable) { browsingMode = BrowsingMode.GROCERY }
-                            .testTag("toggle_grocery")
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(vertical = 10.dp)
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Fresh Groceries & Fruits",
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = if (!groceryAvailable) TextSecondary.copy(alpha = 0.5f) else if (isGrocery) NaturalPrimary else TextSecondary
-                                )
-                                if (!groceryAvailable) {
-                                    Text("Coming Soon", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = NaturalPrimary)
-                                }
-                            }
-                        }
-                    }
-
-                    val isHotel = browsingMode == BrowsingMode.HOTELS
-                    val hotelsAvailable = serviceMode != "grocery_only"
-                    Surface(
-                        shape = RoundedCornerShape(11.dp),
-                        color = if (isHotel) Color.White else Color.Transparent,
-                        shadowElevation = if (isHotel) 3.dp else 0.dp,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(11.dp))
-                            .clickable(enabled = hotelsAvailable) { browsingMode = BrowsingMode.HOTELS }
-                            .testTag("toggle_hotels")
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(vertical = 10.dp)
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Hotel Food & Dining",
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = if (!hotelsAvailable) TextSecondary.copy(alpha = 0.5f) else if (isHotel) NaturalPrimary else TextSecondary
-                                )
-                                if (!hotelsAvailable) {
-                                    Text("Coming Soon", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = NaturalPrimary)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            HomeModeToggle(
+                browsingMode = browsingMode,
+                serviceMode = serviceMode,
+                tiffinOn = tiffinOn,
+                onSelect = { browsingMode = it },
+                onTiffin = { onNavigateToTiffin?.invoke() }
+            )
 
             Spacer(modifier = Modifier.height(6.dp))
 

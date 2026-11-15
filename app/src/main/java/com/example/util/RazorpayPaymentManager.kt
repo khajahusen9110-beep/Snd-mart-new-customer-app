@@ -107,4 +107,38 @@ object RazorpayPaymentManager {
             Result.failure(e)
         }
     }
+
+    /**
+     * Opens Razorpay Checkout for a monthly auto-pay subscription (UPI AutoPay mandate; the trial fee
+     * is taken with it). The result arrives on [paymentResult] like any other payment.
+     */
+    fun startSubscriptionCheckout(
+        activity: Activity,
+        keyId: String,
+        subscriptionId: String,
+        description: String,
+        userPhone: String? = null,
+        userEmail: String? = null
+    ): Result<Unit> {
+        return try {
+            val checkout = Checkout()
+            if (keyId.isNotBlank()) checkout.setKeyID(keyId)
+            val options = JSONObject().apply {
+                put("key", keyId)
+                put("subscription_id", subscriptionId)
+                put("name", "Sndmart")
+                put("description", description)
+                put("modal", JSONObject().apply { put("ondismiss", true) })
+                val prefill = JSONObject()
+                if (!userPhone.isNullOrBlank()) prefill.put("contact", userPhone)
+                if (!userEmail.isNullOrBlank()) prefill.put("email", userEmail)
+                if (prefill.length() > 0) put("prefill", prefill)
+            }
+            checkout.open(activity, options)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting Razorpay subscription checkout", e)
+            Result.failure(e)
+        }
+    }
 }
