@@ -224,15 +224,9 @@ fun TiffinScreen(
                 }
                 else -> {
                     val cfg = config!!
-                    Card(shape = AppCardShape, colors = CardDefaults.cardColors(containerColor = NaturalPrimaryContainer)) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(tx("heroTitle"), fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = NaturalOnPrimaryContainer)
-                            Text(tx("heroSub"), fontSize = 13.sp, color = NaturalOnPrimaryContainer)
-                            if (cfg.trialEnabled) Text(tx("heroTrial", cfg.trialDays, rupees(cfg.trialPrice)), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = NaturalPrimary)
-                        }
-                    }
+                    TiffinHero(cfg)
+                    TiffinTiles()
                     error?.let { Text(it, color = NaturalBadgeRed) }
-                    GuideCard(cfg)
 
                     plans.forEach { plan ->
                         PlanCard(
@@ -252,7 +246,12 @@ fun TiffinScreen(
                     }
 
                     if (!showForm) {
-                        OutlinedButton(onClick = { showForm = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("+ " + tx("newPlan")) }
+                        TiffinGuide(cfg)
+                        Button(
+                            onClick = { showForm = true },
+                            modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary)
+                        ) { Text(tx("createPlan") + "  →", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold) }
                     } else if (addresses.size < 2) {
                         Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder) {
                             Text(tx("saveAddressesFirst"), modifier = Modifier.padding(16.dp), color = TextSecondary)
@@ -282,29 +281,6 @@ private fun LangChips(lang: String, onPick: (String) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(selected = lang == "en", onClick = { onPick("en") }, label = { Text("English") })
         FilterChip(selected = lang == "kn", onClick = { onPick("kn") }, label = { Text("ಕನ್ನಡ") })
-    }
-}
-
-/** "How it works": six short steps in the customer's language; the first sentence of each is its heading. */
-@Composable
-private fun GuideCard(cfg: TiffinConfig) {
-    val steps = listOf("g1") + (if (cfg.trialEnabled) listOf("g2") else emptyList()) + listOf("g3", "g4", "g5", "g6")
-    Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder, elevation = appCardElevation()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(tx("guideTitle"), fontWeight = FontWeight.Bold)
-            steps.forEachIndexed { i, k ->
-                val text = if (k == "g2") tx(k, cfg.trialDays, rupees(cfg.trialPrice)) else tx(k)
-                val cut = text.indexOf('.')
-                Text(
-                    androidx.compose.ui.text.buildAnnotatedString {
-                        append("${i + 1}. ")
-                        pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)); append(text.substring(0, cut + 1)); pop()
-                        append(text.substring(cut + 1))
-                    },
-                    fontSize = 13.sp
-                )
-            }
-        }
     }
 }
 
@@ -557,6 +533,7 @@ private fun NewPlanForm(
     var saving by remember { mutableStateOf(false) }
     var formError by remember { mutableStateOf<String?>(null) }
     var accepted by remember { mutableStateOf(false) }
+    var step by remember { mutableStateOf(1) }
     val langNow = LocalTiffinLang.current
     val who = tx(kindWho(kind))
     // Messages shown from inside click handlers are prepared here (they cannot call composable functions).
@@ -579,9 +556,22 @@ private fun NewPlanForm(
     Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder, elevation = appCardElevation()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(tx("planFormTitle"), fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                if (canClose) TextButton(onClick = onClose) { Text(tx("close")) }
+                if (step == 2) TextButton(onClick = { step = 1; formError = null }) { Text("←") }
+                else if (canClose) TextButton(onClick = onClose) { Text("←") }
+                Text(tx(if (step == 1) "planFormTitle" else "summaryTitle"), fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
             }
+            TiffinStepper(step)
+            // Plain values computed once, so the button and notes below carry no chained safe calls.
+            val good: TiffinQuote? = quote?.takeIf { it.ok }
+            val failMessage: String = quote?.message ?: hintPrice
+            val btnLabel: String = if (good == null) tx("btnStart")
+                else if (good.trialAvailable) tx("btnTrial", good.trialDays, rupees(good.trialPrice))
+                else tx("btnPay", rupees(good.total))
+            val footNote: String = if (good != null && good.trialAvailable && good.firstChargeDate != null)
+                tx("trialNote", rupees(good.trialPrice), dl(good.firstChargeDate), rupees(good.total))
+                else tx("payNote")
+            val canSubmit: Boolean = good != null && !saving && !quoting && accepted
+            if (step == 1) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 KINDS.forEach { k -> FilterChip(selected = kind == k, onClick = { kind = k }, label = { Text(tx(kindLabel(k))) }) }
             }
@@ -619,6 +609,34 @@ private fun NewPlanForm(
                 minLines = 2, modifier = Modifier.fillMaxWidth(), shape = AppFieldShape, colors = appFieldColors()
             )
 
+                if (good != null) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(if (good.trialAvailable) tx("everyMonthAfter") else tx("everyMonth"), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text(rupees(good.total), fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                    }
+                } else if (quoting) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = NaturalPrimary)
+                } else if (dropId.isNotBlank()) {
+                    Text(failMessage, fontSize = 13.sp, color = NaturalBadgeRed)
+                }
+                formError?.let { Text(it, color = NaturalBadgeRed, fontSize = 13.sp) }
+                Button(
+                    onClick = {
+                        formError = null
+                        if (name.isBlank()) { formError = errName; return@Button }
+                        if (dropId.isBlank()) { formError = errAddr; return@Button }
+                        if (good == null) { formError = failMessage; return@Button }
+                        step = 2
+                    },
+                    enabled = good != null && !quoting,
+                    modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NaturalPrimary)
+                ) { Text(tx("next") + "  →", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp) }
+            } else {
+                TiffinReview(
+                    kind = kind, name = name.trim(), detail = detail.trim(), pickup = addrText(pickupId), drop = addrText(dropId),
+                    days = days, pickupTime = pickupTime, startDate = startDate, returnTrip = returnTrip, returnTime = returnTime, note = note.trim()
+                )
             Surface(shape = RoundedCornerShape(12.dp), color = SurfaceVariantLight) {
                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     val q = quote
@@ -655,16 +673,6 @@ private fun NewPlanForm(
             }
             formError?.let { Text(it, color = NaturalBadgeRed, fontSize = 13.sp) }
 
-            // Plain values computed once, so the button and notes below carry no chained safe calls.
-            val good: TiffinQuote? = quote?.takeIf { it.ok }
-            val failMessage: String = quote?.message ?: hintPrice
-            val btnLabel: String = if (good == null) tx("btnStart")
-                else if (good.trialAvailable) tx("btnTrial", good.trialDays, rupees(good.trialPrice))
-                else tx("btnPay", rupees(good.total))
-            val footNote: String = if (good != null && good.trialAvailable && good.firstChargeDate != null)
-                tx("trialNote", rupees(good.trialPrice), dl(good.firstChargeDate), rupees(good.total))
-                else tx("payNote")
-            val canSubmit: Boolean = good != null && !saving && !quoting && accepted
             Button(
                 onClick = {
                     formError = null
@@ -689,6 +697,7 @@ private fun NewPlanForm(
                 else Text(btnLabel, fontWeight = FontWeight.Bold)
             }
             Text(footNote, fontSize = 11.sp, color = TextMuted)
+            }
         }
     }
 }
