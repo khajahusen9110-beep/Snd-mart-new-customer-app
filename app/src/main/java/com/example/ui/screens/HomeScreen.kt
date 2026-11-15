@@ -90,10 +90,13 @@ fun HomeScreen(
     onNavigateToWallet: (() -> Unit)? = null,
     onNavigateToTiffin: (() -> Unit)? = null
 ) {
+    // One null-safe read of the city id, reused everywhere below (dozens of repeated safe calls made the
+    // Kotlin compiler run out of memory on this very large function).
+    val homeCityId = selectedCity?.id
     val coroutineScope = rememberCoroutineScope()
-    val cityTheme = rememberCityTheme(repository, selectedCity?.id)
-    val homeSections = rememberHomeSections(repository, selectedCity?.id)
-    val tiffinOn = rememberTiffinEnabled(selectedCity?.id) && onNavigateToTiffin != null
+    val cityTheme = rememberCityTheme(repository, homeCityId)
+    val homeSections = rememberHomeSections(repository, homeCityId)
+    val tiffinOn = rememberTiffinEnabled(homeCityId) && onNavigateToTiffin != null
     // Rotating example in the search box (hint only; typing searches everything as before)
     var searchHintIndex by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) {
@@ -110,7 +113,7 @@ fun HomeScreen(
     val serviceMode = selectedCity?.serviceMode ?: "both"
     // City Admin's Operating Hours / Emergency Close — caps grocery & hotel ordering city-wide.
     val cityIsOpen = com.example.util.isCityOpenNow(selectedCity)
-    var browsingMode by rememberSaveable(selectedCity?.id) {
+    var browsingMode by rememberSaveable(homeCityId) {
         mutableStateOf(if (serviceMode == "food_only") BrowsingMode.HOTELS else BrowsingMode.GROCERY)
     }
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -140,28 +143,28 @@ fun HomeScreen(
 
     // Super-Admin promo banners for the tab being shown (last loaded ones appear at once).
     val bannerPlacement = if (browsingMode == BrowsingMode.HOTELS) "food" else "grocery"
-    var promoBanners by remember(selectedCity?.id, bannerPlacement) {
-        mutableStateOf(repository.getCachedPromoBanners(selectedCity?.id, bannerPlacement) ?: emptyList())
+    var promoBanners by remember(homeCityId, bannerPlacement) {
+        mutableStateOf(repository.getCachedPromoBanners(homeCityId, bannerPlacement) ?: emptyList())
     }
     var bannerRefreshTick by remember { mutableStateOf(0) }
-    LaunchedEffect(selectedCity?.id, bannerPlacement, bannerRefreshTick) {
-        val cid = selectedCity?.id ?: return@LaunchedEffect
+    LaunchedEffect(homeCityId, bannerPlacement, bannerRefreshTick) {
+        val cid = homeCityId ?: return@LaunchedEffect
         promoBanners = repository.getPromoBanners(cid, bannerPlacement, force = bannerRefreshTick > 0)
     }
     // Local-business paid ads: 'home' banner + bottom-of-list strip for each tab.
-    var homeAds by remember(selectedCity?.id) {
-        mutableStateOf(repository.getCachedLocalAds(selectedCity?.id, "home") ?: emptyList())
+    var homeAds by remember(homeCityId) {
+        mutableStateOf(repository.getCachedLocalAds(homeCityId, "home") ?: emptyList())
     }
-    LaunchedEffect(selectedCity?.id) {
-        val cid = selectedCity?.id ?: return@LaunchedEffect
+    LaunchedEffect(homeCityId) {
+        val cid = homeCityId ?: return@LaunchedEffect
         homeAds = repository.getLocalAds(cid, "home")
     }
     val bottomAdPlacement = if (browsingMode == BrowsingMode.HOTELS) "food_bottom" else "grocery_bottom"
-    var bottomAds by remember(selectedCity?.id, bottomAdPlacement) {
-        mutableStateOf(repository.getCachedLocalAds(selectedCity?.id, bottomAdPlacement) ?: emptyList())
+    var bottomAds by remember(homeCityId, bottomAdPlacement) {
+        mutableStateOf(repository.getCachedLocalAds(homeCityId, bottomAdPlacement) ?: emptyList())
     }
-    LaunchedEffect(selectedCity?.id, bottomAdPlacement) {
-        val cid = selectedCity?.id ?: return@LaunchedEffect
+    LaunchedEffect(homeCityId, bottomAdPlacement) {
+        val cid = homeCityId ?: return@LaunchedEffect
         bottomAds = repository.getLocalAds(cid, bottomAdPlacement)
     }
 
@@ -188,36 +191,36 @@ fun HomeScreen(
     }
     var groceryProducts by remember {
         mutableStateOf(
-            repository.getCachedGroceryProducts(selectedCity?.id, selectedCategoryId, searchQuery) ?: emptyList()
+            repository.getCachedGroceryProducts(homeCityId, selectedCategoryId, searchQuery) ?: emptyList()
         )
     }
     var isGroceryLoading by remember { mutableStateOf(groceryProducts.isEmpty()) }
     // "Most Selling" grocery row (by units sold in this city).
-    var topSelling by remember(selectedCity?.id) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
-    LaunchedEffect(selectedCity?.id) {
-        val cid = selectedCity?.id ?: return@LaunchedEffect
+    var topSelling by remember(homeCityId) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    LaunchedEffect(homeCityId) {
+        val cid = homeCityId ?: return@LaunchedEffect
         topSelling = repository.getTopSellingGroceryProducts(cid).getOrNull() ?: emptyList()
     }
     // Featured grocery row + the city's promo coupon, loaded outside this (already very large) function.
-    val homeExtras = rememberHomeExtras(repository, selectedCity?.id)
+    val homeExtras = rememberHomeExtras(repository, homeCityId)
     // "Most Ordered" food row (hotel dishes by units sold in this city).
-    var topFood by remember(selectedCity?.id) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
-    LaunchedEffect(selectedCity?.id) {
-        val cid = selectedCity?.id ?: return@LaunchedEffect
+    var topFood by remember(homeCityId) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    LaunchedEffect(homeCityId) {
+        val cid = homeCityId ?: return@LaunchedEffect
         topFood = repository.getTopSellingFoodProducts(cid).getOrNull() ?: emptyList()
     }
     // "99 Store" row (hotel dishes priced ₹99 or under, across the city).
-    var budgetFood by remember(selectedCity?.id) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
-    LaunchedEffect(selectedCity?.id) {
-        val cid = selectedCity?.id ?: return@LaunchedEffect
+    var budgetFood by remember(homeCityId) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    LaunchedEffect(homeCityId) {
+        val cid = homeCityId ?: return@LaunchedEffect
         budgetFood = repository.getBudgetFoodProducts(cid).getOrNull() ?: emptyList()
     }
     // "Recently Viewed" rows — real product_view history for this logged-in customer only;
     // a signed-out visitor has no server-side history, so this stays empty for them.
-    var recentGrocery by remember(selectedCity?.id) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
-    var recentFood by remember(selectedCity?.id) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
-    LaunchedEffect(selectedCity?.id) {
-        val cid = selectedCity?.id ?: return@LaunchedEffect
+    var recentGrocery by remember(homeCityId) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    var recentFood by remember(homeCityId) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
+    LaunchedEffect(homeCityId) {
+        val cid = homeCityId ?: return@LaunchedEffect
         val uid = repository.sessionManager.getUserId()
         if (uid.isNullOrBlank()) {
             recentGrocery = emptyList()
@@ -261,8 +264,8 @@ fun HomeScreen(
     var displayedFoodCategories by remember { mutableStateOf<List<Category>>(emptyList()) }
     var selectedFoodCategoryName by remember { mutableStateOf<String?>(null) }
     // Price tier chosen from the "Restaurants for every budget" cards (null = all hotels).
-    var selectedTierKey by rememberSaveable(selectedCity?.id) { mutableStateOf<String?>(null) }
-    val tierUi = rememberFoodTierUi(repository, selectedCity?.id, selectedTierKey, searchQuery.isBlank())
+    var selectedTierKey by rememberSaveable(homeCityId) { mutableStateOf<String?>(null) }
+    val tierUi = rememberFoodTierUi(repository, homeCityId, selectedTierKey, searchQuery.isBlank())
     // Back leaves a chosen price tier or dish category and returns to the food home (registered after
     // the groceries handler above, so it wins while a filter is open).
     BackHandler(enabled = browsingMode == BrowsingMode.HOTELS && (tierUi.open || !selectedFoodCategoryName.isNullOrEmpty())) {
@@ -283,8 +286,8 @@ fun HomeScreen(
 
     // Fresh cart pricing for floating cart button
     var freshGroceryItems by remember { mutableStateOf<List<CartItemUi>>(emptyList()) }
-    LaunchedEffect(groceryCart, selectedCity?.id) {
-        val cid = selectedCity?.id
+    LaunchedEffect(groceryCart, homeCityId) {
+        val cid = homeCityId
         if (cid != null && groceryCart.isNotEmpty()) {
             val res = repository.getFreshCartItems(isHotel = false, cityId = cid)
             if (res.isSuccess) {
@@ -296,8 +299,8 @@ fun HomeScreen(
     }
 
     var freshHotelItems by remember { mutableStateOf<List<CartItemUi>>(emptyList()) }
-    LaunchedEffect(hotelCart, selectedCity?.id) {
-        val cid = selectedCity?.id
+    LaunchedEffect(hotelCart, homeCityId) {
+        val cid = homeCityId
         if (cid != null && hotelCart.isNotEmpty()) {
             val res = repository.getFreshCartItems(isHotel = true, cityId = cid)
             if (res.isSuccess) {
@@ -340,8 +343,8 @@ fun HomeScreen(
 
     // Free Delivery Threshold for flash banner
     var freeDeliveryThreshold by remember { mutableStateOf<Double?>(null) }
-    LaunchedEffect(selectedCity?.id) {
-        val cid = selectedCity?.id
+    LaunchedEffect(homeCityId) {
+        val cid = homeCityId
         if (cid != null) {
             freeDeliveryThreshold = repository.getFreeDeliveryThreshold(cid)
         } else {
@@ -350,8 +353,8 @@ fun HomeScreen(
     }
 
     // Hotel menu categories available in this city, for the "What's on your mind?" picker.
-    LaunchedEffect(selectedCity?.id) {
-        val cid = selectedCity?.id
+    LaunchedEffect(homeCityId) {
+        val cid = homeCityId
         hotelCategoriesPool = if (cid != null) {
             repository.getHotelCategoriesForCity(cid).getOrNull() ?: emptyList()
         } else {
@@ -398,8 +401,8 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(selectedCity?.id) {
-        val cid = selectedCity?.id
+    LaunchedEffect(homeCityId) {
+        val cid = homeCityId
         if (!hasShownCouponPopup && cid != null) {
             val result = repository.getCoupons(cid)
             val coupon = result.getOrNull()?.firstOrNull { it.isActive }
@@ -634,7 +637,7 @@ fun HomeScreen(
 
     LaunchedEffect(shouldLoadMoreGrocery) {
         if (shouldLoadMoreGrocery && hasMoreProducts && !isLoadingMoreProducts && !isGroceryLoading) {
-            val cityId = selectedCity?.id
+            val cityId = homeCityId
             if (cityId != null) {
                 loadGroceryProducts(cityId, searchQuery, selectedCategoryId, reset = false)
             }
@@ -653,7 +656,7 @@ fun HomeScreen(
 
     LaunchedEffect(shouldLoadMoreHotels) {
         if (shouldLoadMoreHotels && hasMoreHotels && !isLoadingMoreHotels && !isHotelsLoading) {
-            val cityId = selectedCity?.id
+            val cityId = homeCityId
             if (cityId != null) {
                 loadHotelsData(cityId, searchQuery, reset = false)
             }
@@ -662,8 +665,8 @@ fun HomeScreen(
 
     // Main data loading effect: strictly loads based on active browsingMode and city.
     // Does NOT load Hotels during App/Grocery startup.
-    LaunchedEffect(browsingMode, selectedCity?.id, selectedCategoryId) {
-        val cityId = selectedCity?.id ?: return@LaunchedEffect
+    LaunchedEffect(browsingMode, homeCityId, selectedCategoryId) {
+        val cityId = homeCityId ?: return@LaunchedEffect
         if (browsingMode == BrowsingMode.HOTELS) {
             loadHotelsData(cityId, searchQuery)
         } else {
@@ -683,7 +686,7 @@ fun HomeScreen(
     LaunchedEffect(searchQuery, browsingMode) {
         if (browsingMode != BrowsingMode.GROCERY) return@LaunchedEffect
         if (searchQuery == lastSearchedGroceryQuery) return@LaunchedEffect
-        val cityId = selectedCity?.id ?: return@LaunchedEffect
+        val cityId = homeCityId ?: return@LaunchedEffect
         val catId = selectedCategoryId ?: return@LaunchedEffect
         delay(350)
         lastSearchedGroceryQuery = searchQuery
@@ -695,7 +698,7 @@ fun HomeScreen(
     LaunchedEffect(searchQuery, browsingMode) {
         if (browsingMode != BrowsingMode.HOTELS) return@LaunchedEffect
         if (searchQuery == lastSearchedHotelsQuery) return@LaunchedEffect
-        val cityId = selectedCity?.id ?: return@LaunchedEffect
+        val cityId = homeCityId ?: return@LaunchedEffect
         delay(350)
         lastSearchedHotelsQuery = searchQuery
         loadHotelsData(cityId, searchQuery)
@@ -704,8 +707,8 @@ fun HomeScreen(
     // Smart Food Search: fetch matching dishes directly (shown above the hotels list) —
     // typo-tolerant + partial-word matched + ranked server-side, with Veg/Budget/Rating/Offers
     // filters and 5 sort modes. Every result is already "open + available right now".
-    LaunchedEffect(searchQuery, browsingMode, selectedCity?.id, foodSort, foodVeg, foodBudgetOnly, foodRatingOnly, foodOffersOnly) {
-        val cityId = selectedCity?.id
+    LaunchedEffect(searchQuery, browsingMode, homeCityId, foodSort, foodVeg, foodBudgetOnly, foodRatingOnly, foodOffersOnly) {
+        val cityId = homeCityId
         if (browsingMode != BrowsingMode.HOTELS || cityId == null || searchQuery.isBlank()) {
             dishResults = emptyList()
             isDishResultsLoading = false
@@ -740,8 +743,8 @@ fun HomeScreen(
 
     // Trending searches (server) + Recent searches (this device) — shown before the customer
     // has typed anything, so they always have a one-tap starting point.
-    LaunchedEffect(selectedCity?.id) {
-        val cityId = selectedCity?.id ?: return@LaunchedEffect
+    LaunchedEffect(homeCityId) {
+        val cityId = homeCityId ?: return@LaunchedEffect
         trendingSearches = repository.getTrendingFoodSearches(cityId).getOrDefault(emptyList())
     }
 
@@ -785,7 +788,7 @@ fun HomeScreen(
                 repository.addToCart(
                     productId = prod.id,
                     vendorId = null,
-                    cityId = selectedCity?.id,
+                    cityId = homeCityId,
                     quantityDelta = delta,
                     isHotel = false,
                     variantId = variantId,
@@ -909,7 +912,7 @@ fun HomeScreen(
                 walletBalance = walletBalance,
                 onWalletClick = onNavigateToWallet,
                 onRefresh = {
-                    val cityId = selectedCity?.id
+                    val cityId = homeCityId
                     bannerRefreshTick += 1
                     if (cityId != null) {
                         if (browsingMode == BrowsingMode.GROCERY) {
@@ -1389,7 +1392,7 @@ fun HomeScreen(
                                                 onNavigateToHotelMenu(dish.vendorId ?: "", dish.soldVendorName ?: "Hotel")
                                             },
                                             onAdd = { delta ->
-                                                val cid = selectedCity?.id
+                                                val cid = homeCityId
                                                 val vid = dish.vendorId
                                                 if (cid != null && vid != null) {
                                                     val res = repository.addToCart(
