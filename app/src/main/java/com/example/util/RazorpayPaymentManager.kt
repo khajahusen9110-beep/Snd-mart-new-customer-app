@@ -28,6 +28,19 @@ object RazorpayPaymentManager {
     private val _paymentResult = MutableSharedFlow<RazorpayPaymentResult>(extraBufferCapacity = 1)
     val paymentResult: SharedFlow<RazorpayPaymentResult> = _paymentResult.asSharedFlow()
 
+    /**
+     * Customer details for Razorpay's "prefill". Razorpay asks for mobile and e-mail on its first screen unless
+     * both are given, so both are always given: the phone as +91 and 10 digits, and the real e-mail when the
+     * customer has one, otherwise a placeholder built from the phone (receipts then go by SMS only).
+     * Returns null when there is no usable phone number.
+     */
+    internal fun customerPrefill(userPhone: String?, userEmail: String?): JSONObject? {
+        val digits = userPhone.orEmpty().filter { it.isDigit() }.takeLast(10)
+        if (digits.length != 10) return null
+        val email = userEmail?.trim()?.takeIf { it.contains("@") && it.contains(".") } ?: "$digits@sndmart.in"
+        return JSONObject().put("contact", "+91$digits").put("email", email)
+    }
+
     fun onPaymentSuccess(razorpayPaymentId: String?, paymentData: PaymentData?) {
         Log.d(TAG, "Razorpay payment success: id=$razorpayPaymentId")
         _paymentResult.tryEmit(RazorpayPaymentResult.Success(razorpayPaymentId, paymentData))
@@ -88,15 +101,9 @@ object RazorpayPaymentManager {
                 }
                 put("modal", modalObj)
 
-                val prefillObj = JSONObject()
-                if (!userPhone.isNullOrBlank()) {
-                    prefillObj.put("contact", userPhone)
-                }
-                if (!userEmail.isNullOrBlank()) {
-                    prefillObj.put("email", userEmail)
-                }
-                if (prefillObj.length() > 0) {
-                    put("prefill", prefillObj)
+                customerPrefill(userPhone, userEmail)?.let {
+                    put("prefill", it)
+                    put("readonly", JSONObject().put("contact", true).put("email", true))
                 }
             }
 
@@ -129,10 +136,11 @@ object RazorpayPaymentManager {
                 put("name", "Sndmart")
                 put("description", description)
                 put("modal", JSONObject().apply { put("ondismiss", true) })
-                val prefill = JSONObject()
-                if (!userPhone.isNullOrBlank()) prefill.put("contact", userPhone)
-                if (!userEmail.isNullOrBlank()) prefill.put("email", userEmail)
-                if (prefill.length() > 0) put("prefill", prefill)
+                customerPrefill(userPhone, userEmail)?.let {
+                    put("prefill", it)
+                    // Both are known, so Razorpay skips its "Contact details" screen.
+                    put("readonly", JSONObject().put("contact", true).put("email", true))
+                }
             }
             checkout.open(activity, options)
             Result.success(Unit)

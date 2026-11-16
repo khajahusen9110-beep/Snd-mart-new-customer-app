@@ -75,7 +75,8 @@ object TiffinRepository {
     suspend fun startAutopay(planId: String): Result<TiffinCheckout> =
         call("Could not start payment", { api.tiffinAutopay(mapOf("action" to "create", "subscription_id" to planId)) }) {
             val o = JSONObject(it)
-            TiffinCheckout(o.getString("key_id"), o.getString("razorpay_subscription_id"), o.flag("is_trial"), o.num("pay_now"), o.num("monthly"))
+            TiffinCheckout(o.getString("key_id"), o.getString("razorpay_subscription_id"), o.flag("is_trial"), o.num("pay_now"), o.num("monthly"),
+                o.optString("short_url").takeIf { u -> u.startsWith("https://") })
         }
 
     suspend fun verifyAutopay(planId: String, paymentId: String, subscriptionId: String, signature: String): Result<Unit> =

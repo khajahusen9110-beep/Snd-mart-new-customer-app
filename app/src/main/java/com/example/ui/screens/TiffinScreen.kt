@@ -197,16 +197,56 @@ fun TiffinScreen(
                 return@launch
             }
             payingPlanId = plan.id
+            // The phone saved at login can be missing: fall back to the profile so Razorpay does not ask for it again.
+            var phoneForPay = userPhone
+            var emailForPay = userEmail
+            if (phoneForPay.orEmpty().filter { it.isDigit() }.length < 10) {
+                val uid = repository.sessionManager.getUserId()
+                if (!uid.isNullOrBlank()) {
+                    val prof = repository.getProfile(uid).getOrNull()
+                    phoneForPay = prof?.phone ?: phoneForPay
+                    if (emailForPay.isNullOrBlank()) emailForPay = prof?.email
+                }
+            }
             val open = RazorpayPaymentManager.startSubscriptionCheckout(
                 activity = activity, keyId = co.keyId, subscriptionId = co.razorpaySubscriptionId,
                 description = if (co.isTrial) "Tiffin Pickup trial, then monthly auto-pay" else "Tiffin Pickup monthly plan",
-                userPhone = userPhone, userEmail = userEmail
+                userPhone = phoneForPay, userEmail = emailForPay
             )
             if (open.isFailure) {
                 payingPlanId = null
                 snackbar.showSnackbar("Could not open the payment screen. Please try again.")
             }
         }
+    }
+
+    // Fallback: Razorpay's own payment page in the browser (it lists PhonePe, Google Pay, Paytm ... for UPI AutoPay).
+    // When the customer comes back to the app the plan is re-checked, so a paid plan starts by itself.
+    var awaitingBrowser by remember { mutableStateOf(false) }
+    fun payInBrowser(plan: TiffinPlan) {
+        scope.launch {
+            busyKey = "pay:${plan.id}"
+            val r = TiffinRepository.startAutopay(plan.id)
+            busyKey = null
+            val url = r.getOrNull()?.shortUrl
+            if (url == null) {
+                snackbar.showSnackbar(r.exceptionOrNull()?.message ?: "Could not open the payment page. Please try again.")
+                return@launch
+            }
+            awaitingBrowser = true
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }
+    }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME && awaitingBrowser) {
+                awaitingBrowser = false
+                scope.launch { load() }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     fun run(key: String, done: String?, block: suspend () -> Result<Unit>) {
@@ -282,6 +322,7 @@ fun TiffinScreen(
                             PlanCard(
                                 plan = managedPlan, cutoffHour = cfg.skipCutoffHour, busyKey = busyKey,
                                 onPay = { payFor(managedPlan) },
+                                onPayBrowser = { payInBrowser(managedPlan) },
                                 onCancelRequest = { run("cancel:${managedPlan.id}", m("toastCancelled", emptyArray())) { TiffinRepository.cancelRequest(managedPlan.id) } },
                                 onPause = { run("pause:${managedPlan.id}", if (managedPlan.status == "active") m("paused", emptyArray()) else m("resumed", emptyArray())) { TiffinRepository.setPaused(managedPlan.id, managedPlan.status == "active") } },
                                 onSkip = { d, skip -> run("skip:$d", if (skip) m("daySkipped", arrayOf(TiffinRepository.dayLabel(d, lang))) else m("dayBack", arrayOf(TiffinRepository.dayLabel(d, lang)))) { TiffinRepository.skipDay(managedPlan.id, d, skip) } },
@@ -398,6 +439,7 @@ private fun PlanCard(
     cutoffHour: Int,
     busyKey: String?,
     onPay: () -> Unit,
+    onPayBrowser: () -> Unit,
     onCancelRequest: () -> Unit,
     onPause: () -> Unit,
     onSkip: (String, Boolean) -> Unit,
@@ -443,6 +485,7 @@ private fun PlanCard(
                             }
                             TextButton(onClick = onCancelRequest, enabled = !busy) { Text(tx("cancelRequest")) }
                         }
+                        TextButton(onClick = onPayBrowser, enabled = !busy) { Text(tx("payBrowser"), fontSize = 13.sp) }
                     }
                 }
             }

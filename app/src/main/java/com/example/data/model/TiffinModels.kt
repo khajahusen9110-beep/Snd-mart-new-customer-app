@@ -161,7 +161,9 @@ data class TiffinCheckout(
     val razorpaySubscriptionId: String,
     val isTrial: Boolean,
     val payNow: Double,
-    val monthly: Double
+    val monthly: Double,
+    /** Razorpay's hosted payment page (lists UPI apps in the browser); fallback when the in-app screen shows no UPI. */
+    val shortUrl: String? = null
 )
 
 data class TiffinPlanInput(
