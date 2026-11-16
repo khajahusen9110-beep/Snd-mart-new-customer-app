@@ -265,6 +265,14 @@ fun ProfileScreen(
                             onClick = onNavigateToHelp,
                             testTag = "menu_item_help"
                         )
+                        HorizontalDivider(color = OutlineSoft)
+                        ProfileMenuItem(
+                            icon = Icons.Outlined.AutoAwesome,
+                            title = "App tour",
+                            subtitle = "See what is new in Sndmart",
+                            onClick = { com.example.ui.components.AppTourState.replay() },
+                            testTag = "menu_item_app_tour"
+                        )
                     }
                 }
             }

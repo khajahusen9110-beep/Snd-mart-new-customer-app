@@ -154,6 +154,8 @@ fun SndmartTopBar(
                     Text(
                         text = "DELIVER TO",
                         style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        softWrap = false,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.8.sp,
                         color = TextSecondary.copy(alpha = 0.8f)

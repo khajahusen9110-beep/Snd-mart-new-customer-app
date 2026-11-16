@@ -1618,14 +1618,14 @@ fun NaturalFeaturedDealsBanner(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(140.dp)
+            .heightIn(min = 140.dp)
             .shadow(8.dp, RoundedCornerShape(18.dp), clip = false)
             .clip(RoundedCornerShape(18.dp))
             .background(theme.ocean)
     ) {
         if (photo != null) {
-            ProductImage(url = photo, contentDescription = null, modifier = Modifier.fillMaxSize())
-            Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Black.copy(alpha = 0.2f)))))
+            ProductImage(url = photo, contentDescription = null, modifier = Modifier.matchParentSize())
+            Box(Modifier.matchParentSize().background(Brush.linearGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Black.copy(alpha = 0.2f)))))
         } else {
             // Silhouette decorations (only without an admin photo)
             Text(
@@ -1640,7 +1640,7 @@ fun NaturalFeaturedDealsBanner(
             )
         }
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 140.dp).padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
@@ -1660,6 +1660,7 @@ fun NaturalFeaturedDealsBanner(
                     lineHeight = 22.sp
                 )
             }
+            Spacer(modifier = Modifier.height(8.dp))
             Surface(shape = RoundedCornerShape(16.dp), color = Color.White) {
                 Text(
                     text = "SHOP NOW",

@@ -113,15 +113,19 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         val repository = SndmartRepository(sessionManager = sessionManager)
 
         setContent {
-            // Some OEM skins (Samsung, Xiaomi, budget phones) allow system font scale up to
-            // 1.5-2x vs stock Android's ~1.3x cap, and compound it with a separate "display
-            // size" density setting — together these break fixed-width layouts. Clamp the
-            // effective font scale app-wide so every screen stays within a safe range
-            // regardless of what the device allows.
+            // Phones with a big "Font size" and/or "Display size" setting (many budget phones allow both,
+            // and they compound) leave the app a much narrower, text-heavy screen than the design was made
+            // for, and fixed-size layouts break. Two guards, applied app-wide:
+            //  1. Font scale is kept within 0.85x - 1.15x.
+            //  2. If "Display size" makes the screen narrower than 360dp, the density is lowered so the app
+            //     always lays out as if the screen were 360dp wide (everything shrinks a little instead of
+            //     wrapping or being cut off).
             val baseDensity = LocalDensity.current
+            val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.toFloat()
+            val narrowFix = if (screenWidthDp > 0f && screenWidthDp < 360f) screenWidthDp / 360f else 1f
             val clampedDensity = Density(
-                density = baseDensity.density,
-                fontScale = baseDensity.fontScale.coerceIn(0.85f, 1.3f)
+                density = baseDensity.density * narrowFix,
+                fontScale = baseDensity.fontScale.coerceIn(0.85f, 1.15f)
             )
             CompositionLocalProvider(LocalDensity provides clampedDensity) {
             SndmartTheme {
@@ -1129,6 +1133,13 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
 
                         // "Order placed" celebration (full-screen dialog; shown via OrderCelebration.show())
                         com.example.ui.components.OrderSuccessHost()
+
+                        // First-visit tour (Tiffin Pickup first); Profile > App tour shows it again
+                        com.example.ui.components.AppTourHost(
+                            cityId = selectedCity?.id,
+                            homeVisible = currentDestination == Screen.Home.route,
+                            onOpenTiffin = { navController.navigate(Screen.Tiffin.route) }
+                        )
 
                         // Supabase Settings Dialog (debug only)
                         if (com.example.BuildConfig.DEBUG && showSupabaseSettings) {
