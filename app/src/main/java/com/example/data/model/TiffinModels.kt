@@ -115,7 +115,8 @@ data class TiffinPlan(
     val partnerName: String?,
     val partnerPhone: String?,
     val skips: List<String>,
-    val trips: List<TiffinTripInfo>
+    val trips: List<TiffinTripInfo>,
+    val distanceKm: Double = 0.0
 ) {
     val autopayLive: Boolean get() = autopayStatus == "authenticated" || autopayStatus == "active" || autopayStatus == "pending"
     val running: Boolean get() = status == "active" || status == "paused"
@@ -147,7 +148,8 @@ data class TiffinPlan(
                 trialEndDate = o.str("trial_end_date"), autopayStatus = o.optString("autopay_status", "none"),
                 billingCyclesPaid = o.int("billing_cycles_paid"), nextChargeDate = o.str("next_charge_date"),
                 partnerName = partner?.str("name"), partnerPhone = partner?.str("phone"),
-                skips = strings(o.optJSONArray("skips")), trips = trips
+                skips = strings(o.optJSONArray("skips")), trips = trips,
+                distanceKm = o.num("distance_km")
             )
         }
     }

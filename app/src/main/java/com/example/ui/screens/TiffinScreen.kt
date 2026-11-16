@@ -66,7 +66,7 @@ private fun savedLang(context: android.content.Context): String {
 private val WEEKDAYS = (1..7).toList()
 private val KINDS = listOf("school", "office", "other")
 
-private fun statusKey(s: String) = when (s) {
+internal fun statusKey(s: String) = when (s) {
     "pending_payment" -> "stPending"; "active" -> "stActive"; "paused" -> "stPaused"; "completed" -> "stCompleted"; else -> "stCancelled"
 }
 
@@ -104,6 +104,9 @@ fun TiffinScreen(
     var addresses by remember { mutableStateOf<List<CustomerAddress>>(emptyList()) }
     var showForm by remember { mutableStateOf(false) }
     var tab by remember { mutableIntStateOf(TAB_HOME) }
+    // Manage screen of one plan, and the "your plan is ready" screen (plan id to paid).
+    var managedId by remember { mutableStateOf<String?>(null) }
+    var ready by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var busyKey by remember { mutableStateOf<String?>(null) }
     // The plan being paid for while the Razorpay screen is open.
     var payingPlanId by remember { mutableStateOf<String?>(null) }
@@ -142,11 +145,12 @@ fun TiffinScreen(
                     busyKey = "pay"
                     val r = TiffinRepository.verifyAutopay(planId, paymentId, rzpSub, signature)
                     busyKey = null
-                    snackbar.showSnackbar(if (r.isSuccess) m("payDone", emptyArray()) else (r.exceptionOrNull()?.message ?: "Payment received, confirming with your bank…"))
+                    if (r.isSuccess) ready = planId to true
+                    else snackbar.showSnackbar(r.exceptionOrNull()?.message ?: "Payment received, confirming with your bank…")
                     load()
                 }
                 is RazorpayPaymentResult.Error -> {
-                    snackbar.showSnackbar(m("payNotDone", emptyArray()))
+                    ready = planId to false
                     load()
                 }
             }
@@ -189,12 +193,23 @@ fun TiffinScreen(
         }
     }
 
+    // Back steps out of the ready / manage / create screens first, then leaves Tiffin.
+    val goBack: () -> Unit = {
+        when {
+            ready != null -> { ready = null; tab = TAB_PLANS }
+            managedId != null -> managedId = null
+            showForm -> showForm = false
+            else -> onBack()
+        }
+    }
+    androidx.activity.compose.BackHandler(enabled = ready != null || managedId != null || showForm) { goBack() }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { Text(TiffinText.t(lang, "title")) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } }
+                title = { Text(TiffinText.t(lang, if (managedId != null) "managePlan" else "title")) },
+                navigationIcon = { IconButton(onClick = goBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } }
             )
         }
     ) { padding ->
@@ -227,7 +242,33 @@ fun TiffinScreen(
                     error?.let { Text(it, color = NaturalBadgeRed) }
                     val usedTrial = plans.any { it.isTrial && it.status != "pending_payment" && it.status != "cancelled" }
                     val payFor = { plan: TiffinPlan -> pay(plan) }
-                    if (showForm) {
+                    val readyNow = ready
+                    val managedPlan = plans.firstOrNull { it.id == managedId }
+                    if (readyNow != null) {
+                        TiffinReadyView(readyNow.second, plans.firstOrNull { it.id == readyNow.first }) {
+                            managedId = readyNow.first; ready = null; tab = TAB_PLANS
+                        }
+                    } else if (managedId != null) {
+                        if (managedPlan == null) {
+                            Text(tx("noPlans"), color = TextSecondary)
+                        } else {
+                            PlanCard(
+                                plan = managedPlan, cutoffHour = cfg.skipCutoffHour, busyKey = busyKey,
+                                onPay = { payFor(managedPlan) },
+                                onCancelRequest = { run("cancel:${managedPlan.id}", m("toastCancelled", emptyArray())) { TiffinRepository.cancelRequest(managedPlan.id) } },
+                                onPause = { run("pause:${managedPlan.id}", if (managedPlan.status == "active") m("paused", emptyArray()) else m("resumed", emptyArray())) { TiffinRepository.setPaused(managedPlan.id, managedPlan.status == "active") } },
+                                onSkip = { d, skip -> run("skip:$d", if (skip) m("daySkipped", arrayOf(TiffinRepository.dayLabel(d, lang))) else m("dayBack", arrayOf(TiffinRepository.dayLabel(d, lang)))) { TiffinRepository.skipDay(managedPlan.id, d, skip) } },
+                                onStopAutopay = { run("stop:${managedPlan.id}", m("toastStopped", emptyArray())) { TiffinRepository.stopAutopay(managedPlan.id) } },
+                                onOpenPhoto = { path ->
+                                    scope.launch {
+                                        val url = TiffinRepository.photoUrl(path)
+                                        if (url != null) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) else snackbar.showSnackbar(m("photoFail", emptyArray()))
+                                    }
+                                }
+                            )
+                            TiffinPaymentDetails(managedPlan)
+                        }
+                    } else if (showForm) {
                         if (addresses.size < 2) {
                             Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder) {
                                 Text(tx("saveAddressesFirst"), modifier = Modifier.padding(16.dp), color = TextSecondary)
@@ -250,19 +291,9 @@ fun TiffinScreen(
                         TiffinTabRow(tab) { tab = it }
                         when (tab) {
                             TAB_PLANS -> TiffinPlansTab(
-                                plans = plans, cutoffHour = cfg.skipCutoffHour, busyKey = busyKey,
+                                plans = plans,
                                 onCreate = { showForm = true },
-                                onPay = payFor,
-                                onCancelRequest = { p -> run("cancel:${p.id}", m("toastCancelled", emptyArray())) { TiffinRepository.cancelRequest(p.id) } },
-                                onPause = { p -> run("pause:${p.id}", if (p.status == "active") m("paused", emptyArray()) else m("resumed", emptyArray())) { TiffinRepository.setPaused(p.id, p.status == "active") } },
-                                onSkip = { p, d, skip -> run("skip:$d", if (skip) m("daySkipped", arrayOf(TiffinRepository.dayLabel(d, lang))) else m("dayBack", arrayOf(TiffinRepository.dayLabel(d, lang)))) { TiffinRepository.skipDay(p.id, d, skip) } },
-                                onStopAutopay = { p -> run("stop:${p.id}", m("toastStopped", emptyArray())) { TiffinRepository.stopAutopay(p.id) } },
-                                onOpenPhoto = { path ->
-                                    scope.launch {
-                                        val url = TiffinRepository.photoUrl(path)
-                                        if (url != null) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) else snackbar.showSnackbar(m("photoFail", emptyArray()))
-                                    }
-                                }
+                                onOpen = { managedId = it.id }
                             )
                             TAB_HELP -> {
                                 TiffinGuide(cfg)
@@ -720,15 +751,8 @@ private fun NewPlanForm(
 @Composable
 private fun TiffinPlansTab(
     plans: List<TiffinPlan>,
-    cutoffHour: Int,
-    busyKey: String?,
     onCreate: () -> Unit,
-    onPay: (TiffinPlan) -> Unit,
-    onCancelRequest: (TiffinPlan) -> Unit,
-    onPause: (TiffinPlan) -> Unit,
-    onSkip: (TiffinPlan, String, Boolean) -> Unit,
-    onStopAutopay: (TiffinPlan) -> Unit,
-    onOpenPhoto: (String) -> Unit
+    onOpen: (TiffinPlan) -> Unit
 ) {
     val today = TiffinRepository.indiaToday()
     val groups = listOf(
@@ -748,17 +772,7 @@ private fun TiffinPlansTab(
     }
     groups.forEach { (key, list) ->
         if (list.isNotEmpty()) Text(tx(key), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-        list.forEach { plan ->
-            PlanCard(
-                plan = plan, cutoffHour = cutoffHour, busyKey = busyKey,
-                onPay = { onPay(plan) },
-                onCancelRequest = { onCancelRequest(plan) },
-                onPause = { onPause(plan) },
-                onSkip = { d, skip -> onSkip(plan, d, skip) },
-                onStopAutopay = { onStopAutopay(plan) },
-                onOpenPhoto = onOpenPhoto
-            )
-        }
+        list.forEach { plan -> TiffinPlanRow(plan) { onOpen(plan) } }
     }
     Button(
         onClick = onCreate,
