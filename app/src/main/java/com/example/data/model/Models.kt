@@ -19,7 +19,9 @@ data class City(
     @Json(name = "open_time") val openTime: String? = "06:00",
     @Json(name = "close_time") val closeTime: String? = "23:00",
     // City Admin's Emergency Close switch — instantly stops every vendor from taking new orders.
-    @Json(name = "emergency_closed") val emergencyClosed: Boolean = false
+    @Json(name = "emergency_closed") val emergencyClosed: Boolean = false,
+    // Why the City Admin closed the city (shown to customers); only set while emergencyClosed.
+    @Json(name = "emergency_reason") val emergencyReason: String? = null
 )
 
 @JsonClass(generateAdapter = true)

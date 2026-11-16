@@ -155,7 +155,12 @@ fun CartScreen(
 
     val payable = (subtotal - promoDiscount - autoCouponDiscount).coerceAtLeast(0.0)
     val unavailableItems = freshItems.filter { !it.isPurchasable }
-    val hotelClosedMessage = if (isHotelCartSelected) {
+    // The whole city being closed (daily timings or Emergency Close) blocks every cart, grocery or hotel.
+    val cartCity by repository.sessionManager.selectedCity.collectAsState()
+    val cityClosureNow = com.example.util.cityClosure(cartCity)
+    val hotelClosedMessage = if (cityClosureNow != null) {
+        cityClosureNow.title
+    } else if (isHotelCartSelected) {
         freshItems.firstOrNull { it.stateMessage == CART_HOTEL_CLOSED_MESSAGE }?.stateMessage
     } else null
     // When the whole hotel is closed every item carries the same sentinel reason - show one
@@ -449,7 +454,7 @@ fun CartScreen(
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
-                                        text = "This hotel is currently closed. You can't place this order right now.",
+                                        text = cityClosureNow?.let { "${it.title}. ${it.message}" } ?: "This hotel is currently closed. You can't place this order right now.",
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.Medium,
                                         color = NaturalBadgeRed

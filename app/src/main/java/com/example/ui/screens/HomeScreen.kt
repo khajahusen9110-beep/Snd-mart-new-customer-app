@@ -1083,6 +1083,9 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        if (!cityIsOpen) {
+                            item(span = { GridItemSpan(2) }) { com.example.ui.components.CityClosedBanner(selectedCity) }
+                        }
                         freeDeliveryThreshold?.let { threshold ->
                             item(span = { GridItemSpan(2) }) {
                                 FreeDeliveryBanner(threshold = threshold)
@@ -1423,6 +1426,10 @@ fun HomeScreen(
                                         )
                                     }
                                 }
+                            }
+
+                            if (!cityIsOpen) {
+                                item(key = "city_closed_banner") { com.example.ui.components.CityClosedBanner(selectedCity) }
                             }
 
                             freeDeliveryThreshold?.let { threshold ->

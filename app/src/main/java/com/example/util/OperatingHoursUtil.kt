@@ -46,6 +46,32 @@ fun isCityOpenNow(city: com.example.data.model.City?, now: LocalTime = LocalTime
     return isVendorWithinOperatingHours(city.openTime, city.closeTime, now)
 }
 
+/** "09:00" -> "9:00 AM" */
+fun clock12(time: String?): String {
+    val t = time?.let { parseTimeString(it) } ?: return time.orEmpty()
+    return t.format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))
+}
+
+/** Why the whole city is closed right now: 'emergency' (City Admin wrote the reason) or 'hours' (outside daily timings). */
+data class CityClosure(val kind: String, val title: String, val message: String)
+
+/** Null when the city is open. One wording for the whole app (banner, cart, checkout, cards). */
+fun cityClosure(city: com.example.data.model.City?, now: LocalTime = LocalTime.now()): CityClosure? {
+    if (city == null || isCityOpenNow(city, now)) return null
+    if (city.emergencyClosed) {
+        val why = city.emergencyReason?.trim().orEmpty()
+        return CityClosure(
+            "emergency", "Sndmart is closed for now",
+            if (why.isNotEmpty()) why else "We are temporarily closed. Please check back shortly."
+        )
+    }
+    val open = clock12(city.openTime)
+    return CityClosure(
+        "hours", "Sndmart is closed right now",
+        "We are closed outside our timings. We take orders from $open to ${clock12(city.closeTime)}. See you at $open!"
+    )
+}
+
 /**
  * Checks if current time falls within ANY of the vendor's operating hour slots.
  * Missing or empty slots are treated as unrestricted (always open) to match existing behavior

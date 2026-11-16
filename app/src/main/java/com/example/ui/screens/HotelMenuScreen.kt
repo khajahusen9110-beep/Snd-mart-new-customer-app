@@ -545,7 +545,9 @@ fun HotelMenuScreen(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
+                                val cityClosureNow = com.example.util.cityClosure(city)
                                 val bannerMessage = when {
+                                    cityClosureNow != null -> "${cityClosureNow.title}. ${cityClosureNow.message}"
                                     !isWithinHours && operatingSlots.isNotEmpty() ->
                                         "This hotel is currently closed outside operating hours (${operatingSlots.joinToString(", ") { "${it.startTime}-${it.endTime}" }}). Ordering is unavailable."
                                     !isWithinHours && !vendor?.openingTime.isNullOrBlank() ->

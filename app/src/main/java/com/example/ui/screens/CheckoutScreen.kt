@@ -96,7 +96,12 @@ fun CheckoutScreen(
     var isLoadingFreshCart by remember { mutableStateOf(true) }
     val subtotal = freshItems.sumOf { it.totalPrice }
     val unavailableItems = freshItems.filter { !it.isPurchasable }
-    val hotelClosedMessage = if (isHotel) {
+    // The whole city being closed (daily timings or Emergency Close) blocks every order, grocery or hotel.
+    val checkoutCity by sessionManager.selectedCity.collectAsState()
+    val cityClosureNow = com.example.util.cityClosure(checkoutCity)
+    val hotelClosedMessage = if (cityClosureNow != null) {
+        cityClosureNow.title
+    } else if (isHotel) {
         freshItems.firstOrNull { it.stateMessage == CART_HOTEL_CLOSED_MESSAGE }?.stateMessage
     } else null
 
@@ -792,7 +797,7 @@ fun CheckoutScreen(
                             Icon(Icons.Default.Info, contentDescription = null, tint = NaturalBadgeRed, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                "This hotel is currently closed. You can't place this order right now.",
+                                cityClosureNow?.let { "${it.title}. ${it.message}" } ?: "This hotel is currently closed. You can't place this order right now.",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Medium,
                                 color = NaturalBadgeRed
