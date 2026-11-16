@@ -14,7 +14,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.BillRow
 import com.example.ui.components.OrderSuccessScreen
-import com.example.ui.screens.AppSoundsRow
 import com.example.ui.screens.TaxesChargesRow
 import com.example.ui.theme.NaturalPrimary
 import com.example.ui.theme.OutlineSoft
@@ -73,27 +72,5 @@ class BillingScreenshotTest {
     fun order_success_frame() {
         rule.setContent { SndmartTheme { OrderSuccessScreen(progressOverride = 0.55f) } }
         rule.onRoot().captureRoboImage("src/test/screenshots/billing_order_success.png")
-    }
-
-    @Test
-    fun profile_sound_row() {
-        rule.setContent {
-            SndmartTheme {
-                Column(Modifier.background(MaterialTheme.colorScheme.background).padding(16.dp)) {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, OutlineSoft)
-                    ) {
-                        Column {
-                            AppSoundsRow(checked = true, onToggle = {})
-                            HorizontalDivider(color = OutlineSoft)
-                            AppSoundsRow(checked = false, onToggle = {})
-                        }
-                    }
-                }
-            }
-        }
-        rule.onRoot().captureRoboImage("src/test/screenshots/billing_sound_rows.png")
     }
 }
