@@ -9,6 +9,10 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Xiaomi / Redmi / Poco (MIUI, HyperOS) hide the installed apps list from apps unless this is declared and allowed
+         in the app's permissions: without it the payment screen cannot see PhonePe / Google Pay and lists no UPI. -->
+    <uses-permission android:name="com.android.permission.GET_INSTALLED_APPS" />
+
     <!-- osmdroid (OpenStreetMap fallback) pulls in a legacy storage permission for its
          default SD-card tile cache path in its own manifest. We point osmdroid at
          cacheDir/filesDir instead (see OsmMapImpl.kt), so no storage permission is needed

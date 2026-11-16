@@ -137,6 +137,8 @@ fun CheckoutScreen(
         "upi" to "UPI / Instant Pay"
     )
     var selectedPaymentMethod by remember { mutableStateOf("cod") }
+    // Fallback for phones whose in-app payment screen lists no UPI apps: pay on Razorpay's page in the browser.
+    var payInBrowser by remember { mutableStateOf(false) }
     // COD is hidden for customers blocked after repeated cancellations (server also enforces it).
     var codAllowed by remember { mutableStateOf(true) }
     LaunchedEffect(userId) {
@@ -503,6 +505,20 @@ fun CheckoutScreen(
         if (activity == null) {
             isPlacingOrder = false
             snackbarHostState.showSnackbar("Unable to open payment screen. Please try again.")
+            return
+        }
+
+        if (payInBrowser) {
+            // The order is placed and unpaid; the browser page takes the payment and the order screen re-checks it
+            // when the customer comes back (it already does that on resume).
+            val url = android.net.Uri.Builder().scheme("https").authority("sndmart.in").path("pay")
+                .appendQueryParameter("o", rpData.razorpayOrderId)
+                .appendQueryParameter("k", rpData.keyId)
+                .appendQueryParameter("n", order.orderNumber)
+                .build()
+            isPlacingOrder = false
+            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, url))
+            onOrderPlacedSuccess(order.id ?: "", order.totalAmount)
             return
         }
 
@@ -1407,6 +1423,15 @@ fun CheckoutScreen(
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = if (selectedPaymentMethod == methodKey) FontWeight.SemiBold else FontWeight.Normal
                                 )
+                            }
+                        }
+                        if (selectedPaymentMethod == "upi") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { payInBrowser = !payInBrowser }.padding(top = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(checked = payInBrowser, onCheckedChange = { payInBrowser = it })
+                                Text("UPI app ಕಾಣುತ್ತಿಲ್ಲವೇ? Browser ನಲ್ಲಿ pay ಮಾಡಿ", fontSize = 13.sp)
                             }
                         }
                         if (!codAllowed) {
