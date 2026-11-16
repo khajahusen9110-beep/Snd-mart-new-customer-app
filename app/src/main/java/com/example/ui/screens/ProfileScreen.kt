@@ -63,6 +63,10 @@ fun ProfileScreen(
         walletBalance = if (isLoggedIn) repository.getMyWallet().getOrNull()?.balance else null
     }
 
+    // WhatsApp offers tick box (ticked unless the customer unticked it before)
+    var offersOn by remember { mutableStateOf(true) }
+    LaunchedEffect(isLoggedIn) { if (isLoggedIn) offersOn = repository.getOffersChoice() }
+    val offersScope = rememberCoroutineScope()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var isLoggingOut by remember { mutableStateOf(false) }
 
@@ -273,6 +277,26 @@ fun ProfileScreen(
                             onClick = { com.example.ui.components.AppTourState.replay() },
                             testTag = "menu_item_app_tour"
                         )
+                    }
+                }
+            }
+
+            if (isLoggedIn) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(start = 8.dp, end = 12.dp, top = 8.dp)) {
+                            com.example.ui.components.WhatsAppOffersCheck(
+                                checked = offersOn,
+                                onChange = { on ->
+                                    offersOn = on
+                                    offersScope.launch { repository.setOffersChoice(on, "profile_app") }
+                                }
+                            )
+                        }
                     }
                 }
             }

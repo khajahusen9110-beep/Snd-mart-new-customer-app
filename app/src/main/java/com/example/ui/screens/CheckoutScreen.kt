@@ -152,6 +152,15 @@ fun CheckoutScreen(
     // Order placement state
     val context = LocalContext.current
     var isPlacingOrder by remember { mutableStateOf(false) }
+    // WhatsApp offers tick box: starts ticked, unticked only if the customer chose so before
+    var offersOn by remember { mutableStateOf(true) }
+    var offersTouched by remember { mutableStateOf(false) }
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            val c = repository.getOffersChoice()
+            if (!offersTouched) offersOn = c
+        }
+    }
     var placingOrderMessage by remember { mutableStateOf("Placing Order...") }
     var activePaymentOrder by remember { mutableStateOf<Order?>(null) }
     var activePaymentRpData by remember { mutableStateOf<RazorpayOrderResponse?>(null) }
@@ -587,6 +596,10 @@ fun CheckoutScreen(
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
+                    com.example.ui.components.WhatsAppOffersCheck(
+                        checked = offersOn,
+                        onChange = { offersTouched = true; offersOn = it }
+                    )
                     Button(
                         onClick = {
                             if (unavailableItems.isNotEmpty()) {
@@ -656,6 +669,7 @@ fun CheckoutScreen(
 
                                 if (res.isSuccess) {
                                     val order = res.getOrNull()
+                                    launch { repository.setOffersChoice(offersOn, "checkout_app") }
                                     if (order == null) {
                                         isPlacingOrder = false
                                         val err = "Failed to process order details. Please try again."

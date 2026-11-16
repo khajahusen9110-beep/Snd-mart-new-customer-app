@@ -312,6 +312,17 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<Map<String, @JvmSuppressWildcards Any>>
 
+    // "Get offers and order updates on WhatsApp" choice (ticked by default until the customer chooses).
+    @POST("rest/v1/rpc/wa_get_my_offers_choice")
+    suspend fun getMyOffersChoice(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Map<String, @JvmSuppressWildcards Any>>
+
+    @POST("rest/v1/rpc/wa_set_my_offers_choice")
+    suspend fun setMyOffersChoice(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
     // Saves cooking/delivery instructions on the customer's own order (returns void).
     @POST("rest/v1/rpc/set_order_instructions")
     suspend fun setOrderInstructions(

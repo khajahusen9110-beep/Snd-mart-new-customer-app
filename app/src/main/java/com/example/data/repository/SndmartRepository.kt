@@ -2763,6 +2763,32 @@ class SndmartRepository(
         }
     }
 
+    /** The WhatsApp offers tick box: true (ticked) unless this customer already unticked it / sent STOP. Fails open to ticked. */
+    suspend fun getOffersChoice(): Boolean {
+        if (!SupabaseClient.isKeyConfigured()) return true
+        return try {
+            val response = api.getMyOffersChoice(emptyMap())
+            if (response.isSuccessful && response.body() != null) response.body()!!["checked"] != false else true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "wa_get_my_offers_choice failed: ${e.message}")
+            true
+        }
+    }
+
+    /** Saves the choice. source = where it was made, e.g. "checkout_app" or "profile_app". */
+    suspend fun setOffersChoice(on: Boolean, source: String) {
+        if (!SupabaseClient.isKeyConfigured()) return
+        try {
+            api.setMyOffersChoice(mapOf("p_on" to on, "p_source" to source))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "wa_set_my_offers_choice failed: ${e.message}")
+        }
+    }
+
     /**
      * Whether this customer may pay Cash on Delivery. Blocked after repeated cancelled orders
      * (or by an admin). Fails open — the checkout RPC also enforces it server-side.
