@@ -1439,7 +1439,7 @@ fun HomeScreen(
                                 }
                             }
 
-                            // Banner carousel and "What's on your mind?": City Admin chooses which comes first.
+                            // Promo banner carousel (or the built-in promo card) at the top of the food home.
                             val bannerBlock: LazyListScope.() -> Unit = {
                                 if (searchQuery.isBlank() && !tierUi.open) {
                                     if (promoBanners.isNotEmpty()) {
@@ -1468,21 +1468,8 @@ fun HomeScreen(
                                     }
                                 }
                             }
-                            val categoryBlock: LazyListScope.() -> Unit = {
-                                if (searchQuery.isBlank() && !tierUi.open && displayedFoodCategories.isNotEmpty()) {
-                                    item(key = "food_dish_categories") {
-                                        FoodCategoryGrid(
-                                            categories = displayedFoodCategories,
-                                            selectedCategoryName = selectedFoodCategoryName,
-                                            onCategoryClick = { name ->
-                                                selectedFoodCategoryName =
-                                                    if (selectedFoodCategoryName == name) null else name
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                            if (homeSections.foodBannerFirst) { bannerBlock(); categoryBlock() } else { categoryBlock(); bannerBlock() }
+                            // The "What's on your mind?" dish-category grid was removed from the food home.
+                            bannerBlock()
 
                             // Restaurants by budget -> Top Hotels; once a tier is chosen, a Luxury/Medium/Low switcher instead.
                             foodTierSection(
@@ -2711,88 +2698,6 @@ fun GroceryVariantPickerSheet(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun FoodCategoryGrid(
-    categories: List<Category>,
-    selectedCategoryName: String?,
-    onCategoryClick: (String) -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "What's on your mind?",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = TextPrimary,
-            modifier = Modifier.padding(bottom = 10.dp)
-        )
-        val rows = categories.chunked(4)
-        rows.forEachIndexed { index, rowCategories ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                rowCategories.forEach { category ->
-                    FoodCategoryTile(
-                        category = category,
-                        isSelected = selectedCategoryName?.equals(category.name, ignoreCase = true) == true,
-                        onClick = { onCategoryClick(category.name) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                // Keep the last (possibly partial) row left-aligned instead of stretched.
-                repeat(4 - rowCategories.size) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-            if (index != rows.lastIndex) {
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun FoodCategoryTile(
-    category: Category,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .testTag("food_category_${category.id}")
-            .padding(vertical = 2.dp)
-    ) {
-        Surface(
-            shape = CircleShape,
-            modifier = Modifier.size(60.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shadowElevation = 3.dp,
-            border = BorderStroke(3.dp, if (isSelected) Color(0xFFFC8019) else Color.Transparent)
-        ) {
-            ProductImage(
-                url = category.imageUrl,
-                contentDescription = category.name,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = category.name,
-            fontSize = 11.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) Color(0xFFFC8019) else TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
     }
 }
 
