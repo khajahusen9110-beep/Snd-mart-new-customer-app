@@ -803,6 +803,7 @@ fun HomeScreen(
     if (showCouponPopup && activeCoupon != null) {
         CouponPopup(
             coupon = activeCoupon!!,
+            repository = repository,
             onDismiss = {
                 showCouponPopup = false
                 if (sessionManager.shouldShowRatingPopup(completedOrderCount) && !showRatingPopup) {
@@ -3213,8 +3214,13 @@ fun FreeDeliveryBanner(threshold: Double, modifier: Modifier = Modifier) {
 fun CouponPopup(
     coupon: Coupon,
     onDismiss: () -> Unit,
-    onCopyCode: (String) -> Unit
+    onCopyCode: (String) -> Unit,
+    repository: SndmartRepository? = null
 ) {
+    // Same terms line as the website: "Use max N% of wallet per order" under a cashback coupon.
+    val walletUsePercent by androidx.compose.runtime.produceState<Double?>(null, coupon.id) {
+        value = if (coupon.isCashback) repository?.getMyWallet()?.getOrNull()?.maxUsePercent else null
+    }
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(20.dp),
@@ -3241,7 +3247,7 @@ fun CouponPopup(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = com.example.util.couponTerms(coupon),
+                    text = com.example.util.couponTerms(coupon, walletUsePercent),
                     fontSize = 14.sp,
                     color = TextSecondary,
                     textAlign = TextAlign.Center
