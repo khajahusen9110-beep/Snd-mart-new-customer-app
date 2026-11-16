@@ -26,7 +26,9 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.*
 import com.example.data.repository.SndmartRepository
 import com.example.data.repository.TiffinRepository
+import com.example.ui.components.AddressPickerDialog
 import com.example.ui.components.PromoBannerCarousel
+import com.example.ui.components.map.GeoLatLng
 import com.example.ui.theme.*
 import com.example.util.RazorpayPaymentManager
 import com.example.util.RazorpayPaymentResult
@@ -130,6 +132,31 @@ fun TiffinScreen(
         loading = false
     }
     LaunchedEffect(cityId) { load() }
+
+    // Add / edit a saved address without leaving the plan form. Pair = (role "pickup" or "drop", address being edited or null).
+    var addrDialog by remember { mutableStateOf<Pair<String, CustomerAddress?>?>(null) }
+    // The address just saved: (role, id), picked automatically in the form.
+    var justSaved by remember { mutableStateOf<Pair<String, String>?>(null) }
+    addrDialog?.let { (role, existing) ->
+        val sm = repository.sessionManager
+        val city = sm.selectedCity.collectAsState().value
+        AddressPickerDialog(
+            repository = repository,
+            userId = sm.getUserId().orEmpty(),
+            existing = existing,
+            defaultPhone = userPhone.orEmpty(),
+            cityCenter = city?.centerLat?.let { lat -> city.centerLng?.let { lng -> GeoLatLng(lat, lng) } },
+            onDismiss = { addrDialog = null },
+            onSaved = { saved ->
+                addrDialog = null
+                scope.launch {
+                    val uid = sm.getUserId()
+                    if (!uid.isNullOrBlank()) addresses = repository.getAddresses(uid).getOrNull().orEmpty().filter { !it.id.isNullOrBlank() }
+                    saved.id?.let { justSaved = role to it }
+                }
+            }
+        )
+    }
 
     // Result of the auto-pay screen: confirm with the server so the plan starts right away.
     LaunchedEffect(Unit) {
@@ -269,11 +296,7 @@ fun TiffinScreen(
                             TiffinPaymentDetails(managedPlan)
                         }
                     } else if (showForm) {
-                        if (addresses.size < 2) {
-                            Card(shape = AppCardShape, colors = appCardColors(), border = AppCardBorder) {
-                                Text(tx("saveAddressesFirst"), modifier = Modifier.padding(16.dp), color = TextSecondary)
-                            }
-                        } else {
+                        run {
                             NewPlanForm(
                                 config = cfg, addresses = addresses, canClose = true, onClose = { showForm = false },
                                 onCreated = { id ->
@@ -284,7 +307,11 @@ fun TiffinScreen(
                                         plans.firstOrNull { it.id == id }?.let { payFor(it) }
                                     }
                                 },
-                                snackbar = snackbar
+                                snackbar = snackbar,
+                                justSaved = justSaved,
+                                onSavedConsumed = { justSaved = null },
+                                onAddAddress = { role -> addrDialog = role to null },
+                                onEditAddress = { role, a -> addrDialog = role to a }
                             )
                         }
                     } else {
@@ -558,7 +585,11 @@ private fun NewPlanForm(
     canClose: Boolean,
     onClose: () -> Unit,
     onCreated: (String) -> Unit,
-    snackbar: SnackbarHostState
+    snackbar: SnackbarHostState,
+    justSaved: Pair<String, String>?,
+    onSavedConsumed: () -> Unit,
+    onAddAddress: (String) -> Unit,
+    onEditAddress: (String, CustomerAddress) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val tomorrow = remember { TiffinRepository.addDays(TiffinRepository.indiaToday(), 1) }
@@ -566,7 +597,7 @@ private fun NewPlanForm(
     var name by remember { mutableStateOf("") }
     var detail by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    var pickupId by remember { mutableStateOf(addresses.firstOrNull { it.isDefault }?.id ?: addresses.first().id!!) }
+    var pickupId by remember { mutableStateOf(addresses.firstOrNull { it.isDefault }?.id ?: addresses.firstOrNull()?.id.orEmpty()) }
     var dropId by remember { mutableStateOf("") }
     var days by remember { mutableStateOf(listOf(1, 2, 3, 4, 5, 6)) }
     var pickupTime by remember { mutableStateOf("07:30") }
@@ -586,6 +617,13 @@ private fun NewPlanForm(
     val errAddr = tx("errAddr")
     val errTerms = tx("errTerms")
     val hintPrice = tx("quoteHint")
+
+    // A just-saved or just-edited address is picked straight away (for the role it was opened from).
+    LaunchedEffect(justSaved) {
+        val js = justSaved ?: return@LaunchedEffect
+        if (js.first == "pickup") { pickupId = js.second; if (dropId == js.second) dropId = "" } else { dropId = js.second }
+        onSavedConsumed()
+    }
 
     fun addrText(id: String) = addresses.firstOrNull { it.id == id }?.let { "${it.label} — ${it.addressLine}" } ?: ""
 
@@ -626,8 +664,17 @@ private fun NewPlanForm(
                 label = { Text(tx(when (kind) { "school" -> "detSchool"; "office" -> "detOffice"; else -> "detOther" })) },
                 singleLine = true, modifier = Modifier.fillMaxWidth(), shape = AppFieldShape, colors = appFieldColors()
             )
-            PickerField(tx("pickupFrom"), addrText(pickupId), addresses, { "${it.label} — ${it.addressLine}" }) { pickupId = it.id!! }
-            PickerField(tx("dropAt", tx(when (kind) { "school" -> "dropWordSchool"; "office" -> "dropWordOffice"; else -> "dropWordOther" })), addrText(dropId), addresses.filter { it.id != pickupId }, { "${it.label} — ${it.addressLine}" }) { dropId = it.id!! }
+            TiffinAddressChoice(
+                title = tx("pickupFrom"), addresses = addresses, selectedId = pickupId, hideId = null,
+                onSelect = { id -> pickupId = id; if (dropId == id) dropId = "" },
+                onAdd = { onAddAddress("pickup") }, onEdit = { a -> onEditAddress("pickup", a) }
+            )
+            TiffinAddressChoice(
+                title = tx("dropAt", tx(when (kind) { "school" -> "dropWordSchool"; "office" -> "dropWordOffice"; else -> "dropWordOther" })),
+                addresses = addresses, selectedId = dropId, hideId = pickupId,
+                onSelect = { id -> dropId = id },
+                onAdd = { onAddAddress("drop") }, onEdit = { a -> onEditAddress("drop", a) }
+            )
 
             Text(tx("days"), fontSize = 12.sp, color = TextSecondary)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -669,7 +716,7 @@ private fun NewPlanForm(
                     onClick = {
                         formError = null
                         if (name.isBlank()) { formError = errName; return@Button }
-                        if (dropId.isBlank()) { formError = errAddr; return@Button }
+                        if (pickupId.isBlank() || dropId.isBlank()) { formError = errAddr; return@Button }
                         if (good == null) { formError = failMessage; return@Button }
                         step = 2
                     },

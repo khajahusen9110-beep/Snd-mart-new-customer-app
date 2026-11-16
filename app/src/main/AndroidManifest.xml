@@ -20,7 +20,31 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         tools:node="remove" />
 
-    <application
+    <!-- Android 11+ hides other apps unless they are declared here. Razorpay Checkout needs to see the UPI apps
+         (PhonePe, Google Pay, Paytm, BHIM ...) to offer UPI and UPI AutoPay. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" android:host="pay" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" android:host="mandate" />
+        </intent>
+        <package android:name="com.google.android.apps.nbu.paisa.user" />
+        <package android:name="com.phonepe.app" />
+        <package android:name="net.one97.paytm" />
+        <package android:name="in.org.npci.upiapp" />
+        <package android:name="in.amazon.mShop.android.shopping" />
+        <package android:name="com.dreamplug.androidapp" />
+        <package android:name="com.whatsapp" />
+    </queries>
+
+        <application
         android:name=".SndmartApp"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"

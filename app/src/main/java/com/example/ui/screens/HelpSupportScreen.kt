@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.theme.*
 import com.example.util.SupportConstants
 
-private const val SUPPORT_PHONE = SupportConstants.PHONE
-private const val SUPPORT_WHATSAPP = SupportConstants.WHATSAPP
+// Support is the Sndmart WhatsApp bot (no personal number) and the support e-mail.
+private const val SUPPORT_BOT_WHATSAPP = SupportConstants.BOT_WHATSAPP
 private const val SUPPORT_EMAIL = SupportConstants.EMAIL
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,33 +69,20 @@ fun HelpSupportScreen(
                 )
             }
 
-            // Call Support
-            SupportOptionCard(
-                icon = Icons.Default.Call,
-                iconTint = NaturalPrimary,
-                iconBg = PastelSky,
-                title = "Call Support",
-                subtitle = SUPPORT_PHONE,
-                onClick = {
-                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$SUPPORT_PHONE")))
-                },
-                testTag = "help_call_button"
-            )
-
             // WhatsApp Support
             SupportOptionCard(
                 icon = Icons.Default.Chat,
                 iconTint = SuccessGreen,
                 iconBg = PastelSage,
                 title = "WhatsApp Support",
-                subtitle = "Chat with us instantly",
+                subtitle = "Chat with the Sndmart assistant",
                 onClick = {
                     val text = if (orderNumber != null)
-                        "I need help with order $orderNumber"
+                        "Hi, I need help with my order $orderNumber"
                     else
-                        "Hi Sndmart Support, I need help"
+                        "Hi"
                     val encoded = java.net.URLEncoder.encode(text, "UTF-8")
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$SUPPORT_WHATSAPP?text=$encoded")))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$SUPPORT_BOT_WHATSAPP?text=$encoded")))
                 },
                 testTag = "help_whatsapp_button"
             )
