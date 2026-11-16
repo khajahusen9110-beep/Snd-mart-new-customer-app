@@ -239,10 +239,9 @@ fun BrandSplash(modifier: Modifier = Modifier) {
             Image(
                 painter = painterResource(R.drawable.sndmart_icon),
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(92.dp).scale(breathe).clip(RoundedCornerShape(26.dp))
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(132.dp).scale(breathe)
             )
-            Text("Sndmart", color = NaturalPrimary, fontSize = 24.sp, fontWeight = FontWeight.Black)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     dots.forEach { d ->
