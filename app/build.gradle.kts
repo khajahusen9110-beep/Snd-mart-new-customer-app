@@ -18,8 +18,8 @@ android {
     applicationId = "in.sndmart.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 37
-    versionName = "1.37"
+    versionCode = 38
+    versionName = "1.38"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -97,6 +97,14 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
+// Razorpay's checkout 1.6.41 asks for the LATEST standard-core, so every build silently picked up whatever
+// Razorpay published that week. 1.7.22 (2 Nov 2026) came in with the 1.33+ builds and the UPI option
+// disappeared from the payment sheet; the last Play Store build (29 Oct) had 1.7.21. Keep it pinned and
+// only move it on purpose, after testing UPI on a real phone.
+configurations.all {
+  resolutionStrategy.force("com.razorpay:standard-core:1.7.21", "com.razorpay:core:1.0.21")
+}
+
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
