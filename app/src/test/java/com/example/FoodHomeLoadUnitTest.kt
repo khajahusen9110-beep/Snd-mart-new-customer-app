@@ -54,7 +54,11 @@ class FoodHomeLoadUnitTest {
                 "getBudgetFoodProducts" -> Response.success(listOf(
                     BudgetFoodRow("p1", "v1", "Hotel One", "A", null, 80.0, null),
                     BudgetFoodRow("p3", "v2", "Hotel Two (closed)", "C", null, 60.0, null)))
-                "getProductsByIds" -> Response.success(listOf(product("p1", "v1", 80.0), product("p2", "v1", 120.0), product("p3", "v2", 60.0)))
+                "getProductsByIds" -> {
+                    // like the server, answer only for the ids that were asked for
+                    val asked = (args[0] as String).removePrefix("in.(").removeSuffix(")").split(",")
+                    Response.success(listOf(product("p1", "v1", 80.0), product("p2", "v1", 120.0), product("p3", "v2", 60.0)).filter { it.id in asked })
+                }
                 "getProductCityStockBatch" -> Response.success(emptyList<ProductCityStock>())
                 "getVendorsByIds" -> Response.success(listOf(
                     Vendor(id = "v1", name = "Hotel One", isOpen = true, isActive = true),
