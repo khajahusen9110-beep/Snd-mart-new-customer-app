@@ -34,6 +34,8 @@ import com.example.util.RazorpayPaymentManager
 import com.example.util.RazorpayPaymentResult
 import com.example.util.rupees
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -115,20 +117,30 @@ fun TiffinScreen(
 
     suspend fun load() {
         error = null
-        val cfg = cityId?.let { TiffinRepository.getConfig(it) }
+        // Settings, my plans and my saved addresses do not depend on each other: ask for all three at once
+        // (was one after the other, which made this screen wait for three round trips in a row).
+        val uid = repository.sessionManager.getUserId()
+        val (cfg, firstPlans, addrs) = coroutineScope {
+            val c = async { cityId?.let { TiffinRepository.getConfig(it) } }
+            val pl = async { TiffinRepository.myPlans() }
+            val ad = async {
+                if (!uid.isNullOrBlank()) repository.getAddresses(uid).getOrNull().orEmpty().filter { !it.id.isNullOrBlank() }
+                else emptyList()
+            }
+            Triple(c.await(), pl.await(), ad.await())
+        }
         config = cfg
         if (cfg == null || !cfg.enabled) { loading = false; return }
-        var mine = TiffinRepository.myPlans()
+        var mine = firstPlans
         // A plan still "waiting for payment" with auto-pay set up may have been paid after the payment screen
         // closed (slow UPI): ask Razorpay and fix it before showing the plan.
         val unpaid = mine.getOrNull().orEmpty().filter { it.status == "pending_payment" && it.autopayStatus == "created" }
         if (unpaid.isNotEmpty()) {
-            unpaid.forEach { TiffinRepository.syncAutopay(it.id) }
+            coroutineScope { unpaid.map { async { TiffinRepository.syncAutopay(it.id) } }.forEach { it.await() } }
             mine = TiffinRepository.myPlans()
         }
         mine.onSuccess { plans = it }.onFailure { error = it.message ?: "Could not load your tiffin plans" }
-        val uid = repository.sessionManager.getUserId()
-        if (!uid.isNullOrBlank()) addresses = repository.getAddresses(uid).getOrNull().orEmpty().filter { !it.id.isNullOrBlank() }
+        if (!uid.isNullOrBlank()) addresses = addrs
         loading = false
     }
     LaunchedEffect(cityId) { load() }

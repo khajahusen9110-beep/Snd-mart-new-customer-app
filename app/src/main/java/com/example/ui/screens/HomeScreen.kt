@@ -197,22 +197,29 @@ fun HomeScreen(
     var isGroceryLoading by remember { mutableStateOf(groceryProducts.isEmpty()) }
     // "Most Selling" grocery row (by units sold in this city).
     var topSelling by remember(homeCityId) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
-    LaunchedEffect(homeCityId) {
+    // Each row is fetched only while its own section (Grocery or Food) is on screen, so opening the app
+    // no longer fires the other section's requests too.
+    LaunchedEffect(homeCityId, browsingMode == BrowsingMode.GROCERY) {
         val cid = homeCityId ?: return@LaunchedEffect
+        if (browsingMode != BrowsingMode.GROCERY) return@LaunchedEffect
         topSelling = repository.getTopSellingGroceryProducts(cid).getOrNull() ?: emptyList()
     }
     // Featured grocery row + the city's promo coupon, loaded outside this (already very large) function.
     val homeExtras = rememberHomeExtras(repository, homeCityId)
     // "Most Ordered" food row (hotel dishes by units sold in this city).
     var topFood by remember(homeCityId) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
-    LaunchedEffect(homeCityId) {
+    LaunchedEffect(homeCityId, browsingMode == BrowsingMode.HOTELS) {
         val cid = homeCityId ?: return@LaunchedEffect
+        if (browsingMode != BrowsingMode.HOTELS) return@LaunchedEffect
+        delay(150)   // let the hotel list ask first; these rows are below it
         topFood = repository.getTopSellingFoodProducts(cid).getOrNull() ?: emptyList()
     }
     // "99 Store" row (hotel dishes priced ₹99 or under, across the city).
     var budgetFood by remember(homeCityId) { mutableStateOf<List<ResolvedProduct>>(emptyList()) }
-    LaunchedEffect(homeCityId) {
+    LaunchedEffect(homeCityId, browsingMode == BrowsingMode.HOTELS) {
         val cid = homeCityId ?: return@LaunchedEffect
+        if (browsingMode != BrowsingMode.HOTELS) return@LaunchedEffect
+        delay(150)
         budgetFood = repository.getBudgetFoodProducts(cid).getOrNull() ?: emptyList()
     }
     // "Recently Viewed" rows — real product_view history for this logged-in customer only;
@@ -353,8 +360,9 @@ fun HomeScreen(
     }
 
     // Hotel menu categories available in this city, for the "What's on your mind?" picker.
-    LaunchedEffect(homeCityId) {
+    LaunchedEffect(homeCityId, browsingMode == BrowsingMode.HOTELS) {
         val cid = homeCityId
+        if (browsingMode != BrowsingMode.HOTELS) return@LaunchedEffect
         hotelCategoriesPool = if (cid != null) {
             repository.getHotelCategoriesForCity(cid).getOrNull() ?: emptyList()
         } else {
@@ -589,6 +597,14 @@ fun HomeScreen(
             }
         }
 
+        // First open after the app starts: show the hotel list saved by the last session right away,
+        // the fresh list from the server replaces it a moment later.
+        if (reset && !forceRefresh && hotels.isEmpty() && query.isBlank()) {
+            repository.getDiskHotels(cityId)?.let { saved ->
+                hotels = saved.sortedWith(HotelComparator)
+            }
+        }
+
         coroutineScope.launch {
             if (reset) {
                 isHotelsLoading = true
@@ -743,8 +759,9 @@ fun HomeScreen(
 
     // Trending searches (server) + Recent searches (this device) — shown before the customer
     // has typed anything, so they always have a one-tap starting point.
-    LaunchedEffect(homeCityId) {
+    LaunchedEffect(homeCityId, browsingMode == BrowsingMode.HOTELS) {
         val cityId = homeCityId ?: return@LaunchedEffect
+        if (browsingMode != BrowsingMode.HOTELS) return@LaunchedEffect
         trendingSearches = repository.getTrendingFoodSearches(cityId).getOrDefault(emptyList())
     }
 

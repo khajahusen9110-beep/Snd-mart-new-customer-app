@@ -22,6 +22,7 @@ class SndmartApp : Application(), ImageLoaderFactory {
         cleanupCorruptedWebViewCache()
         sessionManager = UserSessionManager(this)
         com.example.util.AppFeedback.init(this)
+        com.example.data.local.DiskJsonCache.init(this)
         createNotificationChannel()
         initFirebaseSafety()
         com.example.data.remote.GoogleMapsConfig.initializePlaces(this)

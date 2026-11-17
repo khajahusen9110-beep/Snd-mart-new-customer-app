@@ -258,12 +258,21 @@ object SupabaseClient {
         level = if (com.example.BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
     }
 
+    // OkHttp's default is 5 requests at a time per host. The Food and Tiffin screens start 15+ requests at once
+    // to the same Supabase host, so most of them stood in a queue behind the first five. Allow more at once
+    // (they share one HTTP/2 connection, so this costs almost nothing).
+    private val dispatcher = okhttp3.Dispatcher().apply {
+        maxRequests = 64
+        maxRequestsPerHost = 24
+    }
+
     val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .dispatcher(dispatcher)
             .addInterceptor(authInterceptor)
             .authenticator(tokenAuthenticator)
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .build()

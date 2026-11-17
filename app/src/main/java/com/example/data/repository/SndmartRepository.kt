@@ -152,6 +152,10 @@ class SndmartRepository(
         return cachedHotelsByCity[cityId]
     }
 
+    /** Hotel list saved on the phone by the last session: shown at once, then replaced by the fresh list. */
+    fun getDiskHotels(cityId: String?): List<Vendor>? =
+        if (cityId.isNullOrBlank()) null else com.example.data.local.DiskJsonCache.getList("hotels.$cityId", Vendor::class.java)?.takeIf { it.isNotEmpty() }
+
     fun getCachedGroceryProducts(cityId: String?, categoryId: String?, searchQuery: String? = null): List<ResolvedProduct>? {
         if (cityId.isNullOrBlank() || categoryId.isNullOrBlank()) return null
         val cleanQuery = searchQuery?.trim()?.lowercase().orEmpty()
@@ -900,6 +904,7 @@ class SndmartRepository(
                     hotelsCache[cacheKey] = CacheEntry(data = sorted, hasMore = sorted.size >= limit)
                     if (searchQuery.isNullOrBlank()) {
                         cachedHotelsByCity[cityId] = sorted
+                        com.example.data.local.DiskJsonCache.putList("hotels.$cityId", sorted, Vendor::class.java)
                     }
                 } else {
                     val existing = hotelsCache[cacheKey]?.data ?: emptyList()
@@ -1556,16 +1561,24 @@ class SndmartRepository(
             val ids = ranked.map { it.productId }.filter { it.isNotBlank() }
             if (ids.isEmpty()) return Result.success(emptyList())
 
-            val prodRes = api.getProductsByIds(
-                idInQuery = "in.(${ids.joinToString(",")})",
-                select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,available_from,available_until,product_variants(id,label,is_active,product_variant_city_stock(price,stock_qty,is_available,city_id))"
-            )
+            // The dishes and their city stock do not depend on each other: ask for both at the same time.
+            val (prodRes, stockRes) = coroutineScope {
+                val p = async {
+                    api.getProductsByIds(
+                        idInQuery = "in.(${ids.joinToString(",")})",
+                        select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,available_from,available_until,product_variants(id,label,is_active,product_variant_city_stock(price,stock_qty,is_available,city_id))"
+                    )
+                }
+                val st = async {
+                    api.getProductCityStockBatch(
+                        cityId = "eq.$cityId",
+                        productIdsQuery = "in.(${ids.joinToString(",")})",
+                        select = "product_id,price,mrp,stock_qty,is_available"
+                    )
+                }
+                p.await() to st.await()
+            }
             val products = (prodRes.body().orEmpty()).filter { it.vendorId != null }
-            val stockRes = api.getProductCityStockBatch(
-                cityId = "eq.$cityId",
-                productIdsQuery = "in.(${ids.joinToString(",")})",
-                select = "product_id,price,mrp,stock_qty,is_available"
-            )
             val stockMap = if (stockRes.isSuccessful) stockRes.body().orEmpty().associateBy { it.productId } else emptyMap()
 
             val resolved = products.mapNotNull { prod ->
@@ -1613,29 +1626,44 @@ class SndmartRepository(
             // orderable right now (stock, availability window, or whether the hotel itself is
             // open) — re-fetch real current product + stock + vendor rows, same as the
             // recently-viewed row does, so 99 Store never offers something you can't buy.
-            val prodRes = api.getProductsByIds(
-                idInQuery = "in.(${ids.joinToString(",")})",
-                select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,available_from,available_until,product_variants(id,label,is_active,product_variant_city_stock(price,stock_qty,is_available,city_id))"
-            )
+            val (prodRes, stockRes) = coroutineScope {
+                val p = async {
+                    api.getProductsByIds(
+                        idInQuery = "in.(${ids.joinToString(",")})",
+                        select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,available_from,available_until,product_variants(id,label,is_active,product_variant_city_stock(price,stock_qty,is_available,city_id))"
+                    )
+                }
+                val st = async {
+                    api.getProductCityStockBatch(
+                        cityId = "eq.$cityId",
+                        productIdsQuery = "in.(${ids.joinToString(",")})",
+                        select = "product_id,price,mrp,stock_qty,is_available"
+                    )
+                }
+                p.await() to st.await()
+            }
             val productsById = prodRes.body().orEmpty().associateBy { it.id }
-            val stockRes = api.getProductCityStockBatch(
-                cityId = "eq.$cityId",
-                productIdsQuery = "in.(${ids.joinToString(",")})",
-                select = "product_id,price,mrp,stock_qty,is_available"
-            )
             val stockMap = if (stockRes.isSuccessful) stockRes.body().orEmpty().associateBy { it.productId } else emptyMap()
 
             val vendorIds = ids.mapNotNull { productsById[it]?.vendorId }.distinct()
             if (vendorIds.isEmpty()) return Result.success(emptyList())
-            val vRes = api.getVendorsByIds(
-                idInQuery = "in.(${vendorIds.joinToString(",")})",
-                select = "id,name,banner_url,is_active,is_featured,is_open,address,latitude,longitude,opening_time,closing_time,default_category_id"
-            )
+            // Hotel details and their serving hours are independent too: one round trip instead of two.
+            val (vRes, slotsRes) = coroutineScope {
+                val v = async {
+                    api.getVendorsByIds(
+                        idInQuery = "in.(${vendorIds.joinToString(",")})",
+                        select = "id,name,banner_url,is_active,is_featured,is_open,address,latitude,longitude,opening_time,closing_time,default_category_id"
+                    )
+                }
+                val sl = async {
+                    api.getVendorOperatingHours(
+                        vendorId = "in.(${vendorIds.joinToString(",")})",
+                        isActive = "eq.true"
+                    )
+                }
+                v.await() to sl.await()
+            }
             val vendorsById = if (vRes.isSuccessful) vRes.body().orEmpty().associateBy { it.id } else emptyMap()
-            val slotsRes = api.getVendorOperatingHours(
-                vendorId = "in.(${vendorIds.joinToString(",")})",
-                isActive = "eq.true"
-            )
             val slotsByVendor = if (slotsRes.isSuccessful) slotsRes.body().orEmpty().groupBy { it.vendorId } else emptyMap()
 
             val resolved = ids.mapNotNull { id ->
