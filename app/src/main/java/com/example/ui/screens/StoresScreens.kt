@@ -261,19 +261,22 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
     }
     val m = menu
     val mine = cart.filter { it.vendorId == storeId }
-    fun qty(id: String) = mine.firstOrNull { it.productId == id }?.quantity ?: 0
+    fun qty(id: String) = mine.filter { it.productId == id }.sumOf { it.quantity }
     val priceOf = { id: String -> m?.products?.firstOrNull { it.id == id }?.price ?: 0.0 }
+    fun lineUnit(ci: com.example.data.model.CartItem): Double { val p = m?.products?.firstOrNull { it.id == ci.productId }; return p?.variants?.firstOrNull { it.id == ci.variantId }?.price ?: p?.price ?: 0.0 }
     val cartCount = mine.sumOf { it.quantity }
-    val cartTotal = mine.sumOf { priceOf(it.productId) * it.quantity }
+    val cartTotal = mine.sumOf { lineUnit(it) * it.quantity }
     fun change(p: StoreMenuProduct, delta: Int) {
         if (delta > 0) repository.sessionManager.cacheCartProductSnapshot(p.id, null, p.name, p.imageUrl, p.unit)
         val res = repository.addToCart(productId = p.id, vendorId = storeId, cityId = cityId, quantityDelta = delta, isHotel = true)
         if (res is AddToCartResult.HotelConflict) conflict = res
     }
-    fun addCustom(p: StoreMenuProduct, note: String?, photo: String?, q: Int) {
-        if (qty(p.id) > 0) { repository.setCartCustomization(p.id, note, photo); return }
-        repository.sessionManager.cacheCartProductSnapshot(p.id, null, p.name, p.imageUrl, p.unit)
-        val res = repository.addToCart(productId = p.id, vendorId = storeId, cityId = cityId, quantityDelta = q, isHotel = true, customNote = note, customPhotoPath = photo)
+    fun addCustom(p: StoreMenuProduct, note: String?, photo: String?, q: Int, variantId: String?) {
+        // a plain customisable product already in the cart: only its message / photo change
+        if (!p.hasVariants && qty(p.id) > 0) { repository.setCartCustomization(p.id, null, note, photo); return }
+        val label = p.availableVariants.firstOrNull { it.id == variantId }?.label
+        repository.sessionManager.cacheCartProductSnapshot(p.id, variantId, if (label != null) "${p.name} - $label" else p.name, p.imageUrl, p.unit)
+        val res = repository.addToCart(productId = p.id, vendorId = storeId, cityId = cityId, variantId = variantId, quantityDelta = q, isHotel = true, customNote = note, customPhotoPath = photo)
         if (res is AddToCartResult.HotelConflict) conflict = res
     }
     Scaffold(
@@ -321,12 +324,12 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
         }
     }
     customising?.let { p ->
-        val line = mine.firstOrNull { it.productId == p.id }
+        val line = if (p.hasVariants) null else mine.firstOrNull { it.productId == p.id }
         CustomiseSheet(
             product = p, repository = repository, initialNote = line?.customNote, initialPhotoPath = line?.customPhotoPath,
-            initialQty = line?.quantity ?: 1, editing = line != null,
+            initialQty = line?.quantity ?: 1, editing = line != null && !p.hasVariants,
             onDismiss = { customising = null },
-            onDone = { note, photo, q -> addCustom(p, note, photo, q); customising = null }
+            onDone = { note, photo, q, vid -> addCustom(p, note, photo, q, vid); customising = null }
         )
     }
     conflict?.let { c ->
@@ -352,10 +355,10 @@ private fun MenuProductRow(p: StoreMenuProduct, canOrder: Boolean, quantity: Int
                 if (!p.isAvailable) StoreBadge("Out of stock", androidx.compose.ui.graphics.Color(0xFFFEE2E2), androidx.compose.ui.graphics.Color(0xFF991B1B))
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(rupee(p.price), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-                if (p.mrp != null && p.mrp > p.price) Text(rupee(p.mrp), fontSize = 11.sp, color = TextMuted, textDecoration = TextDecoration.LineThrough)
+                Text(if (p.hasVariants) "from ${rupee(p.fromPrice)}" else rupee(p.price), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                if (!p.hasVariants && p.mrp != null && p.mrp > p.price) Text(rupee(p.mrp), fontSize = 11.sp, color = TextMuted, textDecoration = TextDecoration.LineThrough)
                 if (p.isAvailable && canOrder) {
-                    if (p.isCustomizable) FilledTonalButton(onClick = onCustomise, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp), modifier = Modifier.height(32.dp).testTag("store_customise_button")) { Text(if (quantity > 0) "Edit · $quantity in cart" else "Customise", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp) }
+                    if (p.isCustomizable || p.hasVariants) FilledTonalButton(onClick = onCustomise, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp), modifier = Modifier.height(32.dp).testTag("store_customise_button")) { Text(if (quantity > 0) "$quantity in cart · ${if (p.hasVariants) "Add" else "Edit"}" else if (p.hasVariants) "Choose" else "Customise", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp) }
                     else if (quantity > 0) Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { onChange(-1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Remove, contentDescription = "Remove one") }
                         Text("$quantity", fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp))

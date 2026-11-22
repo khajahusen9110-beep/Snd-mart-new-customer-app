@@ -93,4 +93,14 @@ class StoresModelsUnitTest {
         assertEquals("Tomorrow", days[0].label)
         assertEquals("12 PM - 2 PM", days[0].slots[0].label)
     }
+
+    @Test fun variants_parse_andFromPrice() {
+        val menu = StoreMenu.from(JSONObject("""{"store":{"id":"s1","name":"Kirana","is_open":true},"categories":[],"products":[
+            {"id":"p1","name":"Rice","price":60,"is_available":true,"variants":[{"id":"v1","label":"1 kg","price":60,"is_available":true},{"id":"v2","label":"5 kg","price":280,"is_available":true},{"id":"v3","label":"10 kg","price":520,"is_available":false}]},
+            {"id":"p2","name":"Salt","price":20,"is_available":true}]}"""))
+        val rice = menu.products[0]
+        assertTrue(rice.hasVariants); assertEquals(3, rice.variants.size); assertEquals(2, rice.availableVariants.size); assertEquals(60.0, rice.fromPrice, 0.0)
+        val salt = menu.products[1]
+        assertFalse(salt.hasVariants); assertEquals(20.0, salt.fromPrice, 0.0)
+    }
 }

@@ -124,8 +124,17 @@ data class StoreMenuProduct(
     val unitLabel: String?, val categoryId: String?, val isAvailable: Boolean,
     /** Made-to-order: the shop asks for a message and/or a photo and may need notice */
     val isCustomizable: Boolean = false, val allowNote: Boolean = true, val allowPhoto: Boolean = false,
-    val noteLabel: String? = null, val customRequired: Boolean = false, val leadHours: Int = 0
-)
+    val noteLabel: String? = null, val customRequired: Boolean = false, val leadHours: Int = 0,
+    /** Sizes / options with their own price (empty: a plain product) */
+    val variants: List<StoreVariant> = emptyList()
+) {
+    val availableVariants: List<StoreVariant> get() = variants.filter { it.isAvailable }
+    val hasVariants: Boolean get() = availableVariants.isNotEmpty()
+    /** The lowest option price when there are options, else the product price */
+    val fromPrice: Double get() = availableVariants.minOfOrNull { it.price } ?: price
+}
+
+data class StoreVariant(val id: String, val label: String, val price: Double, val isAvailable: Boolean)
 
 data class StoreMenu(
     val id: String, val name: String, val bannerUrl: String?, val address: String?, val categoryName: String?, val isOpen: Boolean, val prepMinutes: Int?,
@@ -145,7 +154,8 @@ data class StoreMenu(
                     StoreMenuProduct(p.getString("id"), p.optString("name"), p.sOrNull("image_url"), p.optDouble("price", 0.0), p.dOrNull("mrp"), p.sOrNull("unit"), p.dOrNull("unit_price"),
                         p.sOrNull("unit_label"), p.sOrNull("category_id"), p.optBoolean("is_available", true),
                         isCustomizable = p.optBoolean("is_customizable", false), allowNote = p.optBoolean("custom_allow_note", true), allowPhoto = p.optBoolean("custom_allow_photo", false),
-                        noteLabel = p.sOrNull("custom_note_label"), customRequired = p.optBoolean("custom_required", false), leadHours = p.optInt("custom_lead_hours", 0))
+                        noteLabel = p.sOrNull("custom_note_label"), customRequired = p.optBoolean("custom_required", false), leadHours = p.optInt("custom_lead_hours", 0),
+                        variants = (p.optJSONArray("variants") ?: JSONArray()).let { va -> (0 until va.length()).map { k -> va.getJSONObject(k).let { v -> StoreVariant(v.getString("id"), v.optString("label"), v.optDouble("price", 0.0), v.optBoolean("is_available", true)) } } })
                 }
             )
         }

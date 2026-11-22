@@ -2439,8 +2439,8 @@ class SndmartRepository(
 
     // --- CART OPERATIONS ---
     /** Edit the message / photo of a made-to-order line already in the shop cart (quantity unchanged). */
-    fun setCartCustomization(productId: String, note: String?, photoPath: String?) {
-        _hotelCart.value = _hotelCart.value.map { if (it.productId == productId) it.copy(customNote = note, customPhotoPath = photoPath) else it }
+    fun setCartCustomization(productId: String, variantId: String?, note: String?, photoPath: String?) {
+        _hotelCart.value = _hotelCart.value.map { if (it.productId == productId && it.variantId == variantId) it.copy(customNote = note, customPhotoPath = photoPath) else it }
         persistCartToBackend()
     }
 
