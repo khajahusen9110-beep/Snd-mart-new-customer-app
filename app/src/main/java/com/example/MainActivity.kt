@@ -969,8 +969,11 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                 arguments = listOf(androidx.navigation.navArgument("storeId") { type = androidx.navigation.NavType.StringType })
                             ) { entry ->
                                 StoreDetailScreen(
+                                    repository = repository,
+                                    cityId = selectedCity?.id,
                                     storeId = entry.arguments?.getString("storeId").orEmpty(),
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    onCheckout = { navController.navigate(Screen.Checkout.createRoute(true, null)) }
                                 )
                             }
 

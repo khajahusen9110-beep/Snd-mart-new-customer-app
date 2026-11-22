@@ -483,6 +483,15 @@ interface SupabaseApi {
         @Body body: RequestBody
     ): Response<ResponseBody>
 
+    // A local shop (Stores) has its own checkout on the server.
+    @POST("rest/v1/rpc/checkout_store_order_v2")
+    suspend fun checkoutStoreOrder(
+        @Body body: RequestBody
+    ): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/is_store_vendor")
+    suspend fun isStoreVendor(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
     // --- SNDMART WALLET & CASHBACK ---
 
     @POST("rest/v1/rpc/preview_checkout_rewards")

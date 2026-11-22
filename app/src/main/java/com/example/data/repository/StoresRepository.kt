@@ -56,6 +56,19 @@ object StoresRepository {
             StoreMenu.from(JSONObject(it))
         }
 
+    private val storeVendors = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    /** Is this vendor a store (a local shop) rather than a hotel? On any problem: no, so hotels keep their own checkout. */
+    suspend fun isStoreVendor(vendorId: String?): Boolean {
+        if (vendorId.isNullOrBlank()) return false
+        storeVendors[vendorId]?.let { return it }
+        val v = call("Stores", { api.isStoreVendor(mapOf("p_vendor_id" to vendorId)) }) { it.trim() == "true" }.getOrNull() ?: return false
+        storeVendors[vendorId] = v
+        return v
+    }
+
+    fun rememberStore(vendorId: String) { storeVendors[vendorId] = true }
+
     /** The default saved address with a map pin, or any address with one; null = the list is not ranked by distance. */
     suspend fun customerLocation(repository: SndmartRepository): StoreLoc? {
         val uid = repository.sessionManager.getUserId()

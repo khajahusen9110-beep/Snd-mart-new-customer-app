@@ -10,7 +10,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.*
+import com.example.data.repository.AddToCartResult
 import com.example.data.repository.SndmartRepository
 import com.example.data.repository.StoresRepository
 import com.example.ui.theme.*
@@ -241,25 +244,48 @@ fun StoreCategoryScreen(
     }
 }
 
-/** One shop: its details and its products by category. (Adding to a cart comes with the store checkout.) */
+/** One shop: its details, its products by category, and the cart (one shop at a time, like a hotel). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StoreDetailScreen(storeId: String, onBack: () -> Unit) {
+fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: String, onBack: () -> Unit, onCheckout: () -> Unit) {
     var menu by remember { mutableStateOf<StoreMenu?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
     var cat by remember { mutableStateOf<String?>(null) }
+    val cart by repository.hotelCart.collectAsState()
+    var conflict by remember { mutableStateOf<AddToCartResult.HotelConflict?>(null) }
     LaunchedEffect(storeId, retry) {
         error = null
-        StoresRepository.getMenu(storeId).onSuccess { menu = it }.onFailure { error = it.message }
+        StoresRepository.getMenu(storeId).onSuccess { menu = it; StoresRepository.rememberStore(storeId) }.onFailure { error = it.message }
     }
     val m = menu
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Column { Text(m?.name ?: "Shop", fontWeight = FontWeight.Bold); if (m?.categoryName != null) Text(m.categoryName, fontSize = 12.sp, color = TextMuted) } },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } }
-        )
-    }) { padding ->
+    val mine = cart.filter { it.vendorId == storeId }
+    fun qty(id: String) = mine.firstOrNull { it.productId == id }?.quantity ?: 0
+    val priceOf = { id: String -> m?.products?.firstOrNull { it.id == id }?.price ?: 0.0 }
+    val cartCount = mine.sumOf { it.quantity }
+    val cartTotal = mine.sumOf { priceOf(it.productId) * it.quantity }
+    fun change(p: StoreMenuProduct, delta: Int) {
+        if (delta > 0) repository.sessionManager.cacheCartProductSnapshot(p.id, null, p.name, p.imageUrl, p.unit)
+        val res = repository.addToCart(productId = p.id, vendorId = storeId, cityId = cityId, quantityDelta = delta, isHotel = true)
+        if (res is AddToCartResult.HotelConflict) conflict = res
+    }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Column { Text(m?.name ?: "Shop", fontWeight = FontWeight.Bold); if (m?.categoryName != null) Text(m.categoryName, fontSize = 12.sp, color = TextMuted) } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } }
+            )
+        },
+        bottomBar = {
+            if (cartCount > 0) Surface(color = NaturalPrimary, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(12.dp).clickable(onClick = onCheckout).testTag("store_checkout_bar")) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("$cartCount item${if (cartCount > 1) "s" else ""} • ${rupee(cartTotal)}", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("Checkout", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.ExtraBold)
+                    Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = androidx.compose.ui.graphics.Color.White)
+                }
+            }
+        }
+    ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).testTag("store_detail_screen"), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
             error?.let { msg -> item { Text("$msg  (tap to retry)", color = ErrorRed, modifier = Modifier.clickable { retry++ }) } }
             if (m == null && error == null) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
@@ -283,14 +309,23 @@ fun StoreDetailScreen(storeId: String, onBack: () -> Unit) {
                 }
                 val shown = m.products.filter { cat == null || it.categoryId == cat }
                 if (shown.isEmpty()) item { StoresEmpty("No products yet", "This shop has not added products here.") }
-                items(shown, key = { it.id }) { p -> MenuProductRow(p) }
+                items(shown, key = { it.id }) { p -> MenuProductRow(p, canOrder = m.isOpen, quantity = qty(p.id)) { d -> change(p, d) } }
             }
         }
+    }
+    conflict?.let { c ->
+        AlertDialog(
+            onDismissRequest = { conflict = null },
+            title = { Text("Replace your cart?") },
+            text = { Text("Your cart already has items from another shop or hotel. Clear it and add from ${m?.name ?: "this shop"}?") },
+            confirmButton = { TextButton(onClick = { repository.forceClearHotelCartAndAdd(c.pendingItem); conflict = null }) { Text("Clear & Add") } },
+            dismissButton = { TextButton(onClick = { conflict = null }) { Text("Cancel") } }
+        )
     }
 }
 
 @Composable
-private fun MenuProductRow(p: StoreMenuProduct) {
+private fun MenuProductRow(p: StoreMenuProduct, canOrder: Boolean, quantity: Int, onChange: (Int) -> Unit) {
     Surface(shape = RoundedCornerShape(14.dp), color = SurfaceLight, border = BorderStroke(1.dp, OutlineSoft), modifier = Modifier.fillMaxWidth().testTag("store_menu_product")) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StorePhoto(p.imageUrl, 56)
@@ -300,9 +335,16 @@ private fun MenuProductRow(p: StoreMenuProduct) {
                 if (unitLine.isNotBlank()) Text(unitLine, fontSize = 12.sp, color = TextMuted)
                 if (!p.isAvailable) StoreBadge("Out of stock", androidx.compose.ui.graphics.Color(0xFFFEE2E2), androidx.compose.ui.graphics.Color(0xFF991B1B))
             }
-            Column(horizontalAlignment = Alignment.End) {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(rupee(p.price), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                 if (p.mrp != null && p.mrp > p.price) Text(rupee(p.mrp), fontSize = 11.sp, color = TextMuted, textDecoration = TextDecoration.LineThrough)
+                if (p.isAvailable && canOrder) {
+                    if (quantity > 0) Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { onChange(-1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Remove, contentDescription = "Remove one") }
+                        Text("$quantity", fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp))
+                        IconButton(onClick = { onChange(1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Add, contentDescription = "Add one") }
+                    } else FilledTonalButton(onClick = { onChange(1) }, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp), modifier = Modifier.height(32.dp).testTag("store_add_button")) { Text("Add", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp) }
+                }
             }
         }
     }

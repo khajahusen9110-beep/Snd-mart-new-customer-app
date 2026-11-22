@@ -3368,7 +3368,10 @@ class SndmartRepository(
             val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
             val requestBody = payloadJson.toString().toRequestBody(mediaType)
 
-            val rpcResult = callCheckoutRpcWithRetry(isHotel, requestBody)
+            // A local shop (Stores) has its own checkout on the server (open hours, radius, category commission, cash limit).
+            val cartVendorId = vendorId?.takeIf { it.isNotBlank() } ?: rawCart.firstOrNull { !it.vendorId.isNullOrBlank() }?.vendorId
+            val storeCheckout = isHotel && StoresRepository.isStoreVendor(cartVendorId)
+            val rpcResult = callCheckoutRpcWithRetry(isHotel, requestBody, storeCheckout = storeCheckout)
             if (rpcResult.isSuccess) {
                 val placedOrder = rpcResult.getOrNull()!!
                 // Cooking (vendor) + delivery (partner) instructions — best-effort, never fail the order.
@@ -3414,13 +3417,16 @@ class SndmartRepository(
     private suspend fun callCheckoutRpcWithRetry(
         isHotel: Boolean,
         requestBody: okhttp3.RequestBody,
-        maxRetries: Int = 1
+        maxRetries: Int = 1,
+        storeCheckout: Boolean = false
     ): Result<Order> {
         var lastException: Exception = Exception("Checkout failed")
 
         for (attempt in 0..maxRetries) {
             try {
-                val response = if (isHotel) {
+                val response = if (storeCheckout) {
+                    api.checkoutStoreOrder(requestBody)
+                } else if (isHotel) {
                     api.checkoutFoodOrder(requestBody)
                 } else {
                     api.checkoutGroceryOrder(requestBody)
