@@ -718,6 +718,15 @@ fun CartItemRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (!item.cartItem.customNote.isNullOrBlank() || !item.cartItem.customPhotoPath.isNullOrBlank()) {
+                    Text(
+                        text = listOfNotNull(item.cartItem.customNote?.takeIf { it.isNotBlank() }?.let { "✏️ $it" }, item.cartItem.customPhotoPath?.takeIf { it.isNotBlank() }?.let { "📷 Photo added" }).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 if (isPurchasable) {
                     Text(
                         text = "₹${"%.0f".format(item.effectivePrice)}${if (item.variant != null) "" else if (!item.product.unit.isNullOrBlank()) " / ${item.product.unit}" else ""}",

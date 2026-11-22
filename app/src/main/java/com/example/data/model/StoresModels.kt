@@ -66,7 +66,9 @@ data class StoreSlot(val startIso: String, val label: String)
 data class StoreSlotDay(val key: String, val label: String, val slots: List<StoreSlot>)
 
 /** Days + time windows the customer can pick (India time). The server checks the same rules again. */
-fun buildStoreSlots(cfg: StoreDeliveryCfg, nowMs: Long = System.currentTimeMillis()): List<StoreSlotDay> {
+fun buildStoreSlots(cfg: StoreDeliveryCfg, nowMs: Long = System.currentTimeMillis(), minLeadMinutes: Int = 0): List<StoreSlotDay> {
+    val lead = maxOf(cfg.leadMinutes, minLeadMinutes)
+    val maxDays = maxOf(cfg.maxDays, (minLeadMinutes + 1439) / 1440 + 1)
     val ist = java.util.TimeZone.getTimeZone("Asia/Kolkata")
     val iso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
     fun hm(mins: Int): String {
@@ -74,14 +76,14 @@ fun buildStoreSlots(cfg: StoreDeliveryCfg, nowMs: Long = System.currentTimeMilli
         return "${if (h % 12 == 0) 12 else h % 12}${if (m != 0) ":%02d".format(m) else ""} ${if (h < 12) "AM" else "PM"}"
     }
     val out = ArrayList<StoreSlotDay>()
-    for (d in 0..cfg.maxDays) {
+    for (d in 0..maxDays) {
         val cal = java.util.Calendar.getInstance(ist).apply { timeInMillis = nowMs; add(java.util.Calendar.DAY_OF_YEAR, d); set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0) }
         val dayStart = cal.timeInMillis
         val slots = ArrayList<StoreSlot>()
         var m = cfg.slotFirstHour * 60
         while (m + cfg.slotMinutes <= cfg.slotLastHour * 60) {
             val start = dayStart + m * 60_000L
-            if (start >= nowMs + cfg.leadMinutes * 60_000L) slots.add(StoreSlot(iso.format(java.util.Date(start)), "${hm(m)} - ${hm(m + cfg.slotMinutes)}"))
+            if (start >= nowMs + lead * 60_000L) slots.add(StoreSlot(iso.format(java.util.Date(start)), "${hm(m)} - ${hm(m + cfg.slotMinutes)}"))
             m += cfg.slotMinutes
         }
         if (slots.isEmpty()) continue
@@ -119,7 +121,10 @@ data class StoreProductHit(
 
 data class StoreMenuProduct(
     val id: String, val name: String, val imageUrl: String?, val price: Double, val mrp: Double?, val unit: String?, val unitPrice: Double?,
-    val unitLabel: String?, val categoryId: String?, val isAvailable: Boolean
+    val unitLabel: String?, val categoryId: String?, val isAvailable: Boolean,
+    /** Made-to-order: the shop asks for a message and/or a photo and may need notice */
+    val isCustomizable: Boolean = false, val allowNote: Boolean = true, val allowPhoto: Boolean = false,
+    val noteLabel: String? = null, val customRequired: Boolean = false, val leadHours: Int = 0
 )
 
 data class StoreMenu(
@@ -138,7 +143,9 @@ data class StoreMenu(
                 products = (0 until prods.length()).map { i ->
                     val p = prods.getJSONObject(i)
                     StoreMenuProduct(p.getString("id"), p.optString("name"), p.sOrNull("image_url"), p.optDouble("price", 0.0), p.dOrNull("mrp"), p.sOrNull("unit"), p.dOrNull("unit_price"),
-                        p.sOrNull("unit_label"), p.sOrNull("category_id"), p.optBoolean("is_available", true))
+                        p.sOrNull("unit_label"), p.sOrNull("category_id"), p.optBoolean("is_available", true),
+                        isCustomizable = p.optBoolean("is_customizable", false), allowNote = p.optBoolean("custom_allow_note", true), allowPhoto = p.optBoolean("custom_allow_photo", false),
+                        noteLabel = p.sOrNull("custom_note_label"), customRequired = p.optBoolean("custom_required", false), leadHours = p.optInt("custom_lead_hours", 0))
                 }
             )
         }

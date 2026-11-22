@@ -17,12 +17,13 @@ import com.example.data.model.buildStoreSlots
 fun StoreDeliveryCard(
     cfg: StoreDeliveryCfg,
     shopOpen: Boolean,
+    leadHours: Int = 0,
     choice: StoreDeliveryChoice,
     onChange: (StoreDeliveryChoice) -> Unit
 ) {
-    val days = remember(cfg) { buildStoreSlots(cfg) }
+    val days = remember(cfg, leadHours) { buildStoreSlots(cfg, System.currentTimeMillis(), leadHours * 60) }
     var dayKey by remember(days) { mutableStateOf(days.firstOrNull()?.key ?: "") }
-    val canExpress = cfg.expressEnabled && shopOpen
+    val canExpress = cfg.expressEnabled && shopOpen && leadHours == 0
     val canSchedule = cfg.scheduledEnabled && days.isNotEmpty()
     // keep the choice valid
     LaunchedEffect(canExpress, canSchedule) {
@@ -45,7 +46,8 @@ fun StoreDeliveryCard(
                     label = { Text("Scheduled" + if (cfg.scheduledDiscount > 0) " (₹${"%.0f".format(cfg.scheduledDiscount)} off)" else "") }
                 )
             }
-            if (cfg.expressEnabled && !shopOpen) Text("The shop is closed right now. Choose a scheduled time. · ಅಂಗಡಿ ಈಗ ಮುಚ್ಚಿದೆ, ಸಮಯ ಆಯ್ಕೆಮಾಡಿ.", style = MaterialTheme.typography.bodySmall)
+            if (leadHours > 0) Text("A made-to-order item in your cart needs $leadHours hour${if (leadHours > 1) "s" else ""} notice, so only Scheduled delivery is available. · ಆರ್ಡರ್‌ಗೆ ತಯಾರಿಸುವ ವಸ್ತು, ಸಮಯ ಆಯ್ಕೆಮಾಡಿ.", style = MaterialTheme.typography.bodySmall)
+            if (leadHours == 0 && cfg.expressEnabled && !shopOpen) Text("The shop is closed right now. Choose a scheduled time. · ಅಂಗಡಿ ಈಗ ಮುಚ್ಚಿದೆ, ಸಮಯ ಆಯ್ಕೆಮಾಡಿ.", style = MaterialTheme.typography.bodySmall)
             if (!choice.scheduled && canExpress) Text("Delivered as soon as the shop packs it. · ಅಂಗಡಿ ಪ್ಯಾಕ್ ಮಾಡಿದ ತಕ್ಷಣ ಡೆಲಿವರಿ.", style = MaterialTheme.typography.bodySmall)
             if (choice.scheduled && day != null) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

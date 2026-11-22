@@ -2438,6 +2438,26 @@ class SndmartRepository(
     }
 
     // --- CART OPERATIONS ---
+    /** Edit the message / photo of a made-to-order line already in the shop cart (quantity unchanged). */
+    fun setCartCustomization(productId: String, note: String?, photoPath: String?) {
+        _hotelCart.value = _hotelCart.value.map { if (it.productId == productId) it.copy(customNote = note, customPhotoPath = photoPath) else it }
+        persistCartToBackend()
+    }
+
+    /** Stores the customer's photo (already shrunk) in their own folder of the private bucket. Returns the path. */
+    suspend fun uploadCustomPhoto(jpegBytes: ByteArray): Result<String> {
+        val userId = sessionManager.userId.value ?: return Result.failure(Exception("Please log in first"))
+        val path = "$userId/${UUID.randomUUID()}.jpg"
+        return try {
+            val res = api.uploadCustomPhoto(path, jpegBytes.toRequestBody("image/jpeg".toMediaTypeOrNull()))
+            if (res.isSuccessful) Result.success(path) else Result.failure(Exception("Photo upload failed (HTTP ${res.code()})"))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun addToCart(
         productId: String,
         vendorId: String?,
@@ -2451,7 +2471,10 @@ class SndmartRepository(
         // is turned off later, RLS stops returning that row for this customer at all, and
         // without this cached snapshot the cart would have nothing left to show but "No longer
         // available" with no name attached.
-        productForSnapshot: ResolvedProduct? = null
+        productForSnapshot: ResolvedProduct? = null,
+        // Made-to-order shop products: the customer's message / photo path
+        customNote: String? = null,
+        customPhotoPath: String? = null
     ): AddToCartResult {
         val currentUserId = sessionManager.userId.value ?: "guest"
         if (quantityDelta > 0) {
@@ -2482,7 +2505,9 @@ class SndmartRepository(
                     variantId = variantId,
                     vendorId = vendorId,
                     cityId = cityId,
-                    quantity = quantityDelta
+                    quantity = quantityDelta,
+                    customNote = customNote,
+                    customPhotoPath = customPhotoPath
                 )
                 return AddToCartResult.HotelConflict(existingVendor, vendorId, pending)
             }
@@ -2493,7 +2518,9 @@ class SndmartRepository(
                     _hotelCart.value = currentList.filter { !(it.productId == productId && it.variantId == variantId) }
                 } else {
                     _hotelCart.value = currentList.map {
-                        if (it.productId == productId && it.variantId == variantId) it.copy(quantity = newQty) else it
+                        if (it.productId == productId && it.variantId == variantId) {
+                            if (customNote != null || customPhotoPath != null) it.copy(quantity = newQty, customNote = customNote, customPhotoPath = customPhotoPath) else it.copy(quantity = newQty)
+                        } else it
                     }
                 }
             } else if (quantityDelta > 0) {
@@ -2504,7 +2531,9 @@ class SndmartRepository(
                     variantId = variantId,
                     vendorId = vendorId,
                     cityId = cityId,
-                    quantity = quantityDelta
+                    quantity = quantityDelta,
+                    customNote = customNote,
+                    customPhotoPath = customPhotoPath
                 )
                 _hotelCart.value = currentList + newItem
             }
@@ -3343,6 +3372,9 @@ class SndmartRepository(
                         put("variant_id", JSONObject.NULL)
                     }
                     put("quantity", item.quantity)
+                    // made-to-order shop products only; absent for everything else
+                    if (!item.customNote.isNullOrBlank()) put("custom_note", item.customNote)
+                    if (!item.customPhotoPath.isNullOrBlank()) put("custom_photo_path", item.customPhotoPath)
                 }
                 itemsArray.put(itemObj)
             }

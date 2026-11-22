@@ -56,6 +56,15 @@ object StoresRepository {
             StoreMenu.from(JSONObject(it))
         }
 
+    /** Longest notice (hours) that a made-to-order product in this cart needs. 0 on any problem or when none. */
+    suspend fun cartLeadHours(productIds: List<String>): Int {
+        if (productIds.isEmpty()) return 0
+        return call("Notice hours", { api.getProductCustomLead("in.(${productIds.joinToString(",")})") }) { raw ->
+            val a = JSONArray(raw)
+            (0 until a.length()).map { a.getJSONObject(it) }.filter { it.optBoolean("is_customizable", false) }.maxOfOrNull { it.optInt("custom_lead_hours", 0) } ?: 0
+        }.getOrNull() ?: 0
+    }
+
     private val storeVendors = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
     /** Is this vendor a store (a local shop) rather than a hotel? On any problem: no, so hotels keep their own checkout. */

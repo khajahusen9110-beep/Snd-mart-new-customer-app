@@ -254,6 +254,7 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
     var cat by remember { mutableStateOf<String?>(null) }
     val cart by repository.hotelCart.collectAsState()
     var conflict by remember { mutableStateOf<AddToCartResult.HotelConflict?>(null) }
+    var customising by remember { mutableStateOf<StoreMenuProduct?>(null) }
     LaunchedEffect(storeId, retry) {
         error = null
         StoresRepository.getMenu(storeId).onSuccess { menu = it; StoresRepository.rememberStore(storeId) }.onFailure { error = it.message }
@@ -267,6 +268,12 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
     fun change(p: StoreMenuProduct, delta: Int) {
         if (delta > 0) repository.sessionManager.cacheCartProductSnapshot(p.id, null, p.name, p.imageUrl, p.unit)
         val res = repository.addToCart(productId = p.id, vendorId = storeId, cityId = cityId, quantityDelta = delta, isHotel = true)
+        if (res is AddToCartResult.HotelConflict) conflict = res
+    }
+    fun addCustom(p: StoreMenuProduct, note: String?, photo: String?, q: Int) {
+        if (qty(p.id) > 0) { repository.setCartCustomization(p.id, note, photo); return }
+        repository.sessionManager.cacheCartProductSnapshot(p.id, null, p.name, p.imageUrl, p.unit)
+        val res = repository.addToCart(productId = p.id, vendorId = storeId, cityId = cityId, quantityDelta = q, isHotel = true, customNote = note, customPhotoPath = photo)
         if (res is AddToCartResult.HotelConflict) conflict = res
     }
     Scaffold(
@@ -309,9 +316,18 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
                 }
                 val shown = m.products.filter { cat == null || it.categoryId == cat }
                 if (shown.isEmpty()) item { StoresEmpty("No products yet", "This shop has not added products here.") }
-                items(shown, key = { it.id }) { p -> MenuProductRow(p, canOrder = m.isOpen, quantity = qty(p.id)) { d -> change(p, d) } }
+                items(shown, key = { it.id }) { p -> MenuProductRow(p, canOrder = m.isOpen, quantity = qty(p.id), onCustomise = { customising = p }) { d -> change(p, d) } }
             }
         }
+    }
+    customising?.let { p ->
+        val line = mine.firstOrNull { it.productId == p.id }
+        CustomiseSheet(
+            product = p, repository = repository, initialNote = line?.customNote, initialPhotoPath = line?.customPhotoPath,
+            initialQty = line?.quantity ?: 1, editing = line != null,
+            onDismiss = { customising = null },
+            onDone = { note, photo, q -> addCustom(p, note, photo, q); customising = null }
+        )
     }
     conflict?.let { c ->
         AlertDialog(
@@ -325,7 +341,7 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
 }
 
 @Composable
-private fun MenuProductRow(p: StoreMenuProduct, canOrder: Boolean, quantity: Int, onChange: (Int) -> Unit) {
+private fun MenuProductRow(p: StoreMenuProduct, canOrder: Boolean, quantity: Int, onCustomise: () -> Unit, onChange: (Int) -> Unit) {
     Surface(shape = RoundedCornerShape(14.dp), color = SurfaceLight, border = BorderStroke(1.dp, OutlineSoft), modifier = Modifier.fillMaxWidth().testTag("store_menu_product")) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StorePhoto(p.imageUrl, 56)
@@ -339,7 +355,8 @@ private fun MenuProductRow(p: StoreMenuProduct, canOrder: Boolean, quantity: Int
                 Text(rupee(p.price), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                 if (p.mrp != null && p.mrp > p.price) Text(rupee(p.mrp), fontSize = 11.sp, color = TextMuted, textDecoration = TextDecoration.LineThrough)
                 if (p.isAvailable && canOrder) {
-                    if (quantity > 0) Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (p.isCustomizable) FilledTonalButton(onClick = onCustomise, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp), modifier = Modifier.height(32.dp).testTag("store_customise_button")) { Text(if (quantity > 0) "Edit · $quantity in cart" else "Customise", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp) }
+                    else if (quantity > 0) Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { onChange(-1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Remove, contentDescription = "Remove one") }
                         Text("$quantity", fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp))
                         IconButton(onClick = { onChange(1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Add, contentDescription = "Add one") }

@@ -101,13 +101,17 @@ fun CheckoutScreen(
     var isStore by remember { mutableStateOf(false) }
     var storeCfg by remember { mutableStateOf<com.example.data.model.StoreDeliveryCfg?>(null) }
     var storeChoice by remember { mutableStateOf(com.example.data.model.StoreDeliveryChoice(false, null)) }
+    var storeLeadHours by remember { mutableIntStateOf(0) }
     val storeVendorId = if (isHotel) (repository.hotelCart.value.firstOrNull()?.vendorId ?: freshItems.firstOrNull { !it.product.vendorId.isNullOrBlank() }?.product?.vendorId) else null
     LaunchedEffect(isHotel, storeVendorId, effectiveCityId) {
         if (!isHotel || storeVendorId.isNullOrBlank()) { isStore = false; return@LaunchedEffect }
         if (!StoresRepository.isStoreVendor(storeVendorId)) { isStore = false; return@LaunchedEffect }
         val d = StoresRepository.getConfig(effectiveCityId ?: "").delivery ?: com.example.data.model.StoreDeliveryCfg.EXPRESS_ONLY
         storeCfg = d
-        storeChoice = com.example.data.model.StoreDeliveryChoice(!d.expressEnabled, null)
+        // made-to-order products need notice: the longest one decides the earliest Scheduled time
+        val hrs = StoresRepository.cartLeadHours(repository.hotelCart.value.map { it.productId })
+        storeLeadHours = hrs
+        storeChoice = com.example.data.model.StoreDeliveryChoice(!d.expressEnabled || hrs > 0, null)
         isStore = true
     }
     // The whole city being closed (daily timings or Emergency Close) blocks every order, grocery or hotel.
@@ -1025,6 +1029,7 @@ fun CheckoutScreen(
                     StoreDeliveryCard(
                         cfg = storeCfg!!,
                         shopOpen = freshItems.none { it.stateMessage == CART_HOTEL_CLOSED_MESSAGE },
+                        leadHours = storeLeadHours,
                         choice = storeChoice,
                         onChange = { storeChoice = it }
                     )

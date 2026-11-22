@@ -456,6 +456,20 @@ interface SupabaseApi {
         @Body items: List<OrderItem>
     ): Response<List<OrderItem>>
 
+    // Customer's photo for a made-to-order product (private bucket, own folder only)
+    @POST("storage/v1/object/custom-order-photos/{path}")
+    suspend fun uploadCustomPhoto(
+        @Path("path", encoded = true) path: String,
+        @Body body: okhttp3.RequestBody
+    ): Response<ResponseBody>
+
+    // Notice hours of made-to-order products in the cart
+    @GET("rest/v1/products")
+    suspend fun getProductCustomLead(
+        @Query("id") idsIn: String,
+        @Query("select") select: String = "id,custom_lead_hours,is_customizable"
+    ): Response<ResponseBody>
+
     @GET("rest/v1/order_items")
     suspend fun getOrderItems(
         @Query("order_id") orderId: String

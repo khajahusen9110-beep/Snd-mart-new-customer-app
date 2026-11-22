@@ -262,7 +262,10 @@ data class CartItem(
     @Json(name = "variant_id") val variantId: String? = null,
     @Json(name = "vendor_id") val vendorId: String? = null,
     @Json(name = "city_id") val cityId: String? = null,
-    val quantity: Int = 1
+    val quantity: Int = 1,
+    // Shops (Stores): the customer's message / photo for a made-to-order product (null = none, not sent)
+    @Json(name = "custom_note") val customNote: String? = null,
+    @Json(name = "custom_photo_path") val customPhotoPath: String? = null
 )
 
 /** Live availability state for a cart row, recomputed every time the cart/checkout screen
@@ -537,7 +540,9 @@ data class OrderItem(
     val quantity: Int = 1,
     @Json(name = "unit_price") val unitPrice: Double = 0.0,
     @Json(name = "total_price") val totalPrice: Double = 0.0,
-    @Json(name = "vendor_id") val vendorId: String? = null
+    @Json(name = "vendor_id") val vendorId: String? = null,
+    @Json(name = "custom_note") val customNote: String? = null,
+    @Json(name = "custom_photo_path") val customPhotoPath: String? = null
 )
 
 @JsonClass(generateAdapter = true)

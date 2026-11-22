@@ -869,6 +869,9 @@ fun OrderDetailScreen(
                                         ) {
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(item.productName, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                                if (!item.customNote.isNullOrBlank() || !item.customPhotoPath.isNullOrBlank()) {
+                                                    Text(listOfNotNull(item.customNote?.takeIf { it.isNotBlank() }?.let { "✏️ $it" }, item.customPhotoPath?.takeIf { it.isNotBlank() }?.let { "📷 Photo sent to the shop" }).joinToString(" · "), fontSize = 12.sp)
+                                                }
                                                 Text(
                                                     "${item.quantity} x ₹${"%.0f".format(item.unitPrice)}${if (!item.variantLabel.isNullOrBlank()) " (${item.variantLabel})" else ""}",
                                                     style = MaterialTheme.typography.bodySmall,

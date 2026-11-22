@@ -76,4 +76,21 @@ class StoresModelsUnitTest {
         assertFalse(d.expressEnabled); assertTrue(d.scheduledEnabled); assertEquals(5.0, d.scheduledDiscount, 0.0); assertEquals(3, d.maxDays)
         assertNull(StoresConfig.from(JSONObject("""{"stores_enabled":true,"categories":[]}""")).delivery)
     }
+
+    @Test fun customisedProduct_parsesFlags_andLeadTimePushesSlots() {
+        val menu = StoreMenu.from(JSONObject("""{"store":{"id":"s1","name":"Cake Shop","is_open":true},"categories":[],"products":[
+            {"id":"p1","name":"Cake 1 kg","price":600,"is_available":true,"is_customizable":true,"custom_allow_note":true,"custom_allow_photo":true,"custom_note_label":"Name on cake","custom_required":true,"custom_lead_hours":24},
+            {"id":"p2","name":"Rice","price":60,"is_available":true}]}"""))
+        val cake = menu.products[0]
+        assertTrue(cake.isCustomizable); assertTrue(cake.allowPhoto); assertTrue(cake.customRequired); assertEquals(24, cake.leadHours); assertEquals("Name on cake", cake.noteLabel)
+        val rice = menu.products[1]
+        assertFalse(rice.isCustomizable); assertEquals(0, rice.leadHours)
+        val cfg = StoreDeliveryCfg(true, 0.0, true, 0.0, 8, 21, 120, 120, 2)
+        val now = java.util.GregorianCalendar(java.util.TimeZone.getTimeZone("UTC")).apply { clear(); set(2026, 10, 22, 5, 0, 0) }.timeInMillis // 10:30 IST
+        // 24 h notice: nothing today, the first slot is tomorrow 12 PM - 2 PM IST (>= 10:30 next day)
+        val days = buildStoreSlots(cfg, now, 24 * 60)
+        assertFalse(days.any { it.label == "Today" })
+        assertEquals("Tomorrow", days[0].label)
+        assertEquals("12 PM - 2 PM", days[0].slots[0].label)
+    }
 }
