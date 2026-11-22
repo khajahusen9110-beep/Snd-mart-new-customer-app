@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.data.analytics.Analytics
 import com.example.data.model.*
 import com.example.data.repository.SndmartRepository
+import com.example.data.repository.StoresRepository
 import com.example.data.session.UserSessionManager
 import com.example.ui.components.AddressPickerDialog
 import com.example.ui.components.ErrorCard
@@ -96,17 +97,33 @@ fun CheckoutScreen(
     var isLoadingFreshCart by remember { mutableStateOf(true) }
     val subtotal = freshItems.sumOf { it.totalPrice }
     val unavailableItems = freshItems.filter { !it.isPurchasable }
+    // Shops (Stores): Express or Scheduled delivery. Food and Grocery never enter this.
+    var isStore by remember { mutableStateOf(false) }
+    var storeCfg by remember { mutableStateOf<com.example.data.model.StoreDeliveryCfg?>(null) }
+    var storeChoice by remember { mutableStateOf(com.example.data.model.StoreDeliveryChoice(false, null)) }
+    val storeVendorId = if (isHotel) (repository.hotelCart.value.firstOrNull()?.vendorId ?: freshItems.firstOrNull { !it.product.vendorId.isNullOrBlank() }?.product?.vendorId) else null
+    LaunchedEffect(isHotel, storeVendorId, effectiveCityId) {
+        if (!isHotel || storeVendorId.isNullOrBlank()) { isStore = false; return@LaunchedEffect }
+        if (!StoresRepository.isStoreVendor(storeVendorId)) { isStore = false; return@LaunchedEffect }
+        val d = StoresRepository.getConfig(effectiveCityId ?: "").delivery ?: com.example.data.model.StoreDeliveryCfg.EXPRESS_ONLY
+        storeCfg = d
+        storeChoice = com.example.data.model.StoreDeliveryChoice(!d.expressEnabled, null)
+        isStore = true
+    }
     // The whole city being closed (daily timings or Emergency Close) blocks every order, grocery or hotel.
     val checkoutCity by sessionManager.selectedCity.collectAsState()
     val cityClosureNow = com.example.util.cityClosure(checkoutCity)
     val hotelClosedMessage = if (cityClosureNow != null) {
         cityClosureNow.title
-    } else if (isHotel) {
+    } else if (isHotel && !(isStore && storeChoice.scheduled)) {
         freshItems.firstOrNull { it.stateMessage == CART_HOTEL_CLOSED_MESSAGE }?.stateMessage
     } else null
 
     // ONE Delivery System: "Express Delivery" Only
-    var calculatedDeliveryFee by remember { mutableStateOf<Double?>(null) }
+    var baseDeliveryFee by remember { mutableStateOf<Double?>(null) }
+    // Shops: the city's Express extra fee / Scheduled discount on top of the normal fee (the server charges the same).
+    val storeFeeAdj = if (isStore) storeCfg?.let { if (storeChoice.scheduled) -it.scheduledDiscount else it.expressExtraFee } ?: 0.0 else 0.0
+    val calculatedDeliveryFee: Double? = baseDeliveryFee?.let { (it + storeFeeAdj).coerceAtLeast(0.0) }
     var isLoadingDeliveryFee by remember { mutableStateOf(false) }
     var deliveryFeeError by remember { mutableStateOf<String?>(null) }
     var handlingFee by remember { mutableStateOf(5.0) }
@@ -405,7 +422,7 @@ fun CheckoutScreen(
         val cid = effectiveCityId ?: return
         val addr = selectedAddress ?: return
         if (!isDeliveryAvailable) {
-            calculatedDeliveryFee = null
+            baseDeliveryFee = null
             deliveryFeeError = null
             return
         }
@@ -445,10 +462,10 @@ fun CheckoutScreen(
                 subtotalAfterDiscount = subtotalAfterDiscount
             )
             if (feeRes.isSuccess) {
-                calculatedDeliveryFee = feeRes.getOrNull()
+                baseDeliveryFee = feeRes.getOrNull()
                 deliveryFeeError = null
             } else {
-                calculatedDeliveryFee = null
+                baseDeliveryFee = null
                 deliveryFeeError = "Could not calculate delivery fee - tap to retry"
             }
             isLoadingDeliveryFee = false
@@ -459,7 +476,7 @@ fun CheckoutScreen(
         if (isDeliveryAvailable && selectedAddress != null && !effectiveCityId.isNullOrBlank()) {
             calculateFees()
         } else {
-            calculatedDeliveryFee = null
+            baseDeliveryFee = null
             deliveryFeeError = null
         }
     }
@@ -553,7 +570,8 @@ fun CheckoutScreen(
             selectedAddressId == null ||
             effectiveCityId == null ||
             subtotal <= 0.0 ||
-            hotelClosedMessage != null
+            hotelClosedMessage != null ||
+            (isStore && storeChoice.scheduled && storeChoice.scheduledFor == null)
 
     // While unavailable items are in the cart, the button only needs to remove them - skip the
     // address/delivery-fee/subtotal gating above so the customer can always clear a dead cart
@@ -680,7 +698,8 @@ fun CheckoutScreen(
                                     coupon = appliedCoupon,
                                     useWallet = walletApplied > 0.0,
                                     cookingInstructions = cookingInstructions,
-                                    deliveryInstructions = deliveryInstructions
+                                    deliveryInstructions = deliveryInstructions,
+                                    storeDelivery = if (isStore) storeChoice else null
                                 )
 
                                 if (res.isSuccess) {
@@ -1001,8 +1020,18 @@ fun CheckoutScreen(
             }
 
             // Delivery Method Section - ONE Delivery System: "Express Delivery" Only
+            if (isStore && storeCfg != null) {
+                item {
+                    StoreDeliveryCard(
+                        cfg = storeCfg!!,
+                        shopOpen = freshItems.none { it.stateMessage == CART_HOTEL_CLOSED_MESSAGE },
+                        choice = storeChoice,
+                        onChange = { storeChoice = it }
+                    )
+                }
+            }
             item {
-                Card(
+                if (!isStore) Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("delivery_method_section"),

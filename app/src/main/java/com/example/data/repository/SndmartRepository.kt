@@ -3295,7 +3295,9 @@ class SndmartRepository(
         useWallet: Boolean = false,
         // Cooking (shown to the vendor) + delivery (shown to the partner) instructions.
         cookingInstructions: String? = null,
-        deliveryInstructions: String? = null
+        deliveryInstructions: String? = null,
+        // Shops only (Stores): Express or Scheduled delivery. Ignored for Food and Grocery.
+        storeDelivery: com.example.data.model.StoreDeliveryChoice? = null
     ): Result<Order> {
         return try {
             val rawCart = (if (isHotel) _hotelCart.value else _groceryCart.value).filter { it.quantity > 0 }
@@ -3365,12 +3367,15 @@ class SndmartRepository(
                 put("p_use_wallet", useWallet)
             }
 
-            val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
-            val requestBody = payloadJson.toString().toRequestBody(mediaType)
-
             // A local shop (Stores) has its own checkout on the server (open hours, radius, category commission, cash limit).
             val cartVendorId = vendorId?.takeIf { it.isNotBlank() } ?: rawCart.firstOrNull { !it.vendorId.isNullOrBlank() }?.vendorId
             val storeCheckout = isHotel && StoresRepository.isStoreVendor(cartVendorId)
+            if (storeCheckout && storeDelivery != null) {
+                payloadJson.put("p_delivery_type", if (storeDelivery.scheduled) "scheduled" else "express")
+                payloadJson.put("p_scheduled_for", if (storeDelivery.scheduled) storeDelivery.scheduledFor else JSONObject.NULL)
+            }
+            val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+            val requestBody = payloadJson.toString().toRequestBody(mediaType)
             val rpcResult = callCheckoutRpcWithRetry(isHotel, requestBody, storeCheckout = storeCheckout)
             if (rpcResult.isSuccess) {
                 val placedOrder = rpcResult.getOrNull()!!

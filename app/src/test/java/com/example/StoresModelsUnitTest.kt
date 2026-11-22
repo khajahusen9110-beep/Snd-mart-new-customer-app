@@ -55,4 +55,25 @@ class StoresModelsUnitTest {
         assertEquals(listOf("k1" to "Rice"), m.categories)
         assertEquals(2, m.products.size); assertTrue(m.products[0].isAvailable); assertFalse(m.products[1].isAvailable); assertNull(m.products[1].categoryId)
     }
+
+    @Test fun storeSlots_respectLeadTimeAndIndiaTime() {
+        val cfg = StoreDeliveryCfg(true, 0.0, true, 0.0, 8, 21, 120, 120, 2)
+        // 22 Nov 2026 10:30 IST = 05:00 UTC; with a 2 h lead the first slot is 2 PM - 4 PM IST (08:30 UTC)
+        val now = java.util.GregorianCalendar(java.util.TimeZone.getTimeZone("UTC")).apply { clear(); set(2026, 10, 22, 5, 0, 0) }.timeInMillis
+        val days = buildStoreSlots(cfg, now)
+        assertEquals(listOf("Today", "Tomorrow"), days.take(2).map { it.label })
+        assertEquals(3, days[0].slots.size)
+        assertEquals("2 PM - 4 PM", days[0].slots[0].label)
+        assertEquals("2026-11-22T08:30:00Z", days[0].slots[0].startIso)
+        assertEquals(6, days[1].slots.size)
+        assertEquals("8 AM - 10 AM", days[1].slots[0].label)
+        assertEquals("2026-11-23T02:30:00Z", days[1].slots[0].startIso)
+    }
+
+    @Test fun deliveryCfg_parsesAndFallsBack() {
+        val c = StoresConfig.from(JSONObject("""{"stores_enabled":true,"categories":[],"delivery":{"express_enabled":false,"express_extra_fee":10,"scheduled_enabled":true,"scheduled_discount":5,"slot_first_hour":9,"slot_last_hour":20,"slot_minutes":60,"lead_minutes":90,"max_days":3}}"""))
+        val d = c.delivery!!
+        assertFalse(d.expressEnabled); assertTrue(d.scheduledEnabled); assertEquals(5.0, d.scheduledDiscount, 0.0); assertEquals(3, d.maxDays)
+        assertNull(StoresConfig.from(JSONObject("""{"stores_enabled":true,"categories":[]}""")).delivery)
+    }
 }
