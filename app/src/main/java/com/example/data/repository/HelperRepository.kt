@@ -91,4 +91,26 @@ object HelperRepository {
     suspend fun syncPayment(bookingId: String) {
         call("sync", { api.helperPayment(mapOf("action" to "sync", "booking_id" to bookingId)) }) { }
     }
+
+    /** The customer asks for more time while the work runs. Returns the extension (the server decides the price and the next step). */
+    suspend fun requestExtension(bookingId: String, minutes: Int): Result<com.example.data.model.HelperExtension> =
+        call("Could not add time", { api.helperRequestExtension(mapOf("p_booking_id" to bookingId, "p_minutes" to minutes)) }) {
+            val e = JSONObject(it)
+            com.example.data.model.HelperExtension(e.optString("id"), e.optInt("minutes"), e.optDouble("amount", 0.0), e.optString("status"), e.optString("payment_method", "cash"), e.optString("payment_status", "unpaid"))
+        }
+
+    suspend fun createExtensionPayment(extId: String): Result<PayOrder> =
+        call("Could not start payment", { api.helperPayment(mapOf("action" to "create_ext", "extension_id" to extId)) }) {
+            val o = JSONObject(it)
+            PayOrder(o.getString("key_id"), o.getLong("amount"), o.optString("currency", "INR"), o.getString("razorpay_order_id"))
+        }
+
+    suspend fun verifyExtensionPayment(extId: String, orderId: String, paymentId: String, signature: String): Result<Unit> =
+        call("Could not confirm the payment", {
+            api.helperPayment(mapOf("action" to "verify_ext", "extension_id" to extId, "razorpay_order_id" to orderId, "razorpay_payment_id" to paymentId, "razorpay_signature" to signature))
+        }) { }
+
+    suspend fun syncExtensionPayment(extId: String) {
+        call("sync", { api.helperPayment(mapOf("action" to "sync_ext", "extension_id" to extId)) }) { }
+    }
 }

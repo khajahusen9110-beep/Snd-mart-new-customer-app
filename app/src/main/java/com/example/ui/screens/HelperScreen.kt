@@ -60,6 +60,7 @@ fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: Stri
     // the booking whose advance payment is open in Razorpay right now (id, number, Razorpay order id)
     var paying by remember { mutableStateOf<Triple<String, String, String>?>(null) }
     var payBusy by remember { mutableStateOf(false) }
+    var payingExt by remember { mutableStateOf(false) } // the open payment is for extra time, not the booking
     var refreshTick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
@@ -69,18 +70,19 @@ fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: Stri
             when (result) {
                 is RazorpayPaymentResult.Error -> {
                     // the payment may still have gone through in the UPI app: the server checks with Razorpay
-                    HelperRepository.syncPayment(cur.first)
-                    snackbar.showSnackbar("Payment not completed. You can pay from My bookings.")
+                    if (payingExt) HelperRepository.syncExtensionPayment(cur.first) else HelperRepository.syncPayment(cur.first)
+                    snackbar.showSnackbar("Payment not completed. You can pay again from this booking.")
                 }
                 is RazorpayPaymentResult.Success -> {
                     payBusy = true
                     val pid = result.paymentData?.paymentId ?: result.razorpayPaymentId ?: ""
                     val oid = result.paymentData?.orderId?.takeIf { it.isNotBlank() } ?: cur.third
                     val sig = result.paymentData?.signature ?: result.paymentData?.data?.optString("razorpay_signature").orEmpty()
-                    val ok = pid.isNotBlank() && HelperRepository.verifyPayment(cur.first, oid, pid, sig).isSuccess
-                    if (!ok) HelperRepository.syncPayment(cur.first)
+                    val ext = payingExt
+                    val ok = pid.isNotBlank() && (if (ext) HelperRepository.verifyExtensionPayment(cur.first, oid, pid, sig) else HelperRepository.verifyPayment(cur.first, oid, pid, sig)).isSuccess
+                    if (!ok) { if (ext) HelperRepository.syncExtensionPayment(cur.first) else HelperRepository.syncPayment(cur.first) }
                     payBusy = false
-                    snackbar.showSnackbar(if (ok) "Payment received. We are finding a helper." else "We are confirming your payment. Please check My bookings in a minute.")
+                    snackbar.showSnackbar(if (ok) (if (ext) "Payment received." else "Payment received. We are finding a helper.") else "We are confirming your payment. Please check again in a minute.")
                 }
             }
             refreshTick++
@@ -90,6 +92,7 @@ fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: Stri
     // Opens the in-app payment for a booking waiting for its advance
     val startPay: (String, String) -> Unit = { bookingId, number ->
         payBusy = true
+        payingExt = false
         payScope.launch {
             HelperRepository.createPayment(bookingId).onSuccess { o ->
                 paying = Triple(bookingId, number, o.razorpayOrderId)
@@ -101,6 +104,24 @@ fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: Stri
                 )
                 if (res.isFailure) { paying = null; snackbar.showSnackbar(res.exceptionOrNull()?.message ?: "Could not open the payment screen") }
             }.onFailure { snackbar.showSnackbar(it.message ?: "Could not start payment. You can pay from My bookings.") }
+            payBusy = false
+        }
+    }
+    // Opens the in-app payment for extra time
+    val startExtPay: (String, String) -> Unit = { extId, label ->
+        payBusy = true
+        payingExt = true
+        payScope.launch {
+            HelperRepository.createExtensionPayment(extId).onSuccess { o ->
+                paying = Triple(extId, label, o.razorpayOrderId)
+                val activity = context as? android.app.Activity
+                val res = if (activity == null) Result.failure(Exception("Cannot open the payment screen"))
+                else RazorpayPaymentManager.startUpiCheckout(
+                    activity = activity, keyId = o.keyId, amountInPaise = o.amountPaise, currency = o.currency,
+                    razorpayOrderId = o.razorpayOrderId, orderNumber = label, userPhone = userPhone, userEmail = sm.userEmail.value
+                )
+                if (res.isFailure) { paying = null; snackbar.showSnackbar(res.exceptionOrNull()?.message ?: "Could not open the payment screen") }
+            }.onFailure { snackbar.showSnackbar(it.message ?: "Could not start payment") }
             payBusy = false
         }
     }
@@ -120,7 +141,7 @@ fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: Stri
             val c = cfg
             when {
                 c == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-                openId != null -> HelperDetail(openId!!, refreshTick, payBusy, startPay)
+                openId != null -> HelperDetail(openId!!, c, refreshTick, payBusy, startPay, startExtPay)
                 else -> {
                     TabRow(selectedTabIndex = tab) {
                         Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Book a helper") })
@@ -371,8 +392,9 @@ private fun HelperList(onOpen: (String) -> Unit) {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun HelperDetail(id: String, refreshTick: Int, payBusy: Boolean, onPay: (String, String) -> Unit) {
+private fun HelperDetail(id: String, cfg: HelperConfig, refreshTick: Int, payBusy: Boolean, onPay: (String, String) -> Unit, onPayExt: (String, String) -> Unit) {
     val scope = rememberCoroutineScope()
     var b by remember { mutableStateOf<HelperBooking?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -393,6 +415,8 @@ private fun HelperDetail(id: String, refreshTick: Int, payBusy: Boolean, onPay: 
                 HelperRepository.syncPayment(id)
                 HelperRepository.get(id).onSuccess { b = it }
             }
+            val openExt = b?.extensions?.firstOrNull { it.paymentMethod == "upi" && (it.paymentStatus == "refund_due" || (it.paymentStatus == "unpaid" && it.status == "pending_payment")) }
+            if (openExt != null) { HelperRepository.syncExtensionPayment(openExt.id); HelperRepository.get(id).onSuccess { b = it } }
             if (b?.isActive == false) break
             delay(8000)
         }
@@ -447,6 +471,42 @@ private fun HelperDetail(id: String, refreshTick: Int, payBusy: Boolean, onPay: 
             val left = booking.endsAt?.let { com.example.util.parseIsoMillis(it) }?.let { ((it - now) / 1000).coerceAtLeast(0) }
             Text("Work in progress" + (left?.let { " · %d:%02d left".format(it / 60, it % 60) } ?: ""), fontWeight = FontWeight.Bold)
             booking.endOtp?.let { CodeCard("End code", it, "Tell this code to your helper when the work is finished.") }
+        }
+        if (booking.status == "started" && cfg.extensionEnabled) {
+            val exts = booking.extensions
+            val open = exts.firstOrNull { it.status == "pending_payment" || it.status == "awaiting_helper" }
+            val used = exts.count { it.status == "applied" }
+            val rate = cfg.categories.firstOrNull { it.id == booking.categoryId }?.ratePer30 ?: cfg.ratePer30
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Need more time?", fontWeight = FontWeight.Bold)
+                    when {
+                        open != null && open.status == "pending_payment" -> {
+                            Text("+${open.minutes} min · ₹${"%.0f".format(open.amount)}: pay to add the time.", fontSize = 13.sp)
+                            Button(onClick = { onPayExt(open.id, "${booking.bookingNumber} +${open.minutes}m") }, enabled = !payBusy, modifier = Modifier.fillMaxWidth()) { Text("Pay ₹${"%.0f".format(open.amount)}") }
+                        }
+                        open != null -> Text("+${open.minutes} min requested. Waiting for your helper to accept" + (if (open.paymentStatus == "paid") " (paid; refunded if declined)." else "."), fontSize = 13.sp)
+                        used >= cfg.maxExtensions -> Text("You have used all the extra-time requests for this booking.", fontSize = 13.sp, color = TextSecondary)
+                        else -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            cfg.extensionOptions.forEach { m ->
+                                OutlinedButton(enabled = !busy && !payBusy, onClick = {
+                                    busy = true
+                                    scope.launch {
+                                        HelperRepository.requestExtension(booking.id, m).onSuccess { e ->
+                                            if (e.status == "pending_payment") onPayExt(e.id, "${booking.bookingNumber} +${m}m")
+                                            error = null
+                                        }.onFailure { error = it.message }
+                                        busy = false; tick++
+                                    }
+                                }) { Text("+$m min · ₹${"%.0f".format(rate * m / 30.0)}") }
+                            }
+                        }
+                    }
+                    exts.lastOrNull { it.status == "declined" || it.status == "expired" }?.let {
+                        Text("Last request (+${it.minutes} min) was not added." + (when (it.paymentStatus) { "refund_due" -> " Refund on its way."; "refunded" -> " Refunded."; else -> "" }), fontSize = 12.sp, color = TextSecondary)
+                    }
+                }
+            }
         }
         if (booking.status == "completed") {
             Text(if (booking.paymentStatus == "paid") "Work completed. Paid online, nothing more to pay." else "Work completed. Please pay ₹${"%.0f".format(booking.priceTotal)} to your helper (cash).", fontWeight = FontWeight.SemiBold)

@@ -812,6 +812,9 @@ interface SupabaseApi {
     @POST("rest/v1/rpc/helper_rate_booking")
     suspend fun helperRate(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
+    @POST("rest/v1/rpc/helper_request_extension")
+    suspend fun helperRequestExtension(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
     // Advance payment for a booking: create | verify | sync (the server holds the Razorpay secret)
     @POST("functions/v1/helper-payment")
     suspend fun helperPayment(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>

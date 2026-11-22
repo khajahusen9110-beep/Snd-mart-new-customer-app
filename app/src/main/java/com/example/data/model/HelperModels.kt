@@ -35,6 +35,10 @@ data class HelperConfig(
     val maxDaysAhead: Int = 7,
     val requireRulesAck: Boolean = true,
     val refundPercentAfterAccept: Int = 100,
+    val extensionEnabled: Boolean = true,
+    val extensionOptions: List<Int> = listOf(30, 60),
+    val maxExtensions: Int = 3,
+    val ratePer30: Double = 0.0,
     val categories: List<HelperCategory> = emptyList()
 ) {
     companion object {
@@ -62,6 +66,10 @@ data class HelperConfig(
                 maxDaysAhead = o.optInt("max_days_ahead", 7),
                 requireRulesAck = o.optBoolean("require_rules_ack", true),
                 refundPercentAfterAccept = o.optInt("refund_percent_after_accept", 100),
+                extensionEnabled = o.optBoolean("extension_enabled", true),
+                extensionOptions = o.optJSONArray("extension_options")?.let { a -> (0 until a.length()).map { a.getInt(it) } } ?: listOf(30, 60),
+                maxExtensions = o.optInt("max_extensions", 3),
+                ratePer30 = o.optDouble("rate_per_30", 0.0),
                 categories = if (cats == null) emptyList() else (0 until cats.length()).map {
                     val c = cats.getJSONObject(it)
                     val d = c.optJSONArray("durations")
@@ -77,6 +85,8 @@ data class HelperConfig(
         }
     }
 }
+
+data class HelperExtension(val id: String, val minutes: Int, val amount: Double, val status: String, val paymentMethod: String, val paymentStatus: String)
 
 data class HelperPerson(val name: String, val phone: String?, val avgRating: Double?, val totalRatings: Int)
 
@@ -101,6 +111,8 @@ data class HelperBooking(
     val rating: Int?,
     val review: String?,
     val createdAt: String,
+    val categoryId: String?,
+    val extensions: List<HelperExtension>,
     val helper: HelperPerson?
 ) {
     val isActive get() = status in setOf("pending_payment", "requested", "accepted", "on_the_way", "started")
@@ -143,6 +155,9 @@ data class HelperBooking(
                 rating = if (o.isNull("rating")) null else o.optInt("rating"),
                 review = str(o, "review"),
                 createdAt = o.optString("created_at"),
+                categoryId = str(o, "category_id"),
+                extensions = o.optJSONArray("extensions")?.let { a -> (0 until a.length()).map { i -> a.getJSONObject(i).let { e ->
+                    HelperExtension(e.optString("id"), e.optInt("minutes"), e.optDouble("amount", 0.0), e.optString("status"), e.optString("payment_method", "cash"), e.optString("payment_status", "unpaid")) } } } ?: emptyList(),
                 helper = h?.let { HelperPerson(it.optString("name"), str(it, "phone"), if (it.isNull("avg_rating")) null else it.optDouble("avg_rating"), it.optInt("total_ratings", 0)) }
             )
         }
