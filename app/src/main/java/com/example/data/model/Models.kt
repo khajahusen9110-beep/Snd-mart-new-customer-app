@@ -137,6 +137,10 @@ data class ProductVariant(
     val id: String = "",
     val label: String = "",
     @Json(name = "is_active") val isActive: Boolean = true,
+    // A shop's own size carries its price here (grocery uses the city stock rows)
+    val price: Double? = null,
+    @Json(name = "stock_qty") val stockQty: Int? = null,
+    @Json(name = "is_available") val isAvailable: Boolean? = null,
     @Json(name = "product_variant_city_stock") val cityStock: List<ProductVariantCityStock>? = null
 )
 
@@ -160,6 +164,9 @@ data class Product(
     @Json(name = "food_type") val foodType: String? = null,
     @Json(name = "available_from") val availableFrom: String? = null,
     @Json(name = "available_until") val availableUntil: String? = null,
+    // Shops: extra charge per piece when the customer customises, and the smallest order
+    @Json(name = "custom_extra_charge") val customExtraCharge: Double? = null,
+    @Json(name = "min_order_qty") val minOrderQty: Int? = null,
     @Json(name = "product_variants") val productVariants: List<ProductVariant>? = null
 )
 

@@ -2236,7 +2236,7 @@ class SndmartRepository(
                 val prodDeferred = async {
                     api.getProductsByIds(
                         idInQuery = "in.(${productIds.joinToString(",")})",
-                        select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,available_from,available_until,product_variants(id,label,is_active,product_variant_city_stock(price,stock_qty,is_available,is_active,city_id))"
+                        select = "id,category_id,vendor_id,name,description,image_url,price,mrp,unit,stock_qty,is_available,is_active,is_featured,available_from,available_until,custom_extra_charge,min_order_qty,product_variants(id,label,price,stock_qty,is_available,is_active,product_variant_city_stock(price,stock_qty,is_available,is_active,city_id))"
                     )
                 }
                 val stockDeferred = if (!isHotel) async {
@@ -2279,17 +2279,24 @@ class SndmartRepository(
                 sessionManager.cacheCartProductSnapshot(item.productId, item.variantId, prod.name, prod.imageUrl, prod.unit)
 
                 if (isHotel) {
+                    // A shop's size / option carries its own price; a customised piece (message / photo) adds the shop's charge.
+                    val rawSize = if (!item.variantId.isNullOrBlank()) prod.productVariants?.firstOrNull { it.id == item.variantId } else null
+                    val customExtra = if (!item.customNote.isNullOrBlank() || !item.customPhotoPath.isNullOrBlank()) (prod.customExtraCharge ?: 0.0) else 0.0
+                    val sizeGone = !item.variantId.isNullOrBlank() && (rawSize == null || !rawSize.isActive || rawSize.isAvailable == false || rawSize.price == null)
+                    val unitNow = (rawSize?.price ?: prod.price) + customExtra
                     val resolvedProd = ResolvedProduct(
                         baseProduct = prod,
-                        effectivePrice = prod.price,
+                        effectivePrice = unitNow,
                         effectiveMrp = prod.mrp,
                         effectiveStock = prod.stockQty ?: prod.stockQuantity ?: 0,
                         effectiveIsAvailable = prod.isAvailable
                     )
+                    val resolvedSize = if (rawSize != null && !sizeGone) ResolvedVariant(id = rawSize.id, label = rawSize.label, price = unitNow, stockQty = rawSize.stockQty ?: 0, isAvailable = true) else null
                     when {
                         !isHotelOpen -> list.add(
-                            CartItemUi(item, resolvedProd, null, CartAvailabilityState.UNAVAILABLE, CART_HOTEL_CLOSED_MESSAGE)
+                            CartItemUi(item, resolvedProd, resolvedSize, CartAvailabilityState.UNAVAILABLE, CART_HOTEL_CLOSED_MESSAGE)
                         )
+                        sizeGone -> list.add(CartItemUi(item, resolvedProd, null, CartAvailabilityState.UNAVAILABLE, "This option is no longer available"))
                         !resolvedProd.isHotelItemAvailable(effectiveSlots) -> {
                             val hasOwnWindow = !prod.availableFrom.isNullOrBlank() && !prod.availableUntil.isNullOrBlank()
                             val reason = if (hasOwnWindow && !isVendorWithinOperatingHours(prod.availableFrom, prod.availableUntil)) {
@@ -2299,7 +2306,7 @@ class SndmartRepository(
                             }
                             list.add(CartItemUi(item, resolvedProd, null, CartAvailabilityState.UNAVAILABLE, reason))
                         }
-                        else -> list.add(CartItemUi(item, resolvedProd, null, CartAvailabilityState.OK, null))
+                        else -> list.add(CartItemUi(item, resolvedProd, resolvedSize, CartAvailabilityState.OK, null))
                     }
                     continue
                 }

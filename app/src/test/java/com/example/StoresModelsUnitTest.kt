@@ -103,4 +103,16 @@ class StoresModelsUnitTest {
         val salt = menu.products[1]
         assertFalse(salt.hasVariants); assertEquals(20.0, salt.fromPrice, 0.0)
     }
+
+    @Test fun minOrder_extraCharge_andDiscountPercent() {
+        val menu = StoreMenu.from(JSONObject("""{"store":{"id":"s1","name":"Shop","is_open":true},"categories":[],"products":[
+            {"id":"p1","name":"Pens x5","price":80,"mrp":100,"is_available":true,"min_order_qty":5},
+            {"id":"p2","name":"Photo frame","price":300,"is_available":true,"is_customizable":true,"custom_extra_charge":50},
+            {"id":"p3","name":"Rice","price":60,"mrp":90,"is_available":true,"variants":[{"id":"v1","label":"1 kg","price":60,"is_available":true}]}]}"""))
+        val pens = menu.products[0]
+        assertEquals(5, pens.minOrderQty); assertEquals(20, pens.discountPercent)
+        val frame = menu.products[1]
+        assertEquals(1, frame.minOrderQty); assertEquals(50.0, frame.customExtraCharge, 0.0); assertEquals(0, frame.discountPercent)
+        assertEquals(0, menu.products[2].discountPercent) // a product with sizes shows no single discount
+    }
 }

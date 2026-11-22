@@ -55,11 +55,13 @@ fun CustomiseSheet(
     val scope = rememberCoroutineScope()
     var note by remember { mutableStateOf(initialNote ?: "") }
     var photoPath by remember { mutableStateOf(initialPhotoPath) }
-    var qty by remember { mutableIntStateOf(initialQty.coerceAtLeast(1)) }
+    var qty by remember { mutableIntStateOf(maxOf(initialQty, product.minOrderQty, 1)) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var variantId by remember { mutableStateOf(initialVariantId ?: product.availableVariants.singleOrNull()?.id) }
-    val unitPrice = product.availableVariants.firstOrNull { it.id == variantId }?.price ?: product.price
+    // customising (a message or a photo) costs the shop's extra charge on top, per piece
+    val customised = product.isCustomizable && ((product.allowNote && note.trim().isNotEmpty()) || (product.allowPhoto && photoPath != null))
+    val unitPrice = (product.availableVariants.firstOrNull { it.id == variantId }?.price ?: product.price) + (if (customised) product.customExtraCharge else 0.0)
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         busy = true; error = null
@@ -81,6 +83,8 @@ fun CustomiseSheet(
                     }
                 }
             }
+            if (product.minOrderQty > 1 && !editing) Text("Minimum order: ${product.minOrderQty}", fontSize = 12.sp)
+            if (product.isCustomizable && product.customExtraCharge > 0) Text("Customising costs ₹${"%.0f".format(product.customExtraCharge)} extra per piece${if (customised) " (added)" else ""}. · ಕಸ್ಟಮೈಸ್ ಮಾಡಲು ಪ್ರತಿ ಒಂದಕ್ಕೆ ₹${"%.0f".format(product.customExtraCharge)} ಹೆಚ್ಚು.", fontSize = 12.sp)
             if (product.leadHours > 0) Text(
                 "Made to order · needs ${product.leadHours} hour${if (product.leadHours > 1) "s" else ""} notice, so choose a Scheduled time at checkout. · ಆರ್ಡರ್‌ಗೆ ತಯಾರಿಸಲಾಗುತ್ತದೆ, ${product.leadHours} ಗಂಟೆ ಮುಂಚಿತವಾಗಿ ತಿಳಿಸಿ.",
                 fontSize = 12.sp
@@ -108,7 +112,7 @@ fun CustomiseSheet(
             }
             if (!editing) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Quantity", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = { qty = (qty - 1).coerceAtLeast(1) }, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(36.dp)) { Text("−") }
+                OutlinedButton(onClick = { qty = (qty - 1).coerceAtLeast(maxOf(1, product.minOrderQty)) }, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(36.dp)) { Text("−") }
                 Text("$qty", fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 14.dp))
                 OutlinedButton(onClick = { qty += 1 }, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(36.dp)) { Text("+") }
             }

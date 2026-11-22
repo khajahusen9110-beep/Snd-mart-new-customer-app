@@ -126,8 +126,11 @@ data class StoreMenuProduct(
     val isCustomizable: Boolean = false, val allowNote: Boolean = true, val allowPhoto: Boolean = false,
     val noteLabel: String? = null, val customRequired: Boolean = false, val leadHours: Int = 0,
     /** Sizes / options with their own price (empty: a plain product) */
-    val variants: List<StoreVariant> = emptyList()
+    val variants: List<StoreVariant> = emptyList(),
+    /** Smallest order (default 1) and the extra charge per piece for customising */
+    val minOrderQty: Int = 1, val customExtraCharge: Double = 0.0
 ) {
+    val discountPercent: Int get() = if (mrp != null && mrp > price && !hasVariants) Math.round(((mrp - price) * 100 / mrp)).toInt() else 0
     val availableVariants: List<StoreVariant> get() = variants.filter { it.isAvailable }
     val hasVariants: Boolean get() = availableVariants.isNotEmpty()
     /** The lowest option price when there are options, else the product price */
@@ -155,6 +158,7 @@ data class StoreMenu(
                         p.sOrNull("unit_label"), p.sOrNull("category_id"), p.optBoolean("is_available", true),
                         isCustomizable = p.optBoolean("is_customizable", false), allowNote = p.optBoolean("custom_allow_note", true), allowPhoto = p.optBoolean("custom_allow_photo", false),
                         noteLabel = p.sOrNull("custom_note_label"), customRequired = p.optBoolean("custom_required", false), leadHours = p.optInt("custom_lead_hours", 0),
+                        minOrderQty = maxOf(1, p.optInt("min_order_qty", 1)), customExtraCharge = p.optDouble("custom_extra_charge", 0.0),
                         variants = (p.optJSONArray("variants") ?: JSONArray()).let { va -> (0 until va.length()).map { k -> va.getJSONObject(k).let { v -> StoreVariant(v.getString("id"), v.optString("label"), v.optDouble("price", 0.0), v.optBoolean("is_available", true)) } } })
                 }
             )

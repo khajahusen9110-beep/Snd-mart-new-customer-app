@@ -263,12 +263,21 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
     val mine = cart.filter { it.vendorId == storeId }
     fun qty(id: String) = mine.filter { it.productId == id }.sumOf { it.quantity }
     val priceOf = { id: String -> m?.products?.firstOrNull { it.id == id }?.price ?: 0.0 }
-    fun lineUnit(ci: com.example.data.model.CartItem): Double { val p = m?.products?.firstOrNull { it.id == ci.productId }; return p?.variants?.firstOrNull { it.id == ci.variantId }?.price ?: p?.price ?: 0.0 }
+    fun lineUnit(ci: com.example.data.model.CartItem): Double {
+        val p = m?.products?.firstOrNull { it.id == ci.productId }
+        val extra = if (!ci.customNote.isNullOrBlank() || !ci.customPhotoPath.isNullOrBlank()) (p?.customExtraCharge ?: 0.0) else 0.0
+        return (p?.variants?.firstOrNull { it.id == ci.variantId }?.price ?: p?.price ?: 0.0) + extra
+    }
     val cartCount = mine.sumOf { it.quantity }
     val cartTotal = mine.sumOf { lineUnit(it) * it.quantity }
     fun change(p: StoreMenuProduct, delta: Int) {
         if (delta > 0) repository.sessionManager.cacheCartProductSnapshot(p.id, null, p.name, p.imageUrl, p.unit)
-        val res = repository.addToCart(productId = p.id, vendorId = storeId, cityId = cityId, quantityDelta = delta, isHotel = true)
+        // a shop's minimum order: the first add brings the minimum, and going below it removes the line
+        val cur = qty(p.id)
+        var d = delta
+        if (delta > 0 && cur == 0) d = p.minOrderQty
+        if (delta < 0 && cur > 0 && cur - 1 < p.minOrderQty) d = -cur
+        val res = repository.addToCart(productId = p.id, vendorId = storeId, cityId = cityId, quantityDelta = d, isHotel = true)
         if (res is AddToCartResult.HotelConflict) conflict = res
     }
     fun addCustom(p: StoreMenuProduct, note: String?, photo: String?, q: Int, variantId: String?) {
@@ -352,11 +361,15 @@ private fun MenuProductRow(p: StoreMenuProduct, canOrder: Boolean, quantity: Int
                 Text(p.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 2)
                 val unitLine = listOfNotNull(p.unit, p.unitPrice?.let { "${rupee(it)}/${p.unitLabel}" }).joinToString(" · ")
                 if (unitLine.isNotBlank()) Text(unitLine, fontSize = 12.sp, color = TextMuted)
+                if (p.minOrderQty > 1) Text("Minimum order ${p.minOrderQty}", fontSize = 11.sp, color = TextMuted)
                 if (!p.isAvailable) StoreBadge("Out of stock", androidx.compose.ui.graphics.Color(0xFFFEE2E2), androidx.compose.ui.graphics.Color(0xFF991B1B))
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(if (p.hasVariants) "from ${rupee(p.fromPrice)}" else rupee(p.price), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-                if (!p.hasVariants && p.mrp != null && p.mrp > p.price) Text(rupee(p.mrp), fontSize = 11.sp, color = TextMuted, textDecoration = TextDecoration.LineThrough)
+                if (!p.hasVariants && p.mrp != null && p.mrp > p.price) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(rupee(p.mrp), fontSize = 11.sp, color = TextMuted, textDecoration = TextDecoration.LineThrough)
+                    StoreBadge("${p.discountPercent}% OFF", androidx.compose.ui.graphics.Color(0xFFDCFCE7), androidx.compose.ui.graphics.Color(0xFF166534))
+                }
                 if (p.isAvailable && canOrder) {
                     if (p.isCustomizable || p.hasVariants) FilledTonalButton(onClick = onCustomise, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp), modifier = Modifier.height(32.dp).testTag("store_customise_button")) { Text(if (quantity > 0) "$quantity in cart · ${if (p.hasVariants) "Add" else "Edit"}" else if (p.hasVariants) "Choose" else "Customise", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp) }
                     else if (quantity > 0) Row(verticalAlignment = Alignment.CenterVertically) {
