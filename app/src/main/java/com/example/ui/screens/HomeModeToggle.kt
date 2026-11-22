@@ -27,7 +27,10 @@ fun HomeModeToggle(
     serviceMode: String,
     tiffinOn: Boolean,
     onSelect: (BrowsingMode) -> Unit,
-    onTiffin: () -> Unit
+    onTiffin: () -> Unit,
+    storesOn: Boolean = false,
+    storesReplace: Boolean = false,
+    onStores: () -> Unit = {}
 ) {
     // Natural Tones Segmented Mode Pill
     Surface(
@@ -44,6 +47,9 @@ fun HomeModeToggle(
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            if (storesReplace) {
+                StoresToggleTab(onClick = onStores)
+            } else {
             val isGrocery = browsingMode == BrowsingMode.GROCERY
             val groceryAvailable = serviceMode != "food_only"
             Surface(
@@ -62,7 +68,7 @@ fun HomeModeToggle(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = if (tiffinOn) "Groceries" else "Fresh Groceries & Fruits",
+                            text = if (tiffinOn || storesOn) "Groceries" else "Fresh Groceries & Fruits",
                             fontWeight = FontWeight.Medium,
                             fontSize = 13.sp,
                             maxLines = 1,
@@ -74,6 +80,7 @@ fun HomeModeToggle(
                         }
                     }
                 }
+            }
             }
 
             val isHotel = browsingMode == BrowsingMode.HOTELS
@@ -94,7 +101,7 @@ fun HomeModeToggle(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = if (tiffinOn) "Hotel Food" else "Hotel Food & Dining",
+                            text = if (tiffinOn || storesOn) "Hotel Food" else "Hotel Food & Dining",
                             fontWeight = FontWeight.Medium,
                             fontSize = 13.sp,
                             maxLines = 1,
@@ -107,6 +114,7 @@ fun HomeModeToggle(
                     }
                 }
             }
+            if (storesOn && !storesReplace) StoresToggleTab(onClick = onStores)
             if (tiffinOn) TiffinToggleTab(onClick = { onTiffin() })
         }
     }

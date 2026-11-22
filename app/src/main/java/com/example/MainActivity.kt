@@ -83,6 +83,13 @@ sealed class Screen(val route: String, val title: String) {
     }
     object Wallet : Screen("wallet", "Wallet")
     object Tiffin : Screen("tiffin", "Tiffin Pickup")
+    object Stores : Screen("stores", "Stores")
+    object StoreCategory : Screen("store_category/{categoryId}", "Shops") {
+        fun createRoute(categoryId: String) = "store_category/$categoryId"
+    }
+    object StoreDetail : Screen("store/{storeId}", "Shop") {
+        fun createRoute(storeId: String) = "store/$storeId"
+    }
     object ReferEarn : Screen("refer_earn", "Refer & Earn")
     object AgentCode : Screen("agent_code", "Agent Code")
     object MyReviews : Screen("my_reviews", "My Reviews")
@@ -567,7 +574,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                     Screen.Home.route,
                     Screen.Cart.route,
                     Screen.Orders.route,
-                    Screen.Profile.route
+                    Screen.Profile.route,
+                    Screen.Stores.route
                 )
 
                 when (val startupState = startupCheckResult) {
@@ -613,25 +621,25 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                                         )
 
                                 NavigationBarItem(
-                                    selected = currentDestination == Screen.Home.route,
+                                    selected = (currentDestination == Screen.Home.route || currentDestination == Screen.Stores.route),
                                     onClick = {
-                                        navController.navigate(Screen.Home.route) {
+                                        if (currentDestination != Screen.Stores.route) navController.navigate(Screen.Home.route) {
                                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                             launchSingleTop = true
                                             restoreState = true
                                         }
                                     },
                                     icon = {
-Box(Modifier.navIconScale(currentDestination == Screen.Home.route)) {
+Box(Modifier.navIconScale((currentDestination == Screen.Home.route || currentDestination == Screen.Stores.route))) {
                                         Icon(
-                                            if (currentDestination == Screen.Home.route) Icons.Filled.Storefront else Icons.Outlined.Storefront,
+                                            if ((currentDestination == Screen.Home.route || currentDestination == Screen.Stores.route)) Icons.Filled.Storefront else Icons.Outlined.Storefront,
                                             contentDescription = "Home"
                                         )
                                     }
                                     },
-                                    label = { Text("Home", fontWeight = if (currentDestination == Screen.Home.route) FontWeight.Bold else FontWeight.Medium, fontSize = 11.sp) },
+                                    label = { Text("Home", fontWeight = if ((currentDestination == Screen.Home.route || currentDestination == Screen.Stores.route)) FontWeight.Bold else FontWeight.Medium, fontSize = 11.sp) },
                                     colors = navItemColors,
-                                    modifier = Modifier.navTopIndicator(currentDestination == Screen.Home.route).testTag("nav_item_home")
+                                    modifier = Modifier.navTopIndicator((currentDestination == Screen.Home.route || currentDestination == Screen.Stores.route)).testTag("nav_item_home")
                                 )
 
                                 NavigationBarItem(
@@ -772,7 +780,10 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                         navController.navigate(Screen.Checkout.createRoute(isHotel, null))
                                     },
                                     onNavigateToWallet = { navController.navigate(Screen.Wallet.route) },
-                                    onNavigateToTiffin = { navController.navigate(Screen.Tiffin.route) }
+                                    onNavigateToTiffin = { navController.navigate(Screen.Tiffin.route) },
+                                    onNavigateToStores = {
+                                        navController.navigate(Screen.Stores.route) { popUpTo(Screen.Home.route) { inclusive = true } }
+                                    }
                                 )
                             }
 
@@ -912,6 +923,54 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                     },
                                     onBack = { navController.popBackStack() },
                                     onNavigateToWallet = { navController.navigate(Screen.Wallet.route) }
+                                )
+                            }
+
+                            composable(Screen.Stores.route) {
+                                val storesTiffinOn = rememberTiffinEnabled(selectedCity?.id)
+                                StoresScreen(
+                                    repository = repository,
+                                    cityId = selectedCity?.id,
+                                    cityName = selectedCity?.name,
+                                    tiffinOn = storesTiffinOn,
+                                    onOpenCategory = { navController.navigate(Screen.StoreCategory.createRoute(it)) },
+                                    onOpenStore = { navController.navigate(Screen.StoreDetail.createRoute(it)) },
+                                    onOpenGrocery = {
+                                        HomeRequest.mode = BrowsingMode.GROCERY
+                                        navController.navigate(Screen.Home.route) { popUpTo(Screen.Stores.route) { inclusive = true } }
+                                    },
+                                    onOpenFood = {
+                                        HomeRequest.mode = BrowsingMode.HOTELS
+                                        navController.navigate(Screen.Home.route) { popUpTo(Screen.Stores.route) { inclusive = true } }
+                                    },
+                                    onOpenTiffin = { navController.navigate(Screen.Tiffin.route) },
+                                    onOpenAddresses = { navController.navigate(Screen.AddressBook.route) },
+                                    onNotAvailable = {
+                                        navController.navigate(Screen.Home.route) { popUpTo(Screen.Stores.route) { inclusive = true } }
+                                    }
+                                )
+                            }
+
+                            composable(
+                                route = Screen.StoreCategory.route,
+                                arguments = listOf(androidx.navigation.navArgument("categoryId") { type = androidx.navigation.NavType.StringType })
+                            ) { entry ->
+                                StoreCategoryScreen(
+                                    repository = repository,
+                                    cityId = selectedCity?.id,
+                                    categoryId = entry.arguments?.getString("categoryId").orEmpty(),
+                                    onBack = { navController.popBackStack() },
+                                    onOpenStore = { navController.navigate(Screen.StoreDetail.createRoute(it)) }
+                                )
+                            }
+
+                            composable(
+                                route = Screen.StoreDetail.route,
+                                arguments = listOf(androidx.navigation.navArgument("storeId") { type = androidx.navigation.NavType.StringType })
+                            ) { entry ->
+                                StoreDetailScreen(
+                                    storeId = entry.arguments?.getString("storeId").orEmpty(),
+                                    onBack = { navController.popBackStack() }
                                 )
                             }
 

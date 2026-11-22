@@ -1,0 +1,67 @@
+package com.example.data.repository
+
+import com.example.data.model.*
+import com.example.data.remote.SupabaseClient
+import org.json.JSONArray
+import org.json.JSONObject
+import retrofit2.Response
+
+/** Stores calls. The server decides everything (what is on, who is in range, the order, cheapest first); this only asks. */
+object StoresRepository {
+    private val api get() = SupabaseClient.api
+    private var cached: Triple<String, Long, StoresConfig>? = null
+
+    private fun readText(res: Response<okhttp3.ResponseBody>): String =
+        try { (if (res.isSuccessful) res.body()?.string() else res.errorBody()?.string()).orEmpty() } catch (e: Exception) { "" }
+
+    private suspend fun <T> call(fallback: String, block: suspend () -> Response<okhttp3.ResponseBody>, parse: (String) -> T): Result<T> =
+        try {
+            val res = block()
+            val raw = readText(res)
+            if (res.isSuccessful) Result.success(parse(raw))
+            else Result.failure(Exception(runCatching { JSONObject(raw).optString("message") }.getOrNull()?.takeIf { it.isNotBlank() } ?: "$fallback (HTTP ${res.code()})"))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+
+    /** OFF on any problem, so a hiccup can never show a half-working Stores. */
+    suspend fun getConfig(cityId: String?, force: Boolean = false): StoresConfig {
+        if (cityId.isNullOrBlank()) return StoresConfig.OFF
+        cached?.let { (id, at, v) -> if (!force && id == cityId && System.currentTimeMillis() - at < 60_000) return v }
+        val v = call("Stores", { api.storesGetConfig(mapOf("p_city_id" to cityId)) }) { StoresConfig.from(JSONObject(it)) }.getOrNull() ?: return StoresConfig.OFF
+        cached = Triple(cityId, System.currentTimeMillis(), v)
+        return v
+    }
+
+    private fun locArgs(loc: StoreLoc?): Map<String, Any> = if (loc == null) emptyMap() else mapOf("p_lat" to loc.lat, "p_lng" to loc.lng)
+
+    suspend fun listStores(cityId: String, loc: StoreLoc?, categoryId: String?): Result<List<StoreListItem>> =
+        call("Could not load the shops", {
+            api.storesList(buildMap { put("p_city_id", cityId); putAll(locArgs(loc)); if (categoryId != null) put("p_category_id", categoryId) })
+        }) { StoreListItem.listFrom(JSONArray(it)) }
+
+    suspend fun search(cityId: String, loc: StoreLoc?, query: String, sort: String, categoryId: String? = null): Result<List<StoreProductHit>> =
+        call("Search failed", {
+            api.storesSearch(buildMap {
+                put("p_city_id", cityId); putAll(locArgs(loc)); put("p_query", query); put("p_sort", sort); put("p_limit", 40); put("p_offset", 0)
+                if (categoryId != null) put("p_category_id", categoryId)
+            })
+        }) { StoreProductHit.listFrom(JSONArray(it)) }
+
+    suspend fun getMenu(storeId: String): Result<StoreMenu> =
+        call("Could not load this shop", { api.storeGetMenu(mapOf("p_store_id" to storeId)) }) {
+            if (it.isBlank() || it.trim() == "null") throw Exception("This shop is not available")
+            StoreMenu.from(JSONObject(it))
+        }
+
+    /** The default saved address with a map pin, or any address with one; null = the list is not ranked by distance. */
+    suspend fun customerLocation(repository: SndmartRepository): StoreLoc? {
+        val uid = repository.sessionManager.getUserId()
+        if (uid.isNullOrBlank()) return null
+        val list = repository.getAddresses(uid).getOrNull().orEmpty()
+        val a = list.firstOrNull { it.isDefault && it.lat != null && it.lng != null } ?: list.firstOrNull { it.lat != null && it.lng != null }
+        return if (a?.lat != null && a.lng != null) StoreLoc(a.lat, a.lng) else null
+    }
+}

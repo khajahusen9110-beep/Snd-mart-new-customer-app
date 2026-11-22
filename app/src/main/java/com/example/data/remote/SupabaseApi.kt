@@ -757,6 +757,19 @@ interface SupabaseApi {
 
     // --- TIFFIN PICKUP ---
 
+    // Stores (local shops next to Food); additive.
+    @POST("rest/v1/rpc/get_city_stores_config")
+    suspend fun storesGetConfig(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/stores_list")
+    suspend fun storesList(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/stores_search")
+    suspend fun storesSearch(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/get_store_menu")
+    suspend fun storeGetMenu(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
     @POST("rest/v1/rpc/tiffin_get_config")
     suspend fun tiffinGetConfig(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 

@@ -88,7 +88,8 @@ fun HomeScreen(
     onNavigateToNotifications: (() -> Unit)? = null,
     onProceedToCheckout: (isHotel: Boolean) -> Unit = {},
     onNavigateToWallet: (() -> Unit)? = null,
-    onNavigateToTiffin: (() -> Unit)? = null
+    onNavigateToTiffin: (() -> Unit)? = null,
+    onNavigateToStores: (() -> Unit)? = null
 ) {
     // One null-safe read of the city id, reused everywhere below (dozens of repeated safe calls made the
     // Kotlin compiler run out of memory on this very large function).
@@ -97,6 +98,10 @@ fun HomeScreen(
     val cityTheme = rememberCityTheme(repository, homeCityId)
     val homeSections = rememberHomeSections(repository, homeCityId)
     val tiffinOn = rememberTiffinEnabled(homeCityId) && onNavigateToTiffin != null
+    // Stores (local shops): only where the City Admin switched it on; otherwise nothing here changes.
+    val storesCfg = rememberStoresConfig(homeCityId)
+    val storesOn = storesCfg.enabled && onNavigateToStores != null
+    val requestedMode = remember { HomeRequest.take() }
     // Rotating example in the search box (hint only; typing searches everything as before)
     var searchHintIndex by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) {
@@ -114,7 +119,14 @@ fun HomeScreen(
     // City Admin's Operating Hours / Emergency Close — caps grocery & hotel ordering city-wide.
     val cityIsOpen = com.example.util.isCityOpenNow(selectedCity)
     var browsingMode by rememberSaveable(homeCityId) {
-        mutableStateOf(if (serviceMode == "food_only") BrowsingMode.HOTELS else BrowsingMode.GROCERY)
+        mutableStateOf(requestedMode ?: if (serviceMode == "food_only") BrowsingMode.HOTELS else BrowsingMode.GROCERY)
+    }
+    // Groceries replaced by Stores in this city: opening Home lands on Stores (once), unless Food/Grocery was asked for.
+    var storesRedirectHandled by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(storesOn, storesCfg.replaceGrocery) {
+        if (storesRedirectHandled) return@LaunchedEffect
+        if (requestedMode != null) { storesRedirectHandled = true; return@LaunchedEffect }
+        if (storesOn && storesCfg.replaceGrocery && serviceMode != "food_only") { storesRedirectHandled = true; onNavigateToStores?.invoke() }
     }
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
@@ -1009,7 +1021,10 @@ fun HomeScreen(
                 serviceMode = serviceMode,
                 tiffinOn = tiffinOn,
                 onSelect = { browsingMode = it },
-                onTiffin = { onNavigateToTiffin?.invoke() }
+                onTiffin = { onNavigateToTiffin?.invoke() },
+                storesOn = storesOn,
+                storesReplace = storesOn && storesCfg.replaceGrocery,
+                onStores = { onNavigateToStores?.invoke() }
             )
 
             Spacer(modifier = Modifier.height(6.dp))
