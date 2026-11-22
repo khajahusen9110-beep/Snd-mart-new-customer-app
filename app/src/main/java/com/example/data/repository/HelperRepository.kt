@@ -37,12 +37,14 @@ object HelperRepository {
         call("Could not load Quick Helper", { api.helperGetConfig(mapOf("p_city_id" to cityId)) }) { HelperConfig.from(JSONObject(it)) }.getOrNull()
 
     suspend fun create(
-        cityId: String, addressId: String, taskType: String, description: String, photoPaths: List<String>, minutes: Int, requestedForIso: String?
+        cityId: String, addressId: String, categoryId: String, description: String, photoPaths: List<String>, minutes: Int,
+        requestedForIso: String?, paymentMethod: String, rulesAccepted: Boolean
     ): Result<HelperBooking> =
         call("Could not book", {
             api.helperCreate(mapOf(
-                "p_city_id" to cityId, "p_address_id" to addressId, "p_task_type" to taskType, "p_description" to description,
-                "p_photo_paths" to photoPaths, "p_minutes" to minutes, "p_requested_for" to requestedForIso
+                "p_city_id" to cityId, "p_address_id" to addressId, "p_category_id" to categoryId, "p_description" to description,
+                "p_photo_paths" to photoPaths, "p_minutes" to minutes, "p_requested_for" to requestedForIso,
+                "p_payment_method" to paymentMethod, "p_rules_accepted" to rulesAccepted
             ))
         }) { raw -> JSONObject(raw).let { HelperBooking.from(it) } }
 

@@ -3,33 +3,74 @@ package com.example.data.model
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Quick Helper: a nearby helper for 30 / 60 / 90 minutes. Plain classes read by hand from the server's JSON, like Stores. */
-data class HelperConfig(
-    val enabled: Boolean = false,
-    val ratePer30: Double = 0.0,
-    val durations: List<Int> = listOf(30, 60, 90),
-    val maxPhotos: Int = 3,
-    val taskTypes: List<String> = emptyList(),
-    val bannedNote: String = "",
-    val prices: Map<Int, Double> = emptyMap()
+/** Quick Helper: a nearby helper for a short time. Plain classes read by hand from the server's JSON, like Stores. */
+data class HelperRuleItem(val text: String, val textKn: String?, val imageUrl: String?)
+
+data class HelperCategory(
+    val id: String,
+    val name: String,
+    val description: String,
+    val imageUrl: String?,
+    val photosAllowed: Boolean,
+    val photoRequired: Boolean,
+    val taskPlaceholder: String,
+    val ratePer30: Double,
+    val durations: List<Int>,
+    val prices: Map<Int, Double>,
+    val dos: List<HelperRuleItem>,
+    val donts: List<HelperRuleItem>
 ) {
     fun priceFor(minutes: Int): Double = prices[minutes] ?: (ratePer30 * minutes / 30.0)
+    val fromPrice: Double get() = durations.minOfOrNull { priceFor(it) } ?: ratePer30
+}
 
+data class HelperConfig(
+    val enabled: Boolean = false,
+    val maxPhotos: Int = 3,
+    val bannedNote: String = "",
+    val termsText: String = "",
+    val supportPhone: String = "",
+    val paymentMode: String = "both", // upi | cash | both
+    val minLeadMinutes: Int = 30,
+    val maxDaysAhead: Int = 7,
+    val requireRulesAck: Boolean = true,
+    val categories: List<HelperCategory> = emptyList()
+) {
     companion object {
+        private fun nz(o: JSONObject, k: String): String? = if (o.isNull(k)) null else o.optString(k).takeIf { it.isNotBlank() }
+
+        private fun rules(a: JSONArray?): List<HelperRuleItem> =
+            if (a == null) emptyList() else (0 until a.length()).map { val r = a.getJSONObject(it); HelperRuleItem(r.optString("text"), nz(r, "text_kn"), nz(r, "image_url")) }
+
+        private fun prices(p: JSONObject?): Map<Int, Double> {
+            val m = HashMap<Int, Double>()
+            p?.keys()?.forEach { k -> k.toIntOrNull()?.let { m[it] = p.optDouble(k, 0.0) } }
+            return m
+        }
+
         fun from(o: JSONObject): HelperConfig {
-            val d = o.optJSONArray("durations")
-            val t = o.optJSONArray("task_types")
-            val p = o.optJSONObject("prices")
-            val prices = HashMap<Int, Double>()
-            p?.keys()?.forEach { k -> k.toIntOrNull()?.let { prices[it] = p.optDouble(k, 0.0) } }
+            val cats = o.optJSONArray("categories")
             return HelperConfig(
                 enabled = o.optBoolean("enabled", false),
-                ratePer30 = o.optDouble("rate_per_30", 0.0),
-                durations = if (d == null) listOf(30, 60, 90) else (0 until d.length()).map { d.getInt(it) },
                 maxPhotos = o.optInt("max_photos", 3),
-                taskTypes = if (t == null) emptyList() else (0 until t.length()).map { t.getString(it) },
                 bannedNote = o.optString("banned_note", ""),
-                prices = prices
+                termsText = o.optString("terms_text", ""),
+                supportPhone = o.optString("support_phone", ""),
+                paymentMode = o.optString("payment_mode", "both"),
+                minLeadMinutes = o.optInt("min_lead_minutes", 30),
+                maxDaysAhead = o.optInt("max_days_ahead", 7),
+                requireRulesAck = o.optBoolean("require_rules_ack", true),
+                categories = if (cats == null) emptyList() else (0 until cats.length()).map {
+                    val c = cats.getJSONObject(it)
+                    val d = c.optJSONArray("durations")
+                    HelperCategory(
+                        id = c.getString("id"), name = c.optString("name"), description = c.optString("description"), imageUrl = nz(c, "image_url"),
+                        photosAllowed = c.optBoolean("photos_allowed", true), photoRequired = c.optBoolean("photo_required", false),
+                        taskPlaceholder = c.optString("task_placeholder"), ratePer30 = c.optDouble("rate_per_30", 0.0),
+                        durations = if (d == null) listOf(30, 60, 90) else (0 until d.length()).map { i -> d.getInt(i) },
+                        prices = prices(c.optJSONObject("prices")), dos = rules(c.optJSONArray("dos")), donts = rules(c.optJSONArray("donts"))
+                    )
+                }
             )
         }
     }
@@ -47,6 +88,7 @@ data class HelperBooking(
     val durationMinutes: Int,
     val addressLine: String,
     val priceTotal: Double,
+    val paymentMethod: String,
     val paymentCollected: Boolean,
     val startOtp: String?,
     val endOtp: String?,
@@ -85,6 +127,7 @@ data class HelperBooking(
                 durationMinutes = o.optInt("duration_minutes", 30),
                 addressLine = o.optString("address_line"),
                 priceTotal = o.optDouble("price_total", 0.0),
+                paymentMethod = o.optString("payment_method", "cash"),
                 paymentCollected = o.optBoolean("payment_collected", false),
                 startOtp = str(o, "start_otp"),
                 endOtp = str(o, "end_otp"),

@@ -18,13 +18,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CustomerAddress
 import com.example.data.model.HelperBooking
+import com.example.data.model.HelperCategory
 import com.example.data.model.HelperConfig
+import com.example.data.model.HelperRuleItem
 import com.example.data.repository.HelperRepository
 import com.example.data.repository.SndmartRepository
 import com.example.ui.components.AddressPickerDialog
@@ -82,8 +86,8 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cit
     val scope = rememberCoroutineScope()
     val sm = repository.sessionManager
     val userId = sm.getUserId().orEmpty()
-    var minutes by remember { mutableIntStateOf(cfg.durations.firstOrNull() ?: 30) }
-    var taskType by remember { mutableStateOf(cfg.taskTypes.firstOrNull().orEmpty()) }
+    var cat by remember { mutableStateOf<HelperCategory?>(null) }
+    var minutes by remember { mutableIntStateOf(30) }
     var desc by remember { mutableStateOf("") }
     var photos by remember { mutableStateOf(listOf<String>()) }
     var addresses by remember { mutableStateOf(listOf<CustomerAddress>()) }
@@ -91,6 +95,8 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cit
     var showAdd by remember { mutableStateOf(false) }
     var later by remember { mutableStateOf(false) }
     var whenMillis by remember { mutableStateOf<Long?>(null) }
+    var pay by remember { mutableStateOf(if (cfg.paymentMode == "cash") "cash" else "upi") }
+    var ack by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -123,33 +129,57 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cit
         )
     }
 
-    val price = cfg.priceFor(minutes)
+    val c = cat
+    // Step 1: browse the services
+    if (c == null) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (cfg.categories.isEmpty()) Text("No services yet. Please check again soon.", color = TextSecondary)
+            else Text("Choose a service", fontWeight = FontWeight.Bold)
+            cfg.categories.forEach { k ->
+                Card(Modifier.fillMaxWidth().clickable { cat = k; minutes = k.durations.firstOrNull() ?: 30; photos = emptyList(); ack = false }, shape = RoundedCornerShape(14.dp)) {
+                    Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (k.imageUrl != null) AsyncImage(model = k.imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(k.name, fontWeight = FontWeight.Bold)
+                            if (k.description.isNotBlank()) Text(k.description, fontSize = 12.sp, color = TextSecondary, maxLines = 2)
+                            Text("From ₹${"%.0f".format(k.fromPrice)} · ${k.durations.joinToString(" / ")} min", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+            if (cfg.bannedNote.isNotBlank()) Text(cfg.bannedNote, fontSize = 12.sp, color = TextSecondary)
+        }
+        return
+    }
+
+    val price = c.priceFor(minutes)
+    val maxPhotos = if (c.photosAllowed) cfg.maxPhotos else 0
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        TextButton(onClick = { cat = null }) { Text("← All services") }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (c.imageUrl != null) AsyncImage(model = c.imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)))
+            Column { Text(c.name, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp); if (c.description.isNotBlank()) Text(c.description, fontSize = 13.sp, color = TextSecondary) }
+        }
+        RuleBlock("The helper does", c.dos, true)
+        RuleBlock("The helper does not", c.donts, false)
+
         Text("How long do you need a helper?", fontWeight = FontWeight.Bold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            cfg.durations.forEach { d ->
-                FilterChip(selected = minutes == d, onClick = { minutes = d }, label = { Text("$d min · ₹${"%.0f".format(cfg.priceFor(d))}") })
-            }
+            c.durations.forEach { d -> FilterChip(selected = minutes == d, onClick = { minutes = d }, label = { Text("$d min · ₹${"%.0f".format(c.priceFor(d))}") }) }
         }
 
-        Text("What do you need help with?", fontWeight = FontWeight.Bold)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            cfg.taskTypes.forEach { t -> FilterChip(selected = taskType == t, onClick = { taskType = t }, label = { Text(t) }) }
-        }
+        Text("Describe the task", fontWeight = FontWeight.Bold)
         OutlinedTextField(
             value = desc, onValueChange = { if (it.length <= 600) desc = it }, modifier = Modifier.fillMaxWidth(), minLines = 3,
-            label = { Text("Describe the task") }, placeholder = { Text("e.g. Stand in the queue at the bank and keep my token") }
+            placeholder = { Text(c.taskPlaceholder.ifBlank { "Describe what you need, e.g. place, what to do, anything the helper should know" }) }
         )
-        if (cfg.maxPhotos > 0) {
+        if (maxPhotos > 0) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                photos.forEachIndexed { i, _ ->
-                    AssistChip(onClick = { photos = photos.filterIndexed { j, _ -> j != i } }, label = { Text("Photo ${i + 1}  ✕") })
-                }
-                if (photos.size < cfg.maxPhotos) OutlinedButton(onClick = { picker.launch("image/*") }, enabled = !busy) { Text(if (busy) "Uploading…" else "Add photo") }
+                photos.forEachIndexed { i, _ -> AssistChip(onClick = { photos = photos.filterIndexed { j, _ -> j != i } }, label = { Text("Photo ${i + 1}  ✕") }) }
+                if (photos.size < maxPhotos) OutlinedButton(onClick = { picker.launch("image/*") }, enabled = !busy) { Text(if (busy) "Uploading…" else "Add photo") }
             }
-            Text("Optional. Only you, your helper and Sndmart can see these.", fontSize = 12.sp, color = TextSecondary)
+            Text((if (c.photoRequired) "A photo is required. " else "Optional. ") + "Only you, your helper and Sndmart can see these.", fontSize = 12.sp, color = TextSecondary)
         }
-        if (cfg.bannedNote.isNotBlank()) Text(cfg.bannedNote, fontSize = 12.sp, color = TextSecondary)
 
         Text("Where?", fontWeight = FontWeight.Bold)
         addresses.forEach { a ->
@@ -175,13 +205,28 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cit
         }
         if (later) {
             val ctx = LocalContext.current
-            OutlinedButton(onClick = { pickDateTime(ctx) { whenMillis = it } }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { pickDateTime(ctx, cfg.minLeadMinutes, cfg.maxDaysAhead) { whenMillis = it } }, modifier = Modifier.fillMaxWidth()) {
                 Text(whenMillis?.let { SimpleDateFormat("EEE d MMM, h:mm a", Locale.getDefault()).format(Date(it)) } ?: "Pick date and time")
             }
         }
 
+        Text("How will you pay?", fontWeight = FontWeight.Bold)
+        if (cfg.paymentMode == "both") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = pay == "upi", onClick = { pay = "upi" }, label = { Text("UPI") })
+                FilterChip(selected = pay == "cash", onClick = { pay = "cash" }, label = { Text("Cash") })
+            }
+        } else Text(if (cfg.paymentMode == "upi") "UPI only" else "Cash only")
+        Text("Pay your helper directly after the work is done.", fontSize = 12.sp, color = TextSecondary)
+
+        if (cfg.termsText.isNotBlank()) Text(cfg.termsText, fontSize = 12.sp, color = TextSecondary)
+        if (cfg.bannedNote.isNotBlank()) Text(cfg.bannedNote, fontSize = 12.sp, color = TextSecondary)
+        if (cfg.requireRulesAck) Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = ack, onCheckedChange = { ack = it })
+            Text("I have read what the helper does and does not do.", fontSize = 13.sp)
+        }
+
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
-        Text("Pay your helper in cash or UPI after the work is done.", fontSize = 12.sp, color = TextSecondary)
         Button(
             onClick = {
                 val aid = addressId
@@ -189,11 +234,14 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cit
                     aid == null -> error = "Choose your address"
                     desc.trim().length < 5 -> error = "Please describe the task"
                     later && whenMillis == null -> error = "Choose the time"
+                    c.photoRequired && photos.isEmpty() -> error = "Please add a photo"
+                    cfg.requireRulesAck && !ack -> error = "Please accept what the helper does and does not do"
                     else -> {
                         busy = true; error = null
                         scope.launch {
-                            val iso = if (later) whenMillis?.let { iso(it) } else null
-                            HelperRepository.create(cityId, aid, taskType, desc.trim(), photos, minutes, iso)
+                            val isoTime = if (later) whenMillis?.let { iso(it) } else null
+                            val method = if (cfg.paymentMode == "both") pay else cfg.paymentMode
+                            HelperRepository.create(cityId, aid, c.id, desc.trim(), photos, minutes, isoTime, method, ack)
                                 .onSuccess { onBooked(it.id) }.onFailure { error = it.message ?: "Could not book" }
                             busy = false
                         }
@@ -202,13 +250,28 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cit
             },
             enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(16.dp)
         ) { Text(if (busy) "Please wait…" else "Book helper · ₹${"%.0f".format(price)}", fontWeight = FontWeight.ExtraBold) }
+        if (cfg.supportPhone.isNotBlank()) Text("Need help? ${cfg.supportPhone}", fontSize = 12.sp, color = TextSecondary)
+    }
+}
+
+@Composable
+private fun RuleBlock(title: String, items: List<HelperRuleItem>, good: Boolean) {
+    if (items.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text((if (good) "✓ " else "✕ ") + title, fontWeight = FontWeight.Bold, color = if (good) Color(0xFF047857) else Color(0xFFBE123C))
+        items.forEach { r ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (r.imageUrl != null) AsyncImage(model = r.imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)))
+                Text(r.text, fontSize = 14.sp)
+            }
+        }
     }
 }
 
 private fun iso(ms: Long): String =
     SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(ms))
 
-private fun pickDateTime(context: android.content.Context, onPicked: (Long) -> Unit) {
+private fun pickDateTime(context: android.content.Context, minLeadMinutes: Int, maxDays: Int, onPicked: (Long) -> Unit) {
     val now = java.util.Calendar.getInstance()
     android.app.DatePickerDialog(context, { _, y, m, d ->
         android.app.TimePickerDialog(context, { _, h, min ->
@@ -217,7 +280,7 @@ private fun pickDateTime(context: android.content.Context, onPicked: (Long) -> U
         }, now.get(java.util.Calendar.HOUR_OF_DAY) + 1, 0, false).show()
     }, now.get(java.util.Calendar.YEAR), now.get(java.util.Calendar.MONTH), now.get(java.util.Calendar.DAY_OF_MONTH)).apply {
         datePicker.minDate = System.currentTimeMillis()
-        datePicker.maxDate = System.currentTimeMillis() + 7L * 24 * 3600 * 1000
+        datePicker.maxDate = System.currentTimeMillis() + maxDays * 24L * 3600 * 1000
     }.show()
 }
 
@@ -279,7 +342,7 @@ private fun HelperDetail(id: String) {
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row { Text(booking.bookingNumber, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Text(booking.statusLabel, fontWeight = FontWeight.Bold) }
-                Text("${booking.taskType} · ${booking.durationMinutes} min · ₹${"%.0f".format(booking.priceTotal)}")
+                Text("${booking.taskType} · ${booking.durationMinutes} min · ₹${"%.0f".format(booking.priceTotal)} · pay by ${if (booking.paymentMethod == "upi") "UPI" else "cash"}")
                 Text(booking.taskDescription, fontSize = 14.sp)
                 Text(booking.addressLine, fontSize = 12.sp, color = TextSecondary)
                 if (booking.photoPaths.isNotEmpty()) Text("${booking.photoPaths.size} photo(s) shared with your helper", fontSize = 12.sp, color = TextSecondary)
@@ -305,7 +368,7 @@ private fun HelperDetail(id: String) {
             booking.endOtp?.let { CodeCard("End code", it, "Tell this code to your helper when the work is finished.") }
         }
         if (booking.status == "completed") {
-            Text("Work completed. Please pay ₹${"%.0f".format(booking.priceTotal)} to your helper (cash or UPI).", fontWeight = FontWeight.SemiBold)
+            Text("Work completed. Please pay ₹${"%.0f".format(booking.priceTotal)} to your helper (${if (booking.paymentMethod == "upi") "UPI" else "cash"}).", fontWeight = FontWeight.SemiBold)
             if (booking.rating != null) Text("You rated ${booking.rating}/5" + (booking.review?.let { " · $it" } ?: ""), color = TextSecondary)
             else {
                 Row { (1..5).forEach { n -> IconButton(onClick = { stars = n }) { Icon(Icons.Filled.Star, "$n star", tint = if (n <= stars) Color(0xFFFFB300) else Color(0xFFCFCFCF)) } } }
