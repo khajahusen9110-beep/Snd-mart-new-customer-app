@@ -19,15 +19,15 @@ import com.example.ui.theme.NaturalPrimary
 import com.example.ui.theme.SurfaceVariantLight
 import com.example.ui.theme.TextSecondary
 
-// The Grocery / Hotel Food / Tiffin Pickup tab pill. Lives in its own file because HomeScreen is at the
+// The Grocery / Hotel Food / Quick Helper tab pill. Lives in its own file because HomeScreen is at the
 // Kotlin compiler's memory limit (the build ran out of memory when it grew).
 @Composable
 fun HomeModeToggle(
     browsingMode: BrowsingMode,
     serviceMode: String,
-    tiffinOn: Boolean,
+    helperOn: Boolean,
     onSelect: (BrowsingMode) -> Unit,
-    onTiffin: () -> Unit,
+    onHelper: () -> Unit,
     storesOn: Boolean = false,
     storesReplace: Boolean = false,
     onStores: () -> Unit = {}
@@ -68,7 +68,7 @@ fun HomeModeToggle(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = if (tiffinOn || storesOn) "Groceries" else "Fresh Groceries & Fruits",
+                            text = if (helperOn || storesOn) "Groceries" else "Fresh Groceries & Fruits",
                             fontWeight = FontWeight.Medium,
                             fontSize = 13.sp,
                             maxLines = 1,
@@ -101,7 +101,7 @@ fun HomeModeToggle(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = if (tiffinOn || storesOn) "Hotel Food" else "Hotel Food & Dining",
+                            text = if (helperOn || storesOn) "Hotel Food" else "Hotel Food & Dining",
                             fontWeight = FontWeight.Medium,
                             fontSize = 13.sp,
                             maxLines = 1,
@@ -115,7 +115,7 @@ fun HomeModeToggle(
                 }
             }
             if (storesOn && !storesReplace) StoresToggleTab(onClick = onStores)
-            if (tiffinOn) TiffinToggleTab(onClick = { onTiffin() })
+            if (helperOn) HelperToggleTab(onClick = { onHelper() })
         }
     }
 }

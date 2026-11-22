@@ -88,7 +88,7 @@ fun HomeScreen(
     onNavigateToNotifications: (() -> Unit)? = null,
     onProceedToCheckout: (isHotel: Boolean) -> Unit = {},
     onNavigateToWallet: (() -> Unit)? = null,
-    onNavigateToTiffin: (() -> Unit)? = null,
+    onNavigateToHelper: (() -> Unit)? = null,
     onNavigateToStores: (() -> Unit)? = null
 ) {
     // One null-safe read of the city id, reused everywhere below (dozens of repeated safe calls made the
@@ -97,7 +97,7 @@ fun HomeScreen(
     val coroutineScope = rememberCoroutineScope()
     val cityTheme = rememberCityTheme(repository, homeCityId)
     val homeSections = rememberHomeSections(repository, homeCityId)
-    val tiffinOn = rememberTiffinEnabled(homeCityId) && onNavigateToTiffin != null
+    val helperOn = rememberHelperEnabled(homeCityId) && onNavigateToHelper != null
     // Stores (local shops): only where the City Admin switched it on; otherwise nothing here changes.
     val storesCfg = rememberStoresConfig(homeCityId)
     val storesOn = storesCfg.enabled && onNavigateToStores != null
@@ -1019,9 +1019,9 @@ fun HomeScreen(
             HomeModeToggle(
                 browsingMode = browsingMode,
                 serviceMode = serviceMode,
-                tiffinOn = tiffinOn,
+                helperOn = helperOn,
                 onSelect = { browsingMode = it },
-                onTiffin = { onNavigateToTiffin?.invoke() },
+                onHelper = { onNavigateToHelper?.invoke() },
                 storesOn = storesOn,
                 storesReplace = storesOn && storesCfg.replaceGrocery,
                 onStores = { onNavigateToStores?.invoke() }

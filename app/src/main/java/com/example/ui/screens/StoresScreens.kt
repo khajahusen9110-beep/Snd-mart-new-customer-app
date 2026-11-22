@@ -42,9 +42,9 @@ import kotlinx.coroutines.delay
 
 private val SORTS = listOf("cheapest" to "Cheapest", "nearest" to "Nearest", "relevance" to "Best match")
 
-/** Third/fourth tab pill of the Stores screen: Stores (current) · Hotel Food · Tiffin. */
+/** Third/fourth tab pill of the Stores screen: Stores (current) · Hotel Food · Quick Helper. */
 @Composable
-private fun StoresModeTabs(tiffinOn: Boolean, onFood: () -> Unit, onTiffin: () -> Unit) {
+private fun StoresModeTabs(helperOn: Boolean, onFood: () -> Unit, onHelper: () -> Unit) {
     Surface(shape = RoundedCornerShape(14.dp), color = SurfaceVariantLight, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Surface(shape = RoundedCornerShape(11.dp), color = androidx.compose.ui.graphics.Color.White, shadowElevation = 3.dp, modifier = Modifier.weight(1f)) {
@@ -53,8 +53,8 @@ private fun StoresModeTabs(tiffinOn: Boolean, onFood: () -> Unit, onTiffin: () -
             Box(Modifier.weight(1f).clip(RoundedCornerShape(11.dp)).clickable(onClick = onFood).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                 Text("Hotel Food", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = TextSecondary)
             }
-            if (tiffinOn) Box(Modifier.weight(1f).clip(RoundedCornerShape(11.dp)).clickable(onClick = onTiffin).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-                Text("Tiffin Pickup", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = TextSecondary)
+            if (helperOn) Box(Modifier.weight(1f).clip(RoundedCornerShape(11.dp)).clickable(onClick = onHelper).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                Text("Quick Helper", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = TextSecondary)
             }
         }
     }
@@ -66,12 +66,12 @@ fun StoresScreen(
     repository: SndmartRepository,
     cityId: String?,
     cityName: String?,
-    tiffinOn: Boolean,
+    helperOn: Boolean,
     onOpenCategory: (String) -> Unit,
     onOpenStore: (String) -> Unit,
     onOpenGrocery: () -> Unit,
     onOpenFood: () -> Unit,
-    onOpenTiffin: () -> Unit,
+    onOpenHelper: () -> Unit,
     onOpenAddresses: () -> Unit,
     onNotAvailable: () -> Unit
 ) {
@@ -113,7 +113,7 @@ fun StoresScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
         ) {
-            item { StoresModeTabs(tiffinOn, onOpenFood, onOpenTiffin) }
+            item { StoresModeTabs(helperOn, onOpenFood, onOpenHelper) }
             item {
                 OutlinedTextField(
                     value = text, onValueChange = { text = it }, singleLine = true, shape = RoundedCornerShape(24.dp),

@@ -19,23 +19,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.repository.TiffinRepository
+import com.example.data.repository.HelperRepository
 import com.example.ui.theme.TextSecondary
 
 // Kept out of HomeScreen on purpose: that function is at the compiler's size limit.
 
-/** True when Tiffin Pickup is switched on for this city; the third home tab only shows then. */
+/** True when Quick Helper is switched on for this city; the third home tab only shows then. */
 @Composable
-fun rememberTiffinEnabled(cityId: String?): Boolean {
+fun rememberHelperEnabled(cityId: String?): Boolean {
     val enabled by produceState(initialValue = false, cityId) {
-        value = cityId != null && TiffinRepository.getConfig(cityId)?.enabled == true
+        value = cityId != null && HelperRepository.getConfig(cityId)?.enabled == true
     }
     return enabled
 }
 
-/** Third tab of the home mode toggle; opens the Tiffin Pickup screen. */
+/** Third tab of the home mode toggle; opens the Quick Helper screen. */
 @Composable
-fun RowScope.TiffinToggleTab(onClick: () -> Unit) {
+fun RowScope.HelperToggleTab(onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(11.dp),
         color = Color.Transparent,
@@ -43,11 +43,11 @@ fun RowScope.TiffinToggleTab(onClick: () -> Unit) {
             .weight(1f)
             .clip(RoundedCornerShape(11.dp))
             .clickable(onClick = onClick)
-            .testTag("toggle_tiffin")
+            .testTag("toggle_helper")
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp)) {
             Text(
-                text = "Tiffin Pickup",
+                text = "Quick Helper",
                 fontWeight = FontWeight.Medium,
                 fontSize = 13.sp,
                 maxLines = 1,

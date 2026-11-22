@@ -82,7 +82,7 @@ sealed class Screen(val route: String, val title: String) {
         fun createRoute(orderId: String) = "order_detail/$orderId"
     }
     object Wallet : Screen("wallet", "Wallet")
-    object Tiffin : Screen("tiffin", "Tiffin Pickup")
+    object Helper : Screen("helper", "Quick Helper")
     object Stores : Screen("stores", "Stores")
     object StoreCategory : Screen("store_category/{categoryId}", "Shops") {
         fun createRoute(categoryId: String) = "store_category/$categoryId"
@@ -780,7 +780,7 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                         navController.navigate(Screen.Checkout.createRoute(isHotel, null))
                                     },
                                     onNavigateToWallet = { navController.navigate(Screen.Wallet.route) },
-                                    onNavigateToTiffin = { navController.navigate(Screen.Tiffin.route) },
+                                    onNavigateToHelper = { navController.navigate(Screen.Helper.route) },
                                     onNavigateToStores = {
                                         navController.navigate(Screen.Stores.route) { popUpTo(Screen.Home.route) { inclusive = true } }
                                     }
@@ -927,12 +927,12 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                             }
 
                             composable(Screen.Stores.route) {
-                                val storesTiffinOn = rememberTiffinEnabled(selectedCity?.id)
+                                val storesHelperOn = rememberHelperEnabled(selectedCity?.id)
                                 StoresScreen(
                                     repository = repository,
                                     cityId = selectedCity?.id,
                                     cityName = selectedCity?.name,
-                                    tiffinOn = storesTiffinOn,
+                                    helperOn = storesHelperOn,
                                     onOpenCategory = { navController.navigate(Screen.StoreCategory.createRoute(it)) },
                                     onOpenStore = { navController.navigate(Screen.StoreDetail.createRoute(it)) },
                                     onOpenGrocery = {
@@ -943,7 +943,7 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                         HomeRequest.mode = BrowsingMode.HOTELS
                                         navController.navigate(Screen.Home.route) { popUpTo(Screen.Stores.route) { inclusive = true } }
                                     },
-                                    onOpenTiffin = { navController.navigate(Screen.Tiffin.route) },
+                                    onOpenHelper = { navController.navigate(Screen.Helper.route) },
                                     onOpenAddresses = { navController.navigate(Screen.AddressBook.route) },
                                     onNotAvailable = {
                                         navController.navigate(Screen.Home.route) { popUpTo(Screen.Stores.route) { inclusive = true } }
@@ -977,15 +977,12 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                 )
                             }
 
-                            composable(Screen.Tiffin.route) {
-                                val tiffinPhone by sessionManager.userPhone.collectAsState()
-                                val tiffinEmail by sessionManager.userEmail.collectAsState()
-                                TiffinScreen(
+                            composable(Screen.Helper.route) {
+                                val helperPhone by sessionManager.userPhone.collectAsState()
+                                HelperScreen(
                                     repository = repository,
                                     cityId = selectedCity?.id,
-                                    userPhone = tiffinPhone,
-                                    userEmail = tiffinEmail,
-                                    onOpenHotel = { vendorId -> navController.navigate(Screen.HotelMenu.createRoute(vendorId, "Hotel")) },
+                                    userPhone = helperPhone,
                                     onBack = { navController.popBackStack() }
                                 )
                             }
@@ -1196,11 +1193,11 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                         // "Order placed" celebration (full-screen dialog; shown via OrderCelebration.show())
                         com.example.ui.components.OrderSuccessHost()
 
-                        // First-visit tour (Tiffin Pickup first); Profile > App tour shows it again
+                        // First-visit tour; Profile > App tour shows it again
                         com.example.ui.components.AppTourHost(
                             cityId = selectedCity?.id,
                             homeVisible = currentDestination == Screen.Home.route,
-                            onOpenTiffin = { navController.navigate(Screen.Tiffin.route) }
+                            onOpenHelper = { navController.navigate(Screen.Helper.route) }
                         )
 
                         // Supabase Settings Dialog (debug only)

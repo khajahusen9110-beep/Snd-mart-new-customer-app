@@ -35,16 +35,16 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.R
-import com.example.data.model.TiffinConfig
-import com.example.data.model.TiffinText
-import com.example.data.repository.TiffinRepository
+import com.example.data.model.HelperConfig
+import com.example.data.model.TourText
+import com.example.data.repository.HelperRepository
 import com.example.ui.theme.NaturalPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.util.rupees
 import kotlinx.coroutines.launch
 
 /**
- * First-visit tour: a few swipeable cards on what Sndmart offers, with Tiffin Pickup (when switched on for the
+ * First-visit tour: a few swipeable cards on what Sndmart offers, with Quick Helper (when switched on for the
  * city) first and in most detail. Shown once per device; Profile > "App tour" opens it again.
  */
 object AppTourState {
@@ -66,14 +66,14 @@ private fun tourLang(context: Context): String {
     return if (java.util.Locale.getDefault().language == "kn") "kn" else "en"
 }
 
-private class TourSlide(val icon: ImageVector, val title: String, val body: String, val tiffin: String? = null)
+private class TourSlide(val icon: ImageVector, val title: String, val body: String, val helper: Boolean = false)
 
 /** Mounted once at the app root. [homeVisible]: the first-visit tour waits until the customer is on Home. */
 @Composable
-fun AppTourHost(cityId: String?, homeVisible: Boolean, onOpenTiffin: () -> Unit) {
+fun AppTourHost(cityId: String?, homeVisible: Boolean, onOpenHelper: () -> Unit) {
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
-    var config by remember { mutableStateOf<TiffinConfig?>(null) }
+    var config by remember { mutableStateOf<HelperConfig?>(null) }
     var lastReplay by remember { mutableIntStateOf(AppTourState.replayTick) }
 
     LaunchedEffect(cityId, homeVisible, AppTourState.replayTick) {
@@ -81,8 +81,7 @@ fun AppTourHost(cityId: String?, homeVisible: Boolean, onOpenTiffin: () -> Unit)
         val replay = AppTourState.replayTick != lastReplay
         if (!replay && (!homeVisible || AppTourState.seen(context))) return@LaunchedEffect
         lastReplay = AppTourState.replayTick
-        TiffinText.ensureLoaded(context)
-        val cfg = try { TiffinRepository.getConfig(cityId) } catch (e: Exception) { null }
+        val cfg = try { HelperRepository.getConfig(cityId) } catch (e: Exception) { null }
         config = cfg?.takeIf { it.enabled }
         open = true
     }
@@ -93,29 +92,18 @@ fun AppTourHost(cityId: String?, homeVisible: Boolean, onOpenTiffin: () -> Unit)
         onDismissRequest = close,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
     ) {
-        TourContent(config = config, onClose = close, onOpenTiffin = { close(); onOpenTiffin() })
+        TourContent(config = config, onClose = close, onOpenHelper = { close(); onOpenHelper() })
     }
 }
 
 @Composable
-private fun TourContent(config: TiffinConfig?, onClose: () -> Unit, onOpenTiffin: () -> Unit) {
+private fun TourContent(config: HelperConfig?, onClose: () -> Unit, onOpenHelper: () -> Unit) {
     val context = LocalContext.current
     var lang by remember { mutableStateOf(tourLang(context)) }
-    val t = { key: String, args: Array<out Any?> -> TiffinText.t(lang, key, *args) }
+    val t = { key: String, args: Array<out Any?> -> TourText.t(lang, key, *args) }
     val slides = buildList {
         add(TourSlide(Icons.Filled.Store, t("tourWelcomeT", emptyArray()), t("tourWelcomeB", emptyArray())))
-        if (config != null) {
-            add(TourSlide(Icons.Filled.Store, t("tourTiffinT", emptyArray()), t("tourTiffinB", emptyArray()), "intro"))
-            val trial = config.trialEnabled
-            add(
-                TourSlide(
-                    Icons.Filled.Store,
-                    if (trial) t("tourTrialT", arrayOf(config.trialDays, rupees(config.trialPrice))) else t("title", emptyArray()),
-                    if (trial) t("tourTrialB", emptyArray()) else t("heroSub", emptyArray()),
-                    "trial"
-                )
-            )
-        }
+        if (config != null) add(TourSlide(Icons.Filled.Store, t("tourHelperT", emptyArray()), t("tourHelperB", emptyArray()), helper = true))
         add(TourSlide(Icons.Filled.SupportAgent, t("tourWaT", emptyArray()), t("tourWaB", emptyArray())))
         add(TourSlide(Icons.Filled.CardGiftcard, t("tourRewardsT", emptyArray()), t("tourRewardsB", emptyArray())))
     }
@@ -150,7 +138,7 @@ private fun TourContent(config: TiffinConfig?, onClose: () -> Unit, onOpenTiffin
             }
 
             HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth()) { page ->
-                TourPage(slides[page], config, lang, onOpenTiffin, t)
+                TourPage(slides[page], onOpenHelper, t)
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -175,54 +163,19 @@ private fun TourContent(config: TiffinConfig?, onClose: () -> Unit, onOpenTiffin
 @Composable
 private fun TourPage(
     slide: TourSlide,
-    config: TiffinConfig?,
-    lang: String,
-    onOpenTiffin: () -> Unit,
+    onOpenHelper: () -> Unit,
     t: (String, Array<out Any?>) -> String
 ) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        when (slide.tiffin) {
-            "intro" -> {
-                val fallback = painterResource(R.drawable.tiffin_hero)
-                AsyncImage(
-                    model = config?.heroImageUrl ?: R.drawable.tiffin_hero, contentDescription = null,
-                    placeholder = fallback, error = fallback, contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1210f / 748f).clip(RoundedCornerShape(18.dp))
-                )
-            }
-            "trial" -> TourSteps(t)
-            else -> Box(
-                Modifier.size(104.dp).clip(CircleShape).background(Color(0xFFECE9FF)),
-                contentAlignment = Alignment.Center
-            ) { Icon(slide.icon, null, tint = NaturalPrimary, modifier = Modifier.size(50.dp)) }
-        }
+        Box(
+            Modifier.size(104.dp).clip(CircleShape).background(Color(0xFFECE9FF)),
+            contentAlignment = Alignment.Center
+        ) { Icon(slide.icon, null, tint = NaturalPrimary, modifier = Modifier.size(50.dp)) }
         Text(slide.title, fontSize = 22.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
         Text(slide.body, fontSize = 14.sp, color = TextSecondary, textAlign = TextAlign.Center)
-        if (slide.tiffin == "trial") {
-            OutlinedButton(onClick = onOpenTiffin, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
-                Text(t("tourTryTiffin", emptyArray()), fontWeight = FontWeight.Bold)
-            }
-        }
-    }
-}
-
-@Composable
-private fun TourSteps(t: (String, Array<out Any?>) -> String) {
-    val keys = listOf("hw1", "hw2", "hw3", "hw4")
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        keys.chunked(2).forEachIndexed { row, pair ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                pair.forEachIndexed { col, k ->
-                    Row(
-                        Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(Color(0xFFF5F3FF)).padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Box(Modifier.size(24.dp).clip(CircleShape).background(NaturalPrimary), contentAlignment = Alignment.Center) {
-                            Text("${row * 2 + col + 1}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Text(t(k, emptyArray()), fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
+        if (slide.helper) {
+            OutlinedButton(onClick = onOpenHelper, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
+                Text(t("tourTryHelper", emptyArray()), fontWeight = FontWeight.Bold)
             }
         }
     }

@@ -778,7 +778,7 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<ResponseBody>
 
-    // --- TIFFIN PICKUP ---
+    // --- STORES ---
 
     // Stores (local shops next to Food); additive.
     @POST("rest/v1/rpc/get_city_stores_config")
@@ -793,34 +793,34 @@ interface SupabaseApi {
     @POST("rest/v1/rpc/get_store_menu")
     suspend fun storeGetMenu(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
-    @POST("rest/v1/rpc/tiffin_get_config")
-    suspend fun tiffinGetConfig(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+    // Quick Helper
+    @POST("rest/v1/rpc/helper_get_config")
+    suspend fun helperGetConfig(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
-    @POST("rest/v1/rpc/tiffin_quote")
-    suspend fun tiffinQuote(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+    @POST("rest/v1/rpc/helper_create_booking")
+    suspend fun helperCreate(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
-    @POST("rest/v1/rpc/tiffin_subscribe")
-    suspend fun tiffinSubscribe(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+    @POST("rest/v1/rpc/helper_my_bookings")
+    suspend fun helperMyBookings(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
-    @POST("rest/v1/rpc/tiffin_my_subscriptions")
-    suspend fun tiffinMySubscriptions(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+    @POST("rest/v1/rpc/helper_get_booking")
+    suspend fun helperGetBooking(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
-    @POST("rest/v1/rpc/tiffin_skip_day")
-    suspend fun tiffinSkipDay(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+    @POST("rest/v1/rpc/helper_cancel_booking")
+    suspend fun helperCancel(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
-    @POST("rest/v1/rpc/tiffin_set_paused")
-    suspend fun tiffinSetPaused(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+    @POST("rest/v1/rpc/helper_rate_booking")
+    suspend fun helperRate(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
-    @POST("rest/v1/rpc/tiffin_cancel_request")
-    suspend fun tiffinCancelRequest(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+    // The customer's reference photos for a booking (private bucket, own folder only)
+    @POST("storage/v1/object/helper-task-photos/{path}")
+    suspend fun uploadHelperPhoto(
+        @Path("path", encoded = true) path: String,
+        @Body body: okhttp3.RequestBody
+    ): Response<ResponseBody>
 
-    // Monthly auto-pay: create | verify | stop (server holds the Razorpay secret).
-    @POST("functions/v1/tiffin-autopay")
-    suspend fun tiffinAutopay(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
-
-    // Short-lived link to a handover photo in the private bucket.
-    @POST("storage/v1/object/sign/delivery-proof-photos/{path}")
-    suspend fun tiffinSignPhoto(
+    @POST("storage/v1/object/sign/helper-task-photos/{path}")
+    suspend fun helperSignPhoto(
         @Path("path", encoded = true) path: String,
         @Body body: Map<String, @JvmSuppressWildcards Any?>
     ): Response<ResponseBody>
