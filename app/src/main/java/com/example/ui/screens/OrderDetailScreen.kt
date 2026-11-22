@@ -1036,7 +1036,7 @@ fun OrderDetailScreen(
             title = { Text("Rate Your Experience", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Hotel / Vendor Rating", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text("Hotel / Shop Rating", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         (1..5).forEach { star ->
                             Icon(
