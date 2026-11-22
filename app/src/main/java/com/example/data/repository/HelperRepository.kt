@@ -72,4 +72,23 @@ object HelperRepository {
             Result.failure(e)
         }
     }
+
+    class PayOrder(val keyId: String, val amountPaise: Long, val currency: String, val razorpayOrderId: String)
+
+    /** The Razorpay order for a booking that waits for its advance payment. */
+    suspend fun createPayment(bookingId: String): Result<PayOrder> =
+        call("Could not start payment", { api.helperPayment(mapOf("action" to "create", "booking_id" to bookingId)) }) {
+            val o = JSONObject(it)
+            PayOrder(o.getString("key_id"), o.getLong("amount"), o.optString("currency", "INR"), o.getString("razorpay_order_id"))
+        }
+
+    suspend fun verifyPayment(bookingId: String, orderId: String, paymentId: String, signature: String): Result<Unit> =
+        call("Could not confirm the payment", {
+            api.helperPayment(mapOf("action" to "verify", "booking_id" to bookingId, "razorpay_order_id" to orderId, "razorpay_payment_id" to paymentId, "razorpay_signature" to signature))
+        }) { }
+
+    /** Asks the server to check Razorpay (a payment the app never reported) and to send a refund that is due. Never fails. */
+    suspend fun syncPayment(bookingId: String) {
+        call("sync", { api.helperPayment(mapOf("action" to "sync", "booking_id" to bookingId)) }) { }
+    }
 }

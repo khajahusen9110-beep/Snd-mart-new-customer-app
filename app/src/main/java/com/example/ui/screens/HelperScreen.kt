@@ -37,6 +37,9 @@ import com.example.ui.theme.NaturalPrimary
 import com.example.ui.theme.OutlineSoft
 import com.example.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import com.example.util.RazorpayPaymentManager
+import com.example.util.RazorpayPaymentResult
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -50,10 +53,62 @@ fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: Stri
     var cfg by remember { mutableStateOf<HelperConfig?>(null) }
     var tab by remember { mutableIntStateOf(0) }
     var openId by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val sm = repository.sessionManager
+    val payScope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
+    // the booking whose advance payment is open in Razorpay right now (id, number, Razorpay order id)
+    var paying by remember { mutableStateOf<Triple<String, String, String>?>(null) }
+    var payBusy by remember { mutableStateOf(false) }
+    var refreshTick by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        RazorpayPaymentManager.paymentResult.collectLatest { result ->
+            val cur = paying ?: return@collectLatest
+            paying = null
+            when (result) {
+                is RazorpayPaymentResult.Error -> {
+                    // the payment may still have gone through in the UPI app: the server checks with Razorpay
+                    HelperRepository.syncPayment(cur.first)
+                    snackbar.showSnackbar("Payment not completed. You can pay from My bookings.")
+                }
+                is RazorpayPaymentResult.Success -> {
+                    payBusy = true
+                    val pid = result.paymentData?.paymentId ?: result.razorpayPaymentId ?: ""
+                    val oid = result.paymentData?.orderId?.takeIf { it.isNotBlank() } ?: cur.third
+                    val sig = result.paymentData?.signature ?: result.paymentData?.data?.optString("razorpay_signature").orEmpty()
+                    val ok = pid.isNotBlank() && HelperRepository.verifyPayment(cur.first, oid, pid, sig).isSuccess
+                    if (!ok) HelperRepository.syncPayment(cur.first)
+                    payBusy = false
+                    snackbar.showSnackbar(if (ok) "Payment received. We are finding a helper." else "We are confirming your payment. Please check My bookings in a minute.")
+                }
+            }
+            refreshTick++
+        }
+    }
+
+    // Opens the in-app payment for a booking waiting for its advance
+    val startPay: (String, String) -> Unit = { bookingId, number ->
+        payBusy = true
+        payScope.launch {
+            HelperRepository.createPayment(bookingId).onSuccess { o ->
+                paying = Triple(bookingId, number, o.razorpayOrderId)
+                val activity = context as? android.app.Activity
+                val res = if (activity == null) Result.failure(Exception("Cannot open the payment screen"))
+                else RazorpayPaymentManager.startUpiCheckout(
+                    activity = activity, keyId = o.keyId, amountInPaise = o.amountPaise, currency = o.currency,
+                    razorpayOrderId = o.razorpayOrderId, orderNumber = number, userPhone = userPhone, userEmail = sm.userEmail.value
+                )
+                if (res.isFailure) { paying = null; snackbar.showSnackbar(res.exceptionOrNull()?.message ?: "Could not open the payment screen") }
+            }.onFailure { snackbar.showSnackbar(it.message ?: "Could not start payment. You can pay from My bookings.") }
+            payBusy = false
+        }
+    }
     LaunchedEffect(cityId) { if (cityId != null) cfg = HelperRepository.getConfig(cityId) }
     LaunchedEffect(cfg) { if (cfg != null && cfg?.enabled != true) onBack() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Column { Text("Quick Helper", fontWeight = FontWeight.Bold); Text("Pay per 30 minutes", fontSize = 12.sp, color = TextSecondary) } },
@@ -65,13 +120,16 @@ fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: Stri
             val c = cfg
             when {
                 c == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-                openId != null -> HelperDetail(openId!!)
+                openId != null -> HelperDetail(openId!!, refreshTick, payBusy, startPay)
                 else -> {
                     TabRow(selectedTabIndex = tab) {
                         Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Book a helper") })
                         Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("My bookings") })
                     }
-                    if (tab == 0) HelperBookForm(repository, c, cityId.orEmpty(), userPhone) { openId = it }
+                    if (tab == 0) HelperBookForm(repository, c, cityId.orEmpty(), userPhone) { b ->
+                        openId = b.id
+                        if (b.status == "pending_payment") startPay(b.id, b.bookingNumber)
+                    }
                     else HelperList { openId = it }
                 }
             }
@@ -81,7 +139,7 @@ fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: Stri
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cityId: String, userPhone: String?, onBooked: (String) -> Unit) {
+private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cityId: String, userPhone: String?, onBooked: (HelperBooking) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sm = repository.sessionManager
@@ -217,7 +275,13 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cit
                 FilterChip(selected = pay == "cash", onClick = { pay = "cash" }, label = { Text("Cash") })
             }
         } else Text(if (cfg.paymentMode == "upi") "UPI only" else "Cash only")
-        Text("Pay your helper directly after the work is done.", fontSize = 12.sp, color = TextSecondary)
+        val online = cfg.paymentMode == "upi" || (cfg.paymentMode == "both" && pay == "upi")
+        Text(
+            if (online) "You pay now, inside the app. If no helper accepts, or you cancel before the work starts, you get your money back" +
+                (if (cfg.refundPercentAfterAccept < 100) " (after a helper accepts, ${cfg.refundPercentAfterAccept}% is refunded)." else ".")
+            else "Pay your helper in cash after the work is done.",
+            fontSize = 12.sp, color = TextSecondary
+        )
 
         if (cfg.termsText.isNotBlank()) Text(cfg.termsText, fontSize = 12.sp, color = TextSecondary)
         if (cfg.bannedNote.isNotBlank()) Text(cfg.bannedNote, fontSize = 12.sp, color = TextSecondary)
@@ -242,14 +306,14 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cit
                             val isoTime = if (later) whenMillis?.let { iso(it) } else null
                             val method = if (cfg.paymentMode == "both") pay else cfg.paymentMode
                             HelperRepository.create(cityId, aid, c.id, desc.trim(), photos, minutes, isoTime, method, ack)
-                                .onSuccess { onBooked(it.id) }.onFailure { error = it.message ?: "Could not book" }
+                                .onSuccess { onBooked(it) }.onFailure { error = it.message ?: "Could not book" }
                             busy = false
                         }
                     }
                 }
             },
             enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(16.dp)
-        ) { Text(if (busy) "Please wait…" else "Book helper · ₹${"%.0f".format(price)}", fontWeight = FontWeight.ExtraBold) }
+        ) { Text(if (busy) "Please wait…" else (if (cfg.paymentMode == "upi" || (cfg.paymentMode == "both" && pay == "upi")) "Pay & book" else "Book helper") + " · ₹${"%.0f".format(price)}", fontWeight = FontWeight.ExtraBold) }
         if (cfg.supportPhone.isNotBlank()) Text("Need help? ${cfg.supportPhone}", fontSize = 12.sp, color = TextSecondary)
     }
 }
@@ -308,7 +372,7 @@ private fun HelperList(onOpen: (String) -> Unit) {
 }
 
 @Composable
-private fun HelperDetail(id: String) {
+private fun HelperDetail(id: String, refreshTick: Int, payBusy: Boolean, onPay: (String, String) -> Unit) {
     val scope = rememberCoroutineScope()
     var b by remember { mutableStateOf<HelperBooking?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -320,9 +384,15 @@ private fun HelperDetail(id: String) {
     var confirmCancel by remember { mutableStateOf(false) }
 
     // live status while the booking is open
-    LaunchedEffect(id, tick) {
+    LaunchedEffect(id, tick, refreshTick) {
         while (true) {
             HelperRepository.get(id).onSuccess { b = it; error = null }.onFailure { error = it.message }
+            // a payment the app never reported, or a refund still to be sent: the server checks, then we read again
+            val cur = b
+            if (cur != null && ((cur.status == "pending_payment" && cur.paymentStatus == "unpaid") || cur.paymentStatus == "refund_due")) {
+                HelperRepository.syncPayment(id)
+                HelperRepository.get(id).onSuccess { b = it }
+            }
             if (b?.isActive == false) break
             delay(8000)
         }
@@ -342,12 +412,23 @@ private fun HelperDetail(id: String) {
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row { Text(booking.bookingNumber, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Text(booking.statusLabel, fontWeight = FontWeight.Bold) }
-                Text("${booking.taskType} · ${booking.durationMinutes} min · ₹${"%.0f".format(booking.priceTotal)} · pay by ${if (booking.paymentMethod == "upi") "UPI" else "cash"}")
+                Text("${booking.taskType} · ${booking.durationMinutes} min · ₹${"%.0f".format(booking.priceTotal)} · ${if (booking.paymentStatus == "paid") "paid online" else if (booking.paymentMethod == "upi") "UPI" else "pay cash after the work"}")
                 Text(booking.taskDescription, fontSize = 14.sp)
                 Text(booking.addressLine, fontSize = 12.sp, color = TextSecondary)
                 if (booking.photoPaths.isNotEmpty()) Text("${booking.photoPaths.size} photo(s) shared with your helper", fontSize = 12.sp, color = TextSecondary)
             }
         }
+        if (booking.status == "pending_payment") Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Pay ₹${"%.0f".format(booking.priceTotal)} to confirm your booking", fontWeight = FontWeight.Bold)
+                Text("Your request goes to helpers only after the payment. Pay within the time, or the booking lapses.", fontSize = 12.sp, color = TextSecondary)
+                Button(onClick = { onPay(booking.id, booking.bookingNumber) }, enabled = !payBusy, modifier = Modifier.fillMaxWidth()) { Text(if (payBusy) "Please wait…" else "Pay ₹${"%.0f".format(booking.priceTotal)}") }
+            }
+        }
+        if (booking.paymentStatus == "refund_due" || booking.paymentStatus == "refunded") Text(
+            if (booking.paymentStatus == "refunded") "Refund of ₹${"%.0f".format(booking.refundAmount)} sent to your account." else "Your refund of ₹${"%.0f".format(booking.refundAmount)} is on its way.",
+            fontWeight = FontWeight.SemiBold
+        )
         if (booking.status == "requested") Text("We are finding a helper near you. This can take a few minutes.", color = TextSecondary)
         booking.helper?.let { h ->
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
@@ -368,7 +449,7 @@ private fun HelperDetail(id: String) {
             booking.endOtp?.let { CodeCard("End code", it, "Tell this code to your helper when the work is finished.") }
         }
         if (booking.status == "completed") {
-            Text("Work completed. Please pay ₹${"%.0f".format(booking.priceTotal)} to your helper (${if (booking.paymentMethod == "upi") "UPI" else "cash"}).", fontWeight = FontWeight.SemiBold)
+            Text(if (booking.paymentStatus == "paid") "Work completed. Paid online, nothing more to pay." else "Work completed. Please pay ₹${"%.0f".format(booking.priceTotal)} to your helper (cash).", fontWeight = FontWeight.SemiBold)
             if (booking.rating != null) Text("You rated ${booking.rating}/5" + (booking.review?.let { " · $it" } ?: ""), color = TextSecondary)
             else {
                 Row { (1..5).forEach { n -> IconButton(onClick = { stars = n }) { Icon(Icons.Filled.Star, "$n star", tint = if (n <= stars) Color(0xFFFFB300) else Color(0xFFCFCFCF)) } } }
@@ -380,7 +461,7 @@ private fun HelperDetail(id: String) {
         }
         if (booking.status == "cancelled" || booking.status == "expired") Text(booking.cancelReason ?: booking.statusLabel, color = TextSecondary)
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
-        if (booking.status in setOf("requested", "accepted", "on_the_way")) OutlinedButton(onClick = { confirmCancel = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Cancel booking") }
+        if (booking.status in setOf("pending_payment", "requested", "accepted", "on_the_way")) OutlinedButton(onClick = { confirmCancel = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Cancel booking") }
     }
 }
 

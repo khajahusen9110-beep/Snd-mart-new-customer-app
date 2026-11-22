@@ -34,6 +34,7 @@ data class HelperConfig(
     val minLeadMinutes: Int = 30,
     val maxDaysAhead: Int = 7,
     val requireRulesAck: Boolean = true,
+    val refundPercentAfterAccept: Int = 100,
     val categories: List<HelperCategory> = emptyList()
 ) {
     companion object {
@@ -60,6 +61,7 @@ data class HelperConfig(
                 minLeadMinutes = o.optInt("min_lead_minutes", 30),
                 maxDaysAhead = o.optInt("max_days_ahead", 7),
                 requireRulesAck = o.optBoolean("require_rules_ack", true),
+                refundPercentAfterAccept = o.optInt("refund_percent_after_accept", 100),
                 categories = if (cats == null) emptyList() else (0 until cats.length()).map {
                     val c = cats.getJSONObject(it)
                     val d = c.optJSONArray("durations")
@@ -90,6 +92,8 @@ data class HelperBooking(
     val priceTotal: Double,
     val paymentMethod: String,
     val paymentCollected: Boolean,
+    val paymentStatus: String,
+    val refundAmount: Double,
     val startOtp: String?,
     val endOtp: String?,
     val endsAt: String?,
@@ -99,8 +103,9 @@ data class HelperBooking(
     val createdAt: String,
     val helper: HelperPerson?
 ) {
-    val isActive get() = status in setOf("requested", "accepted", "on_the_way", "started")
+    val isActive get() = status in setOf("pending_payment", "requested", "accepted", "on_the_way", "started")
     val statusLabel get() = when (status) {
+        "pending_payment" -> "Payment pending"
         "requested" -> "Finding a helper"
         "accepted" -> "Helper accepted"
         "on_the_way" -> "Helper is on the way"
@@ -129,6 +134,8 @@ data class HelperBooking(
                 priceTotal = o.optDouble("price_total", 0.0),
                 paymentMethod = o.optString("payment_method", "cash"),
                 paymentCollected = o.optBoolean("payment_collected", false),
+                paymentStatus = o.optString("payment_status", "unpaid"),
+                refundAmount = o.optDouble("refund_amount", 0.0),
                 startOtp = str(o, "start_otp"),
                 endOtp = str(o, "end_otp"),
                 endsAt = str(o, "ends_at"),
