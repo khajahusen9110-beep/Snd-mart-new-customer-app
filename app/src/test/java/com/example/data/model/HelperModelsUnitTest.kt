@@ -3,7 +3,12 @@ package com.example.data.model
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
 class HelperModelsUnitTest {
     private val json = """{"enabled":true,"max_photos":2,"payment_mode":"upi","min_lead_minutes":45,"max_days_ahead":5,"require_rules_ack":false,
       "support_phone":"+919000000000","terms_text":"T","banned_note":"B",
