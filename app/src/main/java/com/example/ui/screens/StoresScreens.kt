@@ -39,6 +39,10 @@ import com.example.data.repository.SndmartRepository
 import com.example.data.repository.StoresRepository
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/** Set by "Add" in the search results for a product that needs a size / customising: the shop screen opens its sheet. */
+internal object PendingStoreAdd { var productId: String? = null }
 
 // Stores screens: home (search, categories, nearby shops), the shops of one category, and one shop.
 // Everything is decided by the server; these only show it. Same flow as the website.
@@ -107,6 +111,37 @@ fun StoresScreen(
         StoresRepository.search(id, loc, query, sort).onSuccess { hits = it }.onFailure { error = it.message }
     }
 
+    val cartNow by repository.hotelCart.collectAsState()
+    val addScope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var conflict by remember { mutableStateOf<AddToCartResult.HotelConflict?>(null) }
+    var conflictShop by remember { mutableStateOf("") }
+    fun addFromSearch(h: StoreProductHit) {
+        addScope.launch {
+            StoresRepository.getMenu(h.storeId).onSuccess { m ->
+                val p = m.products.firstOrNull { it.id == h.productId }
+                when {
+                    p == null || !p.isAvailable -> android.widget.Toast.makeText(ctx, "This product is not available right now", android.widget.Toast.LENGTH_SHORT).show()
+                    !m.isOpen -> android.widget.Toast.makeText(ctx, "${m.name} is closed now", android.widget.Toast.LENGTH_SHORT).show()
+                    p.isCustomizable || p.hasVariants -> { PendingStoreAdd.productId = p.id; onOpenStore(h.storeId) }
+                    else -> {
+                        repository.sessionManager.cacheCartProductSnapshot(p.id, null, p.name, p.imageUrl, p.unit)
+                        val res = repository.addToCart(productId = p.id, vendorId = h.storeId, cityId = cityId, quantityDelta = p.minOrderQty, isHotel = true)
+                        if (res is AddToCartResult.HotelConflict) { conflictShop = h.storeName; conflict = res }
+                        else android.widget.Toast.makeText(ctx, "${p.name} added", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }.onFailure { android.widget.Toast.makeText(ctx, it.message ?: "Could not add", android.widget.Toast.LENGTH_SHORT).show() }
+        }
+    }
+    conflict?.let { c ->
+        AlertDialog(
+            onDismissRequest = { conflict = null }, title = { Text("Replace your cart?") },
+            text = { Text("Your cart already has items from another shop or hotel. Clear it and add from $conflictShop?") },
+            confirmButton = { TextButton(onClick = { repository.forceClearHotelCartAndAdd(c.pendingItem); conflict = null }) { Text("Clear & Add") } },
+            dismissButton = { TextButton(onClick = { conflict = null }) { Text("Cancel") } }
+        )
+    }
     val shops = remember(stores) { stores.orEmpty().sortedWith(compareBy<StoreListItem>({ !it.isOpen }, { it.distanceKm ?: 999.0 }, { it.name })) }
     val searching = query.length >= 2
 
@@ -174,7 +209,7 @@ fun StoresScreen(
                 if (hits == null) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
                 hits?.let { list ->
                     if (list.isEmpty()) item { StoresEmpty("Nothing found", "No open shop near you has “$query” right now.") }
-                    items(list, key = { it.storeId + ":" + it.productId }) { h -> StoreProductRow(h) { onOpenStore(h.storeId) } }
+                    items(list, key = { it.storeId + ":" + it.productId }) { h -> StoreProductRow(h, onAdd = { addFromSearch(h) }) { onOpenStore(h.storeId) } }
                 }
             } else {
                 if (catId == null && cfg?.replaceGrocery == true) item {
@@ -294,6 +329,10 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
         StoresRepository.getMenu(storeId).onSuccess { menu = it; StoresRepository.rememberStore(storeId) }.onFailure { error = it.message }
     }
     val m = menu
+    LaunchedEffect(m) {
+        val want = PendingStoreAdd.productId
+        if (m != null && want != null) { PendingStoreAdd.productId = null; m.products.firstOrNull { it.id == want && it.isAvailable }?.takeIf { m.isOpen }?.let { customising = it } }
+    }
     val mine = cart.filter { it.vendorId == storeId }
     fun qty(id: String) = mine.filter { it.productId == id }.sumOf { it.quantity }
     val priceOf = { id: String -> m?.products?.firstOrNull { it.id == id }?.price ?: 0.0 }

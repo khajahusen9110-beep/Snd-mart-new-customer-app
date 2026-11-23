@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -84,7 +85,7 @@ fun StoreCard(s: StoreListItem, onClick: () -> Unit) {
 
 /** One search hit: product, unit price (per kg / litre), shop and distance, and the price. */
 @Composable
-fun StoreProductRow(hit: StoreProductHit, onClick: () -> Unit) {
+fun StoreProductRow(hit: StoreProductHit, onAdd: (() -> Unit)? = null, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(14.dp), color = SurfaceLight, border = BorderStroke(1.dp, OutlineSoft),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).testTag("store_product_hit")
@@ -100,6 +101,7 @@ fun StoreProductRow(hit: StoreProductHit, onClick: () -> Unit) {
             Column(horizontalAlignment = Alignment.End) {
                 Text(rupee(hit.price), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = TextPrimary)
                 if (hit.mrp != null && hit.mrp > hit.price) Text(rupee(hit.mrp), fontSize = 11.sp, color = TextMuted, textDecoration = TextDecoration.LineThrough)
+                if (onAdd != null) FilledTonalButton(onClick = onAdd, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp), modifier = Modifier.padding(top = 4.dp).height(32.dp).testTag("store_search_add")) { Text("Add", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp) }
             }
         }
     }
