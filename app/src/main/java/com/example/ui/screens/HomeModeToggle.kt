@@ -54,7 +54,7 @@ fun HomeModeToggle(
             val groceryAvailable = serviceMode != "food_only"
             Surface(
                 shape = RoundedCornerShape(11.dp),
-                color = if (isGrocery) Color.White else Color.Transparent,
+                color = if (isGrocery) Color(0xFFDCFCE7) else Color.Transparent,
                 shadowElevation = if (isGrocery) 3.dp else 0.dp,
                 modifier = Modifier
                     .weight(1f)
@@ -69,11 +69,11 @@ fun HomeModeToggle(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = if (helperOn || storesOn) "Groceries" else "Fresh Groceries & Fruits",
-                            fontWeight = FontWeight.Medium,
+                            fontWeight = if (isGrocery) FontWeight.Bold else FontWeight.Medium,
                             fontSize = 13.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = if (!groceryAvailable) TextSecondary.copy(alpha = 0.5f) else if (isGrocery) NaturalPrimary else TextSecondary
+                            color = if (!groceryAvailable) TextSecondary.copy(alpha = 0.5f) else if (isGrocery) Color(0xFF15803D) else TextSecondary
                         )
                         if (!groceryAvailable) {
                             Text("Coming Soon", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = NaturalPrimary)
@@ -87,7 +87,7 @@ fun HomeModeToggle(
             val hotelsAvailable = serviceMode != "grocery_only"
             Surface(
                 shape = RoundedCornerShape(11.dp),
-                color = if (isHotel) Color.White else Color.Transparent,
+                color = if (isHotel) Color(0xFFFFEDD5) else Color.Transparent,
                 shadowElevation = if (isHotel) 3.dp else 0.dp,
                 modifier = Modifier
                     .weight(1f)
@@ -106,7 +106,7 @@ fun HomeModeToggle(
                             fontSize = 13.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = if (!hotelsAvailable) TextSecondary.copy(alpha = 0.5f) else if (isHotel) NaturalPrimary else TextSecondary
+                            color = if (!hotelsAvailable) TextSecondary.copy(alpha = 0.5f) else if (isHotel) Color(0xFFC2410C) else TextSecondary
                         )
                         if (!hotelsAvailable) {
                             Text("Coming Soon", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = NaturalPrimary)

@@ -50,8 +50,8 @@ private val SORTS = listOf("cheapest" to "Cheapest", "nearest" to "Nearest", "re
 private fun StoresModeTabs(helperOn: Boolean, onFood: () -> Unit, onHelper: () -> Unit) {
     Surface(shape = RoundedCornerShape(14.dp), color = SurfaceVariantLight, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Surface(shape = RoundedCornerShape(11.dp), color = androidx.compose.ui.graphics.Color.White, shadowElevation = 3.dp, modifier = Modifier.weight(1f)) {
-                Box(Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) { Text("Grocery", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = NaturalPrimary) }
+            Surface(shape = RoundedCornerShape(11.dp), color = androidx.compose.ui.graphics.Color(0xFFDCFCE7), shadowElevation = 2.dp, modifier = Modifier.weight(1f)) {
+                Box(Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) { Text("Grocery", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = androidx.compose.ui.graphics.Color(0xFF15803D)) }
             }
             Box(Modifier.weight(1f).clip(RoundedCornerShape(11.dp)).clickable(onClick = onFood).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                 Text("Hotel Food", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = TextSecondary)
@@ -111,7 +111,21 @@ fun StoresScreen(
     val searching = query.length >= 2
 
     Scaffold(topBar = {
-        TopAppBar(title = { Column { Text("Grocery", fontWeight = FontWeight.Bold); if (!cityName.isNullOrBlank()) Text(cityName, fontSize = 12.sp, color = TextMuted) } })
+        Surface(color = androidx.compose.ui.graphics.Color.White, shadowElevation = 2.dp) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape).background(androidx.compose.ui.graphics.Color(0xFFDCFCE7)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Storefront, contentDescription = null, tint = androidx.compose.ui.graphics.Color(0xFF15803D), modifier = Modifier.size(22.dp))
+                }
+                Column {
+                    Text("Grocery", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, lineHeight = 22.sp)
+                    if (!cityName.isNullOrBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.LocationOn, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(2.dp))
+                        Text(cityName, fontSize = 13.sp, color = TextMuted, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+        }
     }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).testTag("stores_screen"),
