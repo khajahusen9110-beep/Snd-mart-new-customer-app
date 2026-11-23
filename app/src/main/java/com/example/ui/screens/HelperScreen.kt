@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -52,6 +53,9 @@ import java.util.TimeZone
 fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: String?, onBack: () -> Unit) {
     var cfg by remember { mutableStateOf<HelperConfig?>(null) }
     var tab by remember { mutableIntStateOf(0) }
+    var cat by remember { mutableStateOf<HelperCategory?>(null) }
+    var formStep by remember { mutableStateOf(false) }
+    var minutes by remember { mutableIntStateOf(30) }
     var openId by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val sm = repository.sessionManager
@@ -128,30 +132,34 @@ fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: Stri
     LaunchedEffect(cityId) { if (cityId != null) cfg = HelperRepository.getConfig(cityId) }
     LaunchedEffect(cfg) { if (cfg != null && cfg?.enabled != true) onBack() }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
-        topBar = {
-            TopAppBar(
-                title = { Column { Text("Quick Helper", fontWeight = FontWeight.Bold); Text("Pay per 30 minutes", fontSize = 12.sp, color = TextSecondary) } },
-                navigationIcon = { IconButton(onClick = { if (openId != null) openId = null else onBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } }
-            )
+    val goBack: () -> Unit = {
+        when {
+            openId != null -> openId = null
+            formStep -> formStep = false
+            cat != null -> cat = null
+            tab == 1 -> tab = 0
+            else -> onBack()
         }
+    }
+    androidx.activity.compose.BackHandler(enabled = openId != null || formStep || cat != null || tab == 1) { goBack() }
+    val cityName = sm.selectedCity.collectAsState().value?.name
+
+    Scaffold(
+        containerColor = Color(0xFFF7F7FA),
+        snackbarHost = { SnackbarHost(snackbar) },
+        topBar = { HelperHeader(cityName, goBack) }
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
             val c = cfg
             when {
                 c == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
                 openId != null -> HelperDetail(openId!!, c, refreshTick, payBusy, startPay, startExtPay)
-                else -> {
-                    TabRow(selectedTabIndex = tab) {
-                        Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Book a helper") })
-                        Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("My bookings") })
-                    }
-                    if (tab == 0) HelperBookForm(repository, c, cityId.orEmpty(), userPhone) { b ->
-                        openId = b.id
-                        if (b.status == "pending_payment") startPay(b.id, b.bookingNumber)
-                    }
-                    else HelperList { openId = it }
+                tab == 1 -> HelperList(c) { openId = it }
+                cat == null -> HelperHomeContent(c, onPick = { k -> cat = k; minutes = k.durations.firstOrNull() ?: 30; formStep = false }, onOpenBooking = { openId = it }, onSeeAll = { tab = 1 })
+                !formStep -> HelperCategoryDetail(cat!!, minutes, { minutes = it }) { formStep = true }
+                else -> HelperBookForm(repository, c, cat!!, minutes, { minutes = it }, cityId.orEmpty(), userPhone) { b ->
+                    openId = b.id; cat = null; formStep = false
+                    if (b.status == "pending_payment") startPay(b.id, b.bookingNumber)
                 }
             }
         }
@@ -160,13 +168,11 @@ fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: Stri
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cityId: String, userPhone: String?, onBooked: (HelperBooking) -> Unit) {
+private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, c: HelperCategory, minutes: Int, onMinutes: (Int) -> Unit, cityId: String, userPhone: String?, onBooked: (HelperBooking) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sm = repository.sessionManager
     val userId = sm.getUserId().orEmpty()
-    var cat by remember { mutableStateOf<HelperCategory?>(null) }
-    var minutes by remember { mutableIntStateOf(30) }
     var desc by remember { mutableStateOf("") }
     var photos by remember { mutableStateOf(listOf<String>()) }
     var addresses by remember { mutableStateOf(listOf<CustomerAddress>()) }
@@ -208,43 +214,18 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cit
         )
     }
 
-    val c = cat
-    // Step 1: browse the services
-    if (c == null) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (cfg.categories.isEmpty()) Text("No services yet. Please check again soon.", color = TextSecondary)
-            else Text("Choose a service", fontWeight = FontWeight.Bold)
-            cfg.categories.forEach { k ->
-                Card(Modifier.fillMaxWidth().clickable { cat = k; minutes = k.durations.firstOrNull() ?: 30; photos = emptyList(); ack = false }, shape = RoundedCornerShape(14.dp)) {
-                    Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (k.imageUrl != null) AsyncImage(model = k.imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(k.name, fontWeight = FontWeight.Bold)
-                            if (k.description.isNotBlank()) Text(k.description, fontSize = 12.sp, color = TextSecondary, maxLines = 2)
-                            Text("From ₹${"%.0f".format(k.fromPrice)} · ${k.durations.joinToString(" / ")} min", fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
-            if (cfg.bannedNote.isNotBlank()) Text(cfg.bannedNote, fontSize = 12.sp, color = TextSecondary)
-        }
-        return
-    }
-
     val price = c.priceFor(minutes)
     val maxPhotos = if (c.photosAllowed) cfg.maxPhotos else 0
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        TextButton(onClick = { cat = null }) { Text("← All services") }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (c.imageUrl != null) AsyncImage(model = c.imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)))
-            Column { Text(c.name, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp); if (c.description.isNotBlank()) Text(c.description, fontSize = 13.sp, color = TextSecondary) }
+        Surface(shape = RoundedCornerShape(14.dp), color = HelperBlueSoft) {
+            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(c.name, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                Text("${minutes} min · ₹${"%.0f".format(c.priceFor(minutes))}", fontWeight = FontWeight.Bold, color = HelperBlue)
+            }
         }
-        RuleBlock("The helper does", c.dos, true)
-        RuleBlock("The helper does not", c.donts, false)
-
-        Text("How long do you need a helper?", fontWeight = FontWeight.Bold)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            c.durations.forEach { d -> FilterChip(selected = minutes == d, onClick = { minutes = d }, label = { Text("$d min · ₹${"%.0f".format(c.priceFor(d))}") }) }
+        Text("Time block", fontWeight = FontWeight.ExtraBold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            c.durations.forEach { d -> FilterChip(selected = minutes == d, onClick = { onMinutes(d) }, label = { Text("$d min") }, modifier = Modifier.weight(1f)) }
         }
 
         Text("Describe the task", fontWeight = FontWeight.Bold)
@@ -311,6 +292,15 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cit
             Text("I have read what the helper does and does not do.", fontSize = 13.sp)
         }
 
+        Surface(shape = RoundedCornerShape(14.dp), color = Color.White, border = BorderStroke(1.dp, OutlineSoft), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row { Text("Service charge ($minutes min)", Modifier.weight(1f), fontSize = 13.sp); Text("₹${"%.0f".format(price)}", fontSize = 13.sp) }
+                Row { Text("Total", Modifier.weight(1f), fontWeight = FontWeight.Bold); Text("₹${"%.0f".format(price)}", fontWeight = FontWeight.Bold) }
+                if (online) Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFFEF9C3)) {
+                    Row(Modifier.fillMaxWidth().padding(10.dp)) { Text("Pay now", Modifier.weight(1f), fontWeight = FontWeight.ExtraBold); Text("₹${"%.0f".format(price)}", fontWeight = FontWeight.ExtraBold) }
+                }
+            }
+        }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
         Button(
             onClick = {
@@ -333,8 +323,8 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, cit
                     }
                 }
             },
-            enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(16.dp)
-        ) { Text(if (busy) "Please wait…" else (if (cfg.paymentMode == "upi" || (cfg.paymentMode == "both" && pay == "upi")) "Pay & book" else "Book helper") + " · ₹${"%.0f".format(price)}", fontWeight = FontWeight.ExtraBold) }
+            enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = HelperBlue), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(16.dp)
+        ) { Text(if (busy) "Please wait…" else (if (cfg.paymentMode == "upi" || (cfg.paymentMode == "both" && pay == "upi")) "Pay advance & book" else "Book helper") + " · ₹${"%.0f".format(price)}", fontWeight = FontWeight.ExtraBold) }
         if (cfg.supportPhone.isNotBlank()) Text("Need help? ${cfg.supportPhone}", fontSize = 12.sp, color = TextSecondary)
     }
 }
@@ -370,23 +360,25 @@ private fun pickDateTime(context: android.content.Context, minLeadMinutes: Int, 
 }
 
 @Composable
-private fun HelperList(onOpen: (String) -> Unit) {
+private fun HelperList(cfg: HelperConfig, onOpen: (String) -> Unit) {
     var list by remember { mutableStateOf<List<HelperBooking>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var filter by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { HelperRepository.mine().onSuccess { list = it }.onFailure { error = it.message } }
     val l = list
-    when {
-        error != null -> Text(error!!, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
-        l == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-        l.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("No bookings yet", color = TextSecondary) }
-        else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            l.forEach { b ->
-                Card(Modifier.fillMaxWidth().clickable { onOpen(b.id) }, shape = RoundedCornerShape(14.dp)) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row { Text(b.taskType, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Text(b.statusLabel, fontSize = 12.sp, color = TextSecondary) }
-                        Text("${b.durationMinutes} min · ₹${"%.0f".format(b.priceTotal)}", fontSize = 13.sp, color = TextSecondary)
-                    }
-                }
+    Column(Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = filter, containerColor = Color.White, contentColor = HelperBlue) {
+            listOf("All", "Upcoming", "Active").forEachIndexed { i, t -> Tab(selected = filter == i, onClick = { filter = i }, text = { Text(t, fontWeight = FontWeight.Bold) }) }
+        }
+        val shown = l.orEmpty().filter {
+            when (filter) { 1 -> it.status in setOf("pending_payment", "requested"); 2 -> it.status in setOf("accepted", "on_the_way", "started"); else -> true }
+        }
+        when {
+            error != null -> Text(error!!, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
+            l == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+            shown.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("No bookings here", color = TextSecondary) }
+            else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                shown.forEach { b -> HelperBookingCard(b, cfg) { onOpen(b.id) } }
             }
         }
     }
@@ -433,6 +425,7 @@ private fun HelperDetail(id: String, cfg: HelperConfig, refreshTick: Int, payBus
     )
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HelperSteps(booking.status)
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row { Text(booking.bookingNumber, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)); Text(booking.statusLabel, fontWeight = FontWeight.Bold) }
@@ -469,7 +462,12 @@ private fun HelperDetail(id: String, cfg: HelperConfig, refreshTick: Int, payBus
         booking.startOtp?.let { CodeCard("Start code", it, "Tell this code to your helper when they arrive, to start the work.") }
         if (booking.status == "started") {
             val left = booking.endsAt?.let { com.example.util.parseIsoMillis(it) }?.let { ((it - now) / 1000).coerceAtLeast(0) }
-            Text("Work in progress" + (left?.let { " · %d:%02d left".format(it / 60, it % 60) } ?: ""), fontWeight = FontWeight.Bold)
+            Surface(shape = RoundedCornerShape(16.dp), color = HelperBlueSoft, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(left?.let { "%02d:%02d".format(it / 60, it % 60) } ?: "Work in progress", fontSize = 34.sp, fontWeight = FontWeight.Black, color = HelperBlue)
+                    Text("Time left", fontSize = 12.sp, color = TextSecondary)
+                }
+            }
             booking.endOtp?.let { CodeCard("End code", it, "Tell this code to your helper when the work is finished.") }
         }
         if (booking.status == "started" && cfg.extensionEnabled) {
