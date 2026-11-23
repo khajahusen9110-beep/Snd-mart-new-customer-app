@@ -87,6 +87,7 @@ sealed class Screen(val route: String, val title: String) {
     object StoreCategory : Screen("store_category/{categoryId}", "Shops") {
         fun createRoute(categoryId: String) = "store_category/$categoryId"
     }
+    object Quotes : Screen("quotes", "My price quotes")
     object StoreDetail : Screen("store/{storeId}", "Shop") {
         fun createRoute(storeId: String) = "store/$storeId"
     }
@@ -947,7 +948,8 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                     onOpenAddresses = { navController.navigate(Screen.AddressBook.route) },
                                     onNotAvailable = {
                                         navController.navigate(Screen.Home.route) { popUpTo(Screen.Stores.route) { inclusive = true } }
-                                    }
+                                    },
+                                    onOpenQuotes = { navController.navigate(Screen.Quotes.route) }
                                 )
                             }
 
@@ -973,7 +975,18 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                     cityId = selectedCity?.id,
                                     storeId = entry.arguments?.getString("storeId").orEmpty(),
                                     onBack = { navController.popBackStack() },
-                                    onCheckout = { navController.navigate(Screen.Checkout.createRoute(true, null)) }
+                                    onCheckout = { navController.navigate(Screen.Checkout.createRoute(true, null)) },
+                                    onOpenQuotes = { navController.navigate(Screen.Quotes.route) }
+                                )
+                            }
+
+                            composable(Screen.Quotes.route) {
+                                MyQuotesScreen(
+                                    repository = repository,
+                                    cityId = selectedCity?.id,
+                                    onBack = { navController.popBackStack() },
+                                    onOpenCart = { navController.navigate(Screen.Cart.route) },
+                                    onOpenOrder = { navController.navigate(Screen.OrderDetail.createRoute(it)) }
                                 )
                             }
 

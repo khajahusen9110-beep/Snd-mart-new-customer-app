@@ -128,7 +128,9 @@ data class StoreMenuProduct(
     /** Sizes / options with their own price (empty: a plain product) */
     val variants: List<StoreVariant> = emptyList(),
     /** Smallest order (default 1) and the extra charge per piece for customising */
-    val minOrderQty: Int = 1, val customExtraCharge: Double = 0.0
+    val minOrderQty: Int = 1, val customExtraCharge: Double = 0.0,
+    /** The shop quotes the price: the customer asks first */
+    val needsQuote: Boolean = false
 ) {
     val discountPercent: Int get() = if (mrp != null && mrp > price && !hasVariants) Math.round(((mrp - price) * 100 / mrp)).toInt() else 0
     val availableVariants: List<StoreVariant> get() = variants.filter { it.isAvailable }
@@ -158,7 +160,7 @@ data class StoreMenu(
                         p.sOrNull("unit_label"), p.sOrNull("category_id"), p.optBoolean("is_available", true),
                         isCustomizable = p.optBoolean("is_customizable", false), allowNote = p.optBoolean("custom_allow_note", true), allowPhoto = p.optBoolean("custom_allow_photo", false),
                         noteLabel = p.sOrNull("custom_note_label"), customRequired = p.optBoolean("custom_required", false), leadHours = p.optInt("custom_lead_hours", 0),
-                        minOrderQty = maxOf(1, p.optInt("min_order_qty", 1)), customExtraCharge = p.optDouble("custom_extra_charge", 0.0),
+                        minOrderQty = maxOf(1, p.optInt("min_order_qty", 1)), customExtraCharge = p.optDouble("custom_extra_charge", 0.0), needsQuote = p.optBoolean("needs_quote", false),
                         variants = (p.optJSONArray("variants") ?: JSONArray()).let { va -> (0 until va.length()).map { k -> va.getJSONObject(k).let { v -> StoreVariant(v.getString("id"), v.optString("label"), v.optDouble("price", 0.0), v.optBoolean("is_available", true)) } } })
                 }
             )
@@ -167,3 +169,39 @@ data class StoreMenu(
 }
 
 data class StoreLoc(val lat: Double, val lng: Double)
+
+
+/** Fees of one cart from the server (City Admin fee rules) and the "add Rs X more" nudges. */
+data class FeeNudge(val kind: String, val add: Double, val saves: Double, val text: String)
+data class CheckoutFees(val rulesEnabled: Boolean, val deliveryFee: Double, val handlingFee: Double, val platformFee: Double, val nudges: List<FeeNudge>) {
+    companion object {
+        fun from(o: JSONObject): CheckoutFees {
+            val n = o.optJSONArray("nudges") ?: JSONArray()
+            return CheckoutFees(
+                o.optBoolean("rules_enabled", false), o.optDouble("delivery_fee", 0.0), o.optDouble("handling_fee", 0.0), o.optDouble("platform_fee", 0.0),
+                (0 until n.length()).map { i -> n.getJSONObject(i).let { FeeNudge(it.optString("kind"), it.optDouble("add", 0.0), it.optDouble("saves", 0.0), it.optString("text")) } }
+            )
+        }
+    }
+}
+
+/** A price quote asked from a shop for custom work. */
+data class StoreQuote(
+    val id: String, val vendorId: String, val vendorName: String, val productId: String, val productName: String, val variantId: String?, val variantLabel: String?,
+    val quantity: Int, val note: String?, val photoPath: String?, val status: String, val quotedUnitPrice: Double?, val vendorNote: String?,
+    val expiresAt: String?, val validUntil: String?, val orderId: String?
+) {
+    val statusLabel get() = when (status) {
+        "requested" -> "Waiting for the shop"; "quoted" -> "Price received"; "accepted" -> "Accepted"; "declined" -> "Declined"
+        "cancelled" -> "Cancelled"; "expired" -> "Expired"; "used" -> "Ordered"; else -> status
+    }
+    val total: Double? get() = quotedUnitPrice?.let { it * quantity }
+    companion object {
+        fun listFrom(a: JSONArray): List<StoreQuote> = (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            StoreQuote(o.getString("id"), o.getString("vendor_id"), o.optString("vendor_name"), o.getString("product_id"), o.optString("product_name"), o.sOrNull("variant_id"), o.sOrNull("variant_label"),
+                o.optDouble("quantity", 1.0).toInt(), o.sOrNull("note"), o.sOrNull("photo_path"), o.optString("status"), o.dOrNull("quoted_unit_price"), o.sOrNull("vendor_note"),
+                o.sOrNull("expires_at"), o.sOrNull("valid_until"), o.sOrNull("order_id"))
+        }
+    }
+}

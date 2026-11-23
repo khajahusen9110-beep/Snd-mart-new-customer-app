@@ -154,6 +154,14 @@ fun CartScreen(
     }
 
     val payable = (subtotal - promoDiscount - autoCouponDiscount).coerceAtLeast(0.0)
+    // "Add Rs X more" nudge for the platform fee (the delivery nudge needs the address, so it shows at checkout)
+    var feeNudge by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(cityId, payable) {
+        if (cityId.isNullOrBlank() || payable <= 0.0) { feeNudge = null; return@LaunchedEffect }
+        kotlinx.coroutines.delay(300)
+        val f = com.example.data.repository.StoresRepository.getCheckoutFees(cityId, null, payable)
+        feeNudge = if (f?.rulesEnabled == true) f.nudges.firstOrNull { it.kind == "platform_fee" }?.text else null
+    }
     val unavailableItems = freshItems.filter { !it.isPurchasable }
     // The whole city being closed (daily timings or Emergency Close) blocks every cart, grocery or hotel.
     val cartCity by repository.sessionManager.selectedCity.collectAsState()
@@ -619,6 +627,11 @@ fun CartScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
+                                feeNudge?.let { t ->
+                                    Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFFECFDF5), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF34D399)), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                                        Text("🎉 $t", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF047857), modifier = Modifier.padding(10.dp))
+                                    }
+                                }
                                 BillRow("Item Subtotal", "₹${"%.2f".format(subtotal)}")
                                 if (promoDiscount > 0) {
                                     BillRow(
@@ -750,7 +763,13 @@ fun CartItemRow(
                 }
             }
 
-            if (isPurchasable) {
+            if (isPurchasable && !item.cartItem.quoteId.isNullOrBlank()) {
+                // a quoted line: the quantity and price were agreed with the shop, only removing is possible
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Qty ${item.cartItem.quantity} · quoted price", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    TextButton(onClick = onRemove) { Text("Remove", color = NaturalBadgeRed) }
+                }
+            } else if (isPurchasable) {
                 QuantityStepper(
                     quantity = item.cartItem.quantity,
                     onIncrease = onIncrease,

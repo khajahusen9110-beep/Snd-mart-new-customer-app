@@ -301,6 +301,23 @@ interface SupabaseApi {
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<Double>
 
+    // Delivery / handling / platform fee by order amount + "add Rs X more" nudges (City Admin fee rules)
+    @POST("rest/v1/rpc/get_checkout_fees")
+    suspend fun getCheckoutFees(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    // Shop price quotes
+    @POST("rest/v1/rpc/store_quote_request")
+    suspend fun storeQuoteRequest(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/store_quotes_mine")
+    suspend fun storeQuotesMine(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/store_quote_respond")
+    suspend fun storeQuoteRespond(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/store_quote_cancel")
+    suspend fun storeQuoteCancel(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
     @POST("rest/v1/rpc/get_handling_fee")
     suspend fun getHandlingFee(
         @Body body: Map<String, @JvmSuppressWildcards Any>

@@ -130,9 +130,14 @@ fun CheckoutScreen(
     val calculatedDeliveryFee: Double? = baseDeliveryFee?.let { (it + storeFeeAdj).coerceAtLeast(0.0) }
     var isLoadingDeliveryFee by remember { mutableStateOf(false) }
     var deliveryFeeError by remember { mutableStateOf<String?>(null) }
-    var handlingFee by remember { mutableStateOf(5.0) }
     // Flat per-order Platform Fee (City Admin). The server charges it, so the estimate must include it.
-    var platformFee by remember { mutableStateOf(0.0) }
+    var platformFeeBase by remember { mutableStateOf(0.0) }
+    var handlingFeeBase by remember { mutableStateOf(5.0) }
+    // Fee rules by order amount (City Admin): the server's fees and the "add Rs X more" nudges; null = the old flat fees
+    var feeInfo by remember { mutableStateOf<CheckoutFees?>(null) }
+    val rulesOn = feeInfo?.rulesEnabled == true
+    val handlingFee = if (rulesOn) feeInfo!!.handlingFee else handlingFeeBase
+    val platformFee = if (rulesOn) feeInfo!!.platformFee else platformFeeBase
     var cityDeliverySettings by remember { mutableStateOf<CityDeliverySettings?>(null) }
     var isCityActive by remember { mutableStateOf(true) }
 
@@ -456,9 +461,10 @@ fun CheckoutScreen(
 
             val handlingRes = repository.getHandlingFee(cid)
             if (handlingRes.isSuccess) {
-                handlingFee = handlingRes.getOrNull() ?: 5.0
+                handlingFeeBase = handlingRes.getOrNull() ?: 5.0
             }
-            platformFee = repository.getPlatformFee(cid)
+            platformFeeBase = repository.getPlatformFee(cid)
+            feeInfo = com.example.data.repository.StoresRepository.getCheckoutFees(cid, dist, subtotalAfterDiscount)
 
             val feeRes = repository.calculateDeliveryFee(
                 cityId = cid,
@@ -1587,6 +1593,14 @@ fun CheckoutScreen(
                             }
                         }
 
+                        feeInfo?.nudges?.firstOrNull()?.takeIf { rulesOn }?.let { n ->
+                            Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFFECFDF5), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF34D399)), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                                Column(Modifier.padding(10.dp)) {
+                                    Text("🎉 ${n.text}", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF047857))
+                                    Text("You save ₹${"%.0f".format(n.saves)}. Go back and add items.", fontSize = 12.sp, color = Color(0xFF065F46))
+                                }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1614,7 +1628,18 @@ fun CheckoutScreen(
                         }
 
                         Spacer(modifier = Modifier.height(6.dp))
-                        TaxesChargesRow(handlingFee = handlingFee, platformFee = platformFee)
+                        if (rulesOn) {
+                            if (handlingFee > 0.0) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Handling Fee", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                                Text("₹${"%.0f".format(handlingFee)}", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Platform Fee", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                                if (platformFee > 0.0) Text("₹${"%.0f".format(platformFee)}", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                else Text("FREE", color = NaturalPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        } else TaxesChargesRow(handlingFee = handlingFee, platformFee = platformFee)
 
                         if (walletApplied > 0.0) {
                             Spacer(modifier = Modifier.height(6.dp))

@@ -56,6 +56,22 @@ object StoresRepository {
             StoreMenu.from(JSONObject(it))
         }
 
+    /** The fees of a cart (City Admin fee rules) and the "add Rs X more" nudges. null on any problem: the old flat fees then apply. */
+    suspend fun getCheckoutFees(cityId: String, distanceKm: Double?, amount: Double): CheckoutFees? =
+        call("Fees", { api.getCheckoutFees(mapOf("p_city_id" to cityId, "p_distance_km" to (distanceKm ?: 0.0), "p_amount" to amount.coerceAtLeast(0.0))) }) { CheckoutFees.from(JSONObject(it)) }.getOrNull()
+
+    suspend fun requestQuote(vendorId: String, productId: String, variantId: String?, quantity: Int, note: String?, photoPath: String?): Result<Unit> =
+        call("Could not send the request", { api.storeQuoteRequest(mapOf("p_vendor_id" to vendorId, "p_product_id" to productId, "p_variant_id" to variantId, "p_quantity" to quantity, "p_note" to note, "p_photo_path" to photoPath)) }) { }
+
+    suspend fun myQuotes(): Result<List<StoreQuote>> =
+        call("Could not load your quotes", { api.storeQuotesMine(emptyMap()) }) { StoreQuote.listFrom(JSONArray(it)) }
+
+    suspend fun answerQuote(id: String, accept: Boolean): Result<Unit> =
+        call("Could not answer", { api.storeQuoteRespond(mapOf("p_quote_id" to id, "p_accept" to accept)) }) { }
+
+    suspend fun cancelQuote(id: String): Result<Unit> =
+        call("Could not cancel", { api.storeQuoteCancel(mapOf("p_quote_id" to id)) }) { }
+
     /** Longest notice (hours) that a made-to-order product in this cart needs. 0 on any problem or when none. */
     suspend fun cartLeadHours(productIds: List<String>): Int {
         if (productIds.isEmpty()) return 0

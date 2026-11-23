@@ -2283,7 +2283,8 @@ class SndmartRepository(
                     val rawSize = if (!item.variantId.isNullOrBlank()) prod.productVariants?.firstOrNull { it.id == item.variantId } else null
                     val customExtra = if (!item.customNote.isNullOrBlank() || !item.customPhotoPath.isNullOrBlank()) (prod.customExtraCharge ?: 0.0) else 0.0
                     val sizeGone = !item.variantId.isNullOrBlank() && (rawSize == null || !rawSize.isActive || rawSize.isAvailable == false || rawSize.price == null)
-                    val unitNow = (rawSize?.price ?: prod.price) + customExtra
+                    // a quoted line costs exactly the shop's accepted price per piece
+                    val unitNow = if (!item.quoteId.isNullOrBlank() && item.quotePrice != null) item.quotePrice else (rawSize?.price ?: prod.price) + customExtra
                     val resolvedProd = ResolvedProduct(
                         baseProduct = prod,
                         effectivePrice = unitNow,
@@ -2481,7 +2482,10 @@ class SndmartRepository(
         productForSnapshot: ResolvedProduct? = null,
         // Made-to-order shop products: the customer's message / photo path
         customNote: String? = null,
-        customPhotoPath: String? = null
+        customPhotoPath: String? = null,
+        // An accepted shop quote (id and the quoted price per piece)
+        quoteId: String? = null,
+        quotePrice: Double? = null
     ): AddToCartResult {
         val currentUserId = sessionManager.userId.value ?: "guest"
         if (quantityDelta > 0) {
@@ -2514,7 +2518,9 @@ class SndmartRepository(
                     cityId = cityId,
                     quantity = quantityDelta,
                     customNote = customNote,
-                    customPhotoPath = customPhotoPath
+                    customPhotoPath = customPhotoPath,
+                    quoteId = quoteId,
+                    quotePrice = quotePrice
                 )
                 return AddToCartResult.HotelConflict(existingVendor, vendorId, pending)
             }
@@ -2540,7 +2546,9 @@ class SndmartRepository(
                     cityId = cityId,
                     quantity = quantityDelta,
                     customNote = customNote,
-                    customPhotoPath = customPhotoPath
+                    customPhotoPath = customPhotoPath,
+                    quoteId = quoteId,
+                    quotePrice = quotePrice
                 )
                 _hotelCart.value = currentList + newItem
             }
@@ -3382,6 +3390,7 @@ class SndmartRepository(
                     // made-to-order shop products only; absent for everything else
                     if (!item.customNote.isNullOrBlank()) put("custom_note", item.customNote)
                     if (!item.customPhotoPath.isNullOrBlank()) put("custom_photo_path", item.customPhotoPath)
+                    if (!item.quoteId.isNullOrBlank()) put("quote_id", item.quoteId)
                 }
                 itemsArray.put(itemObj)
             }

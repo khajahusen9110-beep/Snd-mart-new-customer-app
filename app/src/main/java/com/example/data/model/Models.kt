@@ -272,7 +272,10 @@ data class CartItem(
     val quantity: Int = 1,
     // Shops (Stores): the customer's message / photo for a made-to-order product (null = none, not sent)
     @Json(name = "custom_note") val customNote: String? = null,
-    @Json(name = "custom_photo_path") val customPhotoPath: String? = null
+    @Json(name = "custom_photo_path") val customPhotoPath: String? = null,
+    // An accepted shop price quote: its id and the quoted price per piece (the server re-checks both at checkout)
+    @Json(name = "quote_id") val quoteId: String? = null,
+    @Json(name = "quote_price") val quotePrice: Double? = null
 )
 
 /** Live availability state for a cart row, recomputed every time the cart/checkout screen

@@ -80,7 +80,8 @@ fun StoresScreen(
     onOpenFood: () -> Unit,
     onOpenHelper: () -> Unit,
     onOpenAddresses: () -> Unit,
-    onNotAvailable: () -> Unit
+    onNotAvailable: () -> Unit,
+    onOpenQuotes: () -> Unit = {}
 ) {
     val cfg by produceState<StoresConfig?>(null, cityId) { value = StoresRepository.getConfig(cityId, force = true) }
     var loc by remember { mutableStateOf<StoreLoc?>(null) }
@@ -168,6 +169,17 @@ fun StoresScreen(
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
         ) {
             item { StoresModeTabs(helperOn, onOpenFood, onOpenHelper) }
+            item {
+                Surface(shape = RoundedCornerShape(14.dp), color = SurfaceLight, border = BorderStroke(1.dp, OutlineSoft), modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenQuotes).testTag("my_quotes_entry")) {
+                    Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("My price quotes", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("Ask a shop for a price on custom work", fontSize = 12.sp, color = TextMuted)
+                        }
+                        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = TextMuted)
+                    }
+                }
+            }
             item {
                 OutlinedTextField(
                     value = text, onValueChange = { text = it }, singleLine = true, shape = RoundedCornerShape(24.dp),
@@ -315,7 +327,7 @@ fun StoreCategoryScreen(
 /** One shop: its details, its products by category, and the cart (one shop at a time, like a hotel). */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: String, onBack: () -> Unit, onCheckout: () -> Unit) {
+fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: String, onBack: () -> Unit, onCheckout: () -> Unit, onOpenQuotes: () -> Unit = {}) {
     var menu by remember { mutableStateOf<StoreMenu?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
@@ -324,6 +336,8 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
     val cart by repository.hotelCart.collectAsState()
     var conflict by remember { mutableStateOf<AddToCartResult.HotelConflict?>(null) }
     var customising by remember { mutableStateOf<StoreMenuProduct?>(null) }
+    var quoting by remember { mutableStateOf<StoreMenuProduct?>(null) }
+    val quoteContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(storeId, retry) {
         error = null
         StoresRepository.getMenu(storeId).onSuccess { menu = it; StoresRepository.rememberStore(storeId) }.onFailure { error = it.message }
@@ -417,9 +431,12 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
                     else -> m.products.filter { it.categoryId == cat }
                 }
                 if (shown.isEmpty()) item { StoresEmpty("No products yet", "This shop has not added products here.") }
-                items(shown, key = { it.id }) { p -> MenuProductRow(p, canOrder = m.isOpen, quantity = qty(p.id), onCustomise = { customising = p }) { d -> change(p, d) } }
+                items(shown, key = { it.id }) { p -> MenuProductRow(p, canOrder = m.isOpen, quantity = qty(p.id), onCustomise = { customising = p }, onQuote = { quoting = p }) { d -> change(p, d) } }
             }
         }
+    }
+    quoting?.let { p ->
+        QuoteRequestSheet(repository, storeId, p, onDismiss = { quoting = null }, onSent = { quoting = null; android.widget.Toast.makeText(quoteContext, "Request sent. The shop will send you a price.", android.widget.Toast.LENGTH_LONG).show(); onOpenQuotes() })
     }
     customising?.let { p ->
         val line = if (p.hasVariants) null else mine.firstOrNull { it.productId == p.id }
@@ -442,7 +459,7 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
 }
 
 @Composable
-private fun MenuProductRow(p: StoreMenuProduct, canOrder: Boolean, quantity: Int, onCustomise: () -> Unit, onChange: (Int) -> Unit) {
+private fun MenuProductRow(p: StoreMenuProduct, canOrder: Boolean, quantity: Int, onCustomise: () -> Unit, onQuote: () -> Unit, onChange: (Int) -> Unit) {
     Surface(shape = RoundedCornerShape(14.dp), color = SurfaceLight, border = BorderStroke(1.dp, OutlineSoft), modifier = Modifier.fillMaxWidth().testTag("store_menu_product")) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StorePhoto(p.imageUrl, 56)
@@ -459,7 +476,8 @@ private fun MenuProductRow(p: StoreMenuProduct, canOrder: Boolean, quantity: Int
                     Text(rupee(p.mrp), fontSize = 11.sp, color = TextMuted, textDecoration = TextDecoration.LineThrough)
                     StoreBadge("${p.discountPercent}% OFF", androidx.compose.ui.graphics.Color(0xFFDCFCE7), androidx.compose.ui.graphics.Color(0xFF166534))
                 }
-                if (p.isAvailable && canOrder) {
+                if (p.isAvailable && canOrder && p.needsQuote) FilledTonalButton(onClick = onQuote, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp), modifier = Modifier.height(32.dp).testTag("store_quote_button")) { Text("Get a quote", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp) }
+                else if (p.isAvailable && canOrder) {
                     if (p.isCustomizable || p.hasVariants) FilledTonalButton(onClick = onCustomise, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp), modifier = Modifier.height(32.dp).testTag("store_customise_button")) { Text(if (quantity > 0) "$quantity in cart · ${if (p.hasVariants) "Add" else "Edit"}" else if (p.hasVariants) "Choose" else "Customise", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp) }
                     else if (quantity > 0) Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { onChange(-1) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Remove, contentDescription = "Remove one") }

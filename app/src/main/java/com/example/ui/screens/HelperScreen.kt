@@ -474,7 +474,8 @@ private fun HelperDetail(id: String, cfg: HelperConfig, refreshTick: Int, payBus
             val exts = booking.extensions
             val open = exts.firstOrNull { it.status == "pending_payment" || it.status == "awaiting_helper" }
             val used = exts.count { it.status == "applied" }
-            val rate = cfg.categories.firstOrNull { it.id == booking.categoryId }?.ratePer30 ?: cfg.ratePer30
+            val extCat = cfg.categories.firstOrNull { it.id == booking.categoryId }
+            val rate = extCat?.ratePer30 ?: cfg.ratePer30
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Need more time?", fontWeight = FontWeight.Bold)
@@ -496,7 +497,7 @@ private fun HelperDetail(id: String, cfg: HelperConfig, refreshTick: Int, payBus
                                         }.onFailure { error = it.message }
                                         busy = false; tick++
                                     }
-                                }) { Text("+$m min · ₹${"%.0f".format(rate * m / 30.0)}") }
+                                }) { Text("+$m min · ₹${"%.0f".format(extCat?.priceFor(m) ?: (rate * m / 30.0))}") }
                             }
                         }
                     }
