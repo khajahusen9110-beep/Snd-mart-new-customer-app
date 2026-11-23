@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
@@ -120,10 +121,11 @@ internal fun HelperHomeContent(cfg: HelperConfig, onPick: (HelperCategory) -> Un
                         Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { onPick(k) }.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Box(Modifier.size(68.dp).clip(CircleShape).background(HelperBlueSoft), contentAlignment = Alignment.Center) {
                                 if (k.imageUrl != null) AsyncImage(k.imageUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                else if (k.isCustom) Icon(Icons.Filled.Edit, null, tint = HelperBlueDark, modifier = Modifier.size(28.dp))
                                 else Text(k.name.take(1), fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = HelperBlueDark)
                             }
                             Text(k.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, lineHeight = 15.sp)
-                            Text("from ₹${"%.0f".format(k.fromPrice)}", fontSize = 11.sp, color = TextMuted)
+                            Text(if (k.isCustom) "Any task · ₹${"%.0f".format(k.fromPrice)}+" else "from ₹${"%.0f".format(k.fromPrice)}", fontSize = 11.sp, color = TextMuted)
                         }
                     }
                     repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -161,6 +163,9 @@ internal fun HelperCategoryDetail(c: HelperCategory, minutes: Int, onMinutes: (I
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(c.name, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp)
                 if (c.description.isNotBlank()) Text(c.description, fontSize = 14.sp, color = TextSecondary)
+                if (c.isCustom) Surface(shape = RoundedCornerShape(12.dp), color = HelperBlueSoft) {
+                    Text("Not sure which service? Describe your own task in the next step. Tell us what, where and for how long, and a helper will take it up.", fontSize = 13.sp, color = HelperBlueDark, modifier = Modifier.padding(12.dp))
+                }
                 Text("Choose time", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     c.durations.forEach { d ->

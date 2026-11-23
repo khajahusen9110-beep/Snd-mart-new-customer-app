@@ -231,7 +231,7 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, c: 
         Text("Describe the task", fontWeight = FontWeight.Bold)
         OutlinedTextField(
             value = desc, onValueChange = { if (it.length <= 600) desc = it }, modifier = Modifier.fillMaxWidth(), minLines = 3,
-            placeholder = { Text(c.taskPlaceholder.ifBlank { "Describe what you need, e.g. place, what to do, anything the helper should know" }) }
+            placeholder = { Text(c.taskPlaceholder.ifBlank { if (c.isCustom) "Tell us exactly what you need: the work, the place, how long, anything the helper should know" else "Describe what you need, e.g. place, what to do, anything the helper should know" }) }
         )
         if (maxPhotos > 0) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -307,7 +307,7 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, c: 
                 val aid = addressId
                 when {
                     aid == null -> error = "Choose your address"
-                    desc.trim().length < 5 -> error = "Please describe the task"
+                    desc.trim().length < (if (c.isCustom) 15 else 5) -> error = if (c.isCustom) "Please describe your task in a little more detail" else "Please describe the task"
                     later && whenMillis == null -> error = "Choose the time"
                     c.photoRequired && photos.isEmpty() -> error = "Please add a photo"
                     cfg.requireRulesAck && !ack -> error = "Please accept what the helper does and does not do"

@@ -18,7 +18,8 @@ data class HelperCategory(
     val durations: List<Int>,
     val prices: Map<Int, Double>,
     val dos: List<HelperRuleItem>,
-    val donts: List<HelperRuleItem>
+    val donts: List<HelperRuleItem>,
+    val isCustom: Boolean = false
 ) {
     fun priceFor(minutes: Int): Double = prices[minutes] ?: (ratePer30 * minutes / 30.0)
     val fromPrice: Double get() = durations.minOfOrNull { priceFor(it) } ?: ratePer30
@@ -78,7 +79,7 @@ data class HelperConfig(
                         photosAllowed = c.optBoolean("photos_allowed", true), photoRequired = c.optBoolean("photo_required", false),
                         taskPlaceholder = c.optString("task_placeholder"), ratePer30 = c.optDouble("rate_per_30", 0.0),
                         durations = if (d == null) listOf(30, 60, 90) else (0 until d.length()).map { i -> d.getInt(i) },
-                        prices = prices(c.optJSONObject("prices")), dos = rules(c.optJSONArray("dos")), donts = rules(c.optJSONArray("donts"))
+                        prices = prices(c.optJSONObject("prices")), dos = rules(c.optJSONArray("dos")), donts = rules(c.optJSONArray("donts")), isCustom = c.optBoolean("is_custom", false)
                     )
                 }
             )
