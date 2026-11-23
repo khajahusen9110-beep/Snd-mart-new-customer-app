@@ -47,7 +47,7 @@ fun RowScope.StoresToggleTab(onClick: () -> Unit) {
         modifier = Modifier.weight(1f).clip(RoundedCornerShape(11.dp)).clickable(onClick = onClick).testTag("toggle_stores")
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp)) {
-            Text("Stores", fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = TextSecondary)
+            Text("Grocery", fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = TextSecondary)
         }
     }
 }

@@ -123,10 +123,10 @@ fun HomeScreen(
     }
     // Groceries replaced by Stores in this city: opening Home lands on Stores (once), unless Food/Grocery was asked for.
     var storesRedirectHandled by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(storesOn, storesCfg.replaceGrocery) {
+    LaunchedEffect(storesOn) {
         if (storesRedirectHandled) return@LaunchedEffect
         if (requestedMode != null) { storesRedirectHandled = true; return@LaunchedEffect }
-        if (storesOn && storesCfg.replaceGrocery && serviceMode != "food_only") { storesRedirectHandled = true; onNavigateToStores?.invoke() }
+        if (storesOn && serviceMode != "food_only") { storesRedirectHandled = true; onNavigateToStores?.invoke() }
     }
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
@@ -1023,7 +1023,7 @@ fun HomeScreen(
                 onSelect = { browsingMode = it },
                 onHelper = { onNavigateToHelper?.invoke() },
                 storesOn = storesOn,
-                storesReplace = storesOn && storesCfg.replaceGrocery,
+                storesReplace = storesOn,
                 onStores = { onNavigateToStores?.invoke() }
             )
 

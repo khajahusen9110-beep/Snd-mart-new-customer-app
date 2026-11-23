@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Close
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,7 +51,7 @@ private fun StoresModeTabs(helperOn: Boolean, onFood: () -> Unit, onHelper: () -
     Surface(shape = RoundedCornerShape(14.dp), color = SurfaceVariantLight, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Surface(shape = RoundedCornerShape(11.dp), color = androidx.compose.ui.graphics.Color.White, shadowElevation = 3.dp, modifier = Modifier.weight(1f)) {
-                Box(Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) { Text("Stores", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = NaturalPrimary) }
+                Box(Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) { Text("Grocery", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = NaturalPrimary) }
             }
             Box(Modifier.weight(1f).clip(RoundedCornerShape(11.dp)).clickable(onClick = onFood).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                 Text("Hotel Food", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = TextSecondary)
@@ -84,11 +87,13 @@ fun StoresScreen(
     var stores by remember { mutableStateOf<List<StoreListItem>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
-    LaunchedEffect(cityId, cfg?.enabled, locDone, loc, retry) {
+    var catId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(cityId, cfg?.enabled, locDone, loc, retry, catId) {
         val id = cityId ?: return@LaunchedEffect
         if (cfg?.enabled != true || !locDone) return@LaunchedEffect
         error = null
-        StoresRepository.listStores(id, loc, null).onSuccess { stores = it }.onFailure { error = it.message }
+        stores = null
+        StoresRepository.listStores(id, loc, catId).onSuccess { stores = it }.onFailure { error = it.message }
     }
 
     var text by remember { mutableStateOf("") }
@@ -102,11 +107,11 @@ fun StoresScreen(
         StoresRepository.search(id, loc, query, sort).onSuccess { hits = it }.onFailure { error = it.message }
     }
 
-    val nearby = remember(stores) { stores.orEmpty().filter { it.isOpen }.sortedBy { it.distanceKm ?: 999.0 }.take(6) }
+    val shops = remember(stores) { stores.orEmpty().sortedWith(compareBy<StoreListItem>({ !it.isOpen }, { it.distanceKm ?: 999.0 }, { it.name })) }
     val searching = query.length >= 2
 
     Scaffold(topBar = {
-        TopAppBar(title = { Column { Text("Stores", fontWeight = FontWeight.Bold); if (!cityName.isNullOrBlank()) Text(cityName, fontSize = 12.sp, color = TextMuted) } })
+        TopAppBar(title = { Column { Text("Grocery", fontWeight = FontWeight.Bold); if (!cityName.isNullOrBlank()) Text(cityName, fontSize = 12.sp, color = TextMuted) } })
     }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).testTag("stores_screen"),
@@ -142,6 +147,12 @@ fun StoresScreen(
                     }
                 }
             }
+            if (!searching && cfg?.categories.orEmpty().isNotEmpty()) item {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.testTag("store_category_row")) {
+                    item { RoundCat("Recommended", null, catId == null) { catId = null } }
+                    items(cfg?.categories.orEmpty(), key = { it.id }) { c -> RoundCat(c.name, c.imageUrl, catId == c.id) { catId = c.id } }
+                }
+            }
             if (searching) {
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(SORTS) { (k, label) -> StoreChip(label, sort == k) { sort = k } } }
@@ -152,7 +163,7 @@ fun StoresScreen(
                     items(list, key = { it.storeId + ":" + it.productId }) { h -> StoreProductRow(h) { onOpenStore(h.storeId) } }
                 }
             } else {
-                if (cfg?.replaceGrocery == true) item {
+                if (catId == null && cfg?.replaceGrocery == true) item {
                     Surface(shape = RoundedCornerShape(16.dp), color = NaturalPrimaryContainer, border = BorderStroke(1.dp, NaturalPrimary.copy(alpha = 0.3f)), modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenGrocery).testTag("snd_mart_store_card")) {
                         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             StorePhoto(null, 56)
@@ -164,25 +175,33 @@ fun StoresScreen(
                         }
                     }
                 }
-                val cats = cfg?.categories.orEmpty()
-                if (cats.isNotEmpty()) {
-                    item { Text("Shop by category", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp) }
-                    items(cats.chunked(2)) { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            row.forEach { c -> CategoryCard(c, Modifier.weight(1f)) { onOpenCategory(c.id) } }
-                            if (row.size == 1) Spacer(Modifier.weight(1f))
-                        }
-                    }
-                }
-                item { Text("Shops near you", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp) }
+                val title = cfg?.categories?.firstOrNull { it.id == catId }?.name ?: "Recommended shops"
+                item { Text(title + if (shops.isNotEmpty()) " · ${shops.size}" else "", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp) }
                 if (stores == null && error == null) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-                if (stores != null && nearby.isEmpty()) item { StoresEmpty("No shops open nearby", "We show shops within ${(cfg?.radiusKm ?: 5.0).toInt()} km. Please check again soon.") }
-                items(nearby, key = { it.storeId }) { s -> StoreCard(s) { onOpenStore(s.storeId) } }
-                if (nearby.isNotEmpty()) item {
-                    Text("Showing shops within ${(cfg?.radiusKm ?: 5.0).toInt()} km" + if (loc != null) " · nearest first" else "", fontSize = 12.sp, color = TextMuted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                if (stores != null && shops.isEmpty()) item { StoresEmpty("No shops here yet", "We show shops within ${(cfg?.radiusKm ?: 5.0).toInt()} km of you. Please check again soon.") }
+                items(shops, key = { it.storeId }) { s -> StoreCard(s) { onOpenStore(s.storeId) } }
+                if (shops.isNotEmpty()) item {
+                    Text("Open shops first" + (if (loc != null) " · nearest first" else "") + " · within ${(cfg?.radiusKm ?: 5.0).toInt()} km", fontSize = 12.sp, color = TextMuted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 }
             }
         }
+    }
+}
+
+/** Round shop-category icon (image from the City Admin, first letter when there is none). */
+@Composable
+private fun RoundCat(name: String, imageUrl: String?, selected: Boolean, onClick: () -> Unit) {
+    Column(Modifier.width(74.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).testTag("store_round_category"), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(
+            Modifier.size(64.dp).clip(androidx.compose.foundation.shape.CircleShape).background(NaturalPrimaryContainer)
+                .border(if (selected) 2.dp else 0.dp, if (selected) NaturalPrimary else androidx.compose.ui.graphics.Color.Transparent, androidx.compose.foundation.shape.CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            if (imageUrl != null) AsyncImage(imageUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            else if (name == "Recommended") Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = NaturalPrimary, modifier = Modifier.size(28.dp))
+            else Text(name.take(1), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = NaturalPrimary)
+        }
+        Text(name, fontSize = 12.sp, fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium, color = if (selected) NaturalPrimary else TextSecondary, maxLines = 2, textAlign = TextAlign.Center, lineHeight = 14.sp)
     }
 }
 
@@ -245,13 +264,14 @@ fun StoreCategoryScreen(
 }
 
 /** One shop: its details, its products by category, and the cart (one shop at a time, like a hotel). */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: String, onBack: () -> Unit, onCheckout: () -> Unit) {
     var menu by remember { mutableStateOf<StoreMenu?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
-    var cat by remember { mutableStateOf<String?>(null) }
+    var cat by remember { mutableStateOf<String?>(null) } // null = Recommended
+    var find by remember { mutableStateOf("") }
     val cart by repository.hotelCart.collectAsState()
     var conflict by remember { mutableStateOf<AddToCartResult.HotelConflict?>(null) }
     var customising by remember { mutableStateOf<StoreMenuProduct?>(null) }
@@ -317,16 +337,32 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
                             else StoreBadge("Closed now", androidx.compose.ui.graphics.Color(0xFFFEE2E2), androidx.compose.ui.graphics.Color(0xFF991B1B))
                             if (m.prepMinutes != null) Text("packs in about ${m.prepMinutes} min", fontSize = 12.sp, color = TextMuted)
                         }
-                        if (m.address != null) Text(m.address, fontSize = 12.sp, color = TextMuted)
+                        if (m.address != null) Text("📍 " + m.address, fontSize = 12.sp, color = TextMuted)
                     }
                 }
-                if (m.categories.isNotEmpty()) item {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item { StoreChip("All", cat == null) { cat = null } }
-                        items(m.categories) { (id, name) -> StoreChip(name, cat == id) { cat = id } }
+                item {
+                    OutlinedTextField(
+                        value = find, onValueChange = { find = it }, singleLine = true, shape = RoundedCornerShape(24.dp),
+                        placeholder = { Text("Search in ${m.name}") },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        trailingIcon = { if (find.isNotEmpty()) IconButton(onClick = { find = "" }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") } },
+                        modifier = Modifier.fillMaxWidth().testTag("store_find")
+                    )
+                }
+                if (find.isBlank()) stickyHeader {
+                    Surface(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.fillMaxWidth()) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 6.dp).testTag("store_product_chips")) {
+                            item { StoreChip("Recommended", cat == null) { cat = null } }
+                            items(m.categories) { (id, name) -> StoreChip(name, cat == id) { cat = id } }
+                        }
                     }
                 }
-                val shown = m.products.filter { cat == null || it.categoryId == cat }
+                // Recommended = the shop's best picks: products on offer first, then the rest in the shop's own order
+                val shown = when {
+                    find.isNotBlank() -> m.products.filter { it.name.contains(find.trim(), ignoreCase = true) }
+                    cat == null -> m.products.filter { it.isAvailable }.withIndex().sortedWith(compareBy({ if (it.value.mrp != null && it.value.mrp!! > it.value.price) 0 else 1 }, { it.index })).map { it.value }.take(12)
+                    else -> m.products.filter { it.categoryId == cat }
+                }
                 if (shown.isEmpty()) item { StoresEmpty("No products yet", "This shop has not added products here.") }
                 items(shown, key = { it.id }) { p -> MenuProductRow(p, canOrder = m.isOpen, quantity = qty(p.id), onCustomise = { customising = p }) { d -> change(p, d) } }
             }
