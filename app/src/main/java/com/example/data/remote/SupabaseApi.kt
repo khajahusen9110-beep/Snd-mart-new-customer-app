@@ -305,6 +305,10 @@ interface SupabaseApi {
     @POST("rest/v1/rpc/get_checkout_fees")
     suspend fun getCheckoutFees(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
+    // Remote control: banners, notices and flags from the City Admin (no app update needed)
+    @POST("rest/v1/rpc/get_remote_config")
+    suspend fun getRemoteConfig(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
     // Shop price quotes
     @POST("rest/v1/rpc/store_quote_request")
     suspend fun storeQuoteRequest(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>

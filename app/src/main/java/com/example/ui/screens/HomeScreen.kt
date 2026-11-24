@@ -1028,6 +1028,7 @@ fun HomeScreen(
             )
 
             Spacer(modifier = Modifier.height(6.dp))
+            com.example.remote.RemoteBlocksStrip("home", onScreen = { com.example.remote.RemoteActions.open(it) })
 
             if (browsingMode == BrowsingMode.HOTELS && searchQuery.isBlank() && trendingSearches.isNotEmpty()) {
                 SearchSuggestRow(
