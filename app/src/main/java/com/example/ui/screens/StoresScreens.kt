@@ -169,6 +169,7 @@ fun StoresScreen(
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
         ) {
             item { StoresModeTabs(helperOn, onOpenFood, onOpenHelper) }
+            item { com.example.remote.RemoteBlocksStrip("stores", onScreen = { com.example.remote.RemoteActions.open(it) }, modifier = Modifier.offset(x = (-16).dp)) }
             item {
                 Surface(shape = RoundedCornerShape(14.dp), color = SurfaceLight, border = BorderStroke(1.dp, OutlineSoft), modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenQuotes).testTag("my_quotes_entry")) {
                     Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {

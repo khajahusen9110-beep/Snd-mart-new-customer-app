@@ -108,6 +108,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
     private val pendingOrderId = mutableStateOf<String?>(null)
     private val pendingOpenOrders = mutableStateOf(false)
+    // a helper / quote push opens that screen ("helper" or "quotes")
+    private val pendingOpenScreen = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -143,6 +145,32 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
                 val selectedCity by sessionManager.selectedCity.collectAsState()
                 val userId by sessionManager.userId.collectAsState()
+
+                // Remote control (banners, notices, flags from the City Admin): load now, refresh when the city changes and about hourly
+                val remoteContext = androidx.compose.ui.platform.LocalContext.current
+                LaunchedEffect(selectedCity?.id) {
+                    com.example.remote.RemoteConfigStore.load(remoteContext)
+                    while (true) {
+                        com.example.remote.RemoteConfigStore.refresh(remoteContext, minGapMs = 30 * 60_000L) {
+                            com.example.data.repository.StoresRepository.getRemoteConfigRaw(selectedCity?.id, com.example.BuildConfig.VERSION_CODE)
+                        }
+                        kotlinx.coroutines.delay(60 * 60_000L)
+                    }
+                }
+                // a banner button opens an app screen by name
+                LaunchedEffect(Unit) {
+                    com.example.remote.RemoteActions.handler = { name ->
+                        runCatching {
+                            when (name) {
+                                "helper" -> navController.navigate(Screen.Helper.route)
+                                "stores", "grocery" -> navController.navigate(Screen.Stores.route)
+                                "quotes" -> navController.navigate(Screen.Quotes.route)
+                                "orders" -> navController.navigate(Screen.Orders.route)
+                                "cart" -> navController.navigate(Screen.Cart.route)
+                            }
+                        }
+                    }
+                }
 
                 // Analytics: one session per process lifetime, tracked regardless of login state
                 // (mirrors the website's initAnalyticsSession()); keep the user id in sync as it
@@ -529,6 +557,19 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                     CustomerFcmService.inAppEvents.collectLatest { notification ->
                         activeNotification = notification
                     }
+                }
+
+                // A Quick Helper or price-quote push opens its own screen
+                val openScreenName by pendingOpenScreen
+                LaunchedEffect(openScreenName, currentDestination, isNavGraphReady) {
+                    val name = openScreenName ?: return@LaunchedEffect
+                    if (!isNavGraphReady || currentDestination == null || currentDestination == Screen.Auth.route || currentDestination == Screen.LocationOnboarding.route) return@LaunchedEffect
+                    try {
+                        navController.navigate(if (name == "quotes") Screen.Quotes.route else Screen.Helper.route)
+                    } catch (e: Exception) {
+                        android.util.Log.w("MainActivity", "Failed to open $name: ${e.message}")
+                    }
+                    pendingOpenScreen.value = null
                 }
 
                 // Navigation if opened with deep link or notification extra
@@ -1238,6 +1279,11 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
 
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
+        intent.getStringExtra("open_screen")?.takeIf { it.isNotBlank() }?.let { name ->
+            intent.removeExtra("open_screen")
+            pendingOpenScreen.value = name
+            return
+        }
         val orderIdFromExtra = intent.getStringExtra("order_id")
             ?: intent.getStringExtra("orderId")
             ?: intent.getStringExtra("id")

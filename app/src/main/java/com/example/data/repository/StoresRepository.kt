@@ -56,6 +56,12 @@ object StoresRepository {
             StoreMenu.from(JSONObject(it))
         }
 
+    /** Raw JSON of the remote control data (banners, flags) for the customer app in this city; null on any problem. */
+    suspend fun getRemoteConfigRaw(cityId: String?, versionCode: Int): String? = try {
+        val res = api.getRemoteConfig(mapOf("p_app" to "customer", "p_city_id" to cityId, "p_version_code" to versionCode))
+        if (res.isSuccessful) res.body()?.string() else null
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
+
     /** The fees of a cart (City Admin fee rules) and the "add Rs X more" nudges. null on any problem: the old flat fees then apply. */
     suspend fun getCheckoutFees(cityId: String, distanceKm: Double?, amount: Double): CheckoutFees? =
         call("Fees", { api.getCheckoutFees(mapOf("p_city_id" to cityId, "p_distance_km" to (distanceKm ?: 0.0), "p_amount" to amount.coerceAtLeast(0.0))) }) { CheckoutFees.from(JSONObject(it)) }.getOrNull()
