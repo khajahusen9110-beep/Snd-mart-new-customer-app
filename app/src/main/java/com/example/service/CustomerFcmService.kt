@@ -83,8 +83,17 @@ open class CustomerFcmService : FirebaseMessagingService() {
         // Broadcast in-app event for foreground banners
         _inAppEvents.tryEmit(InAppNotification(title, body, orderId))
 
-        // Create intent opening OrderDetailActivity
-        val intent = Intent(this, OrderDetailActivity::class.java).apply {
+        // A Quick Helper or price-quote push opens that screen in the app; everything else opens the order
+        val pushType = message.data["type"].orEmpty().lowercase()
+        val openScreen = when {
+            pushType.startsWith("helper_") -> "helper"
+            pushType.startsWith("store_quote") -> "quotes"
+            else -> null
+        }
+        val intent = if (openScreen != null) Intent(this, com.example.MainActivity::class.java).apply {
+            putExtra("open_screen", openScreen)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        } else Intent(this, OrderDetailActivity::class.java).apply {
             putExtra("from_notification", true)
             if (!orderId.isNullOrBlank()) {
                 putExtra("order_id", orderId)
@@ -93,7 +102,7 @@ open class CustomerFcmService : FirebaseMessagingService() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
 
-        val notificationId = orderId?.hashCode() ?: System.currentTimeMillis().toInt()
+        val notificationId = (message.data["booking_id"] ?: message.data["quote_id"] ?: orderId)?.hashCode() ?: System.currentTimeMillis().toInt()
         val pendingIntent = PendingIntent.getActivity(
             this,
             notificationId,

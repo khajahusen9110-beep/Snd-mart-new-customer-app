@@ -108,6 +108,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
     private val pendingOrderId = mutableStateOf<String?>(null)
     private val pendingOpenOrders = mutableStateOf(false)
+    // a helper / quote push opens that screen ("helper" or "quotes")
+    private val pendingOpenScreen = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -529,6 +531,19 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                     CustomerFcmService.inAppEvents.collectLatest { notification ->
                         activeNotification = notification
                     }
+                }
+
+                // A Quick Helper or price-quote push opens its own screen
+                val openScreenName by pendingOpenScreen
+                LaunchedEffect(openScreenName, currentDestination, isNavGraphReady) {
+                    val name = openScreenName ?: return@LaunchedEffect
+                    if (!isNavGraphReady || currentDestination == null || currentDestination == Screen.Auth.route || currentDestination == Screen.LocationOnboarding.route) return@LaunchedEffect
+                    try {
+                        navController.navigate(if (name == "quotes") Screen.Quotes.route else Screen.Helper.route)
+                    } catch (e: Exception) {
+                        android.util.Log.w("MainActivity", "Failed to open $name: ${e.message}")
+                    }
+                    pendingOpenScreen.value = null
                 }
 
                 // Navigation if opened with deep link or notification extra
@@ -1238,6 +1253,11 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
 
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
+        intent.getStringExtra("open_screen")?.takeIf { it.isNotBlank() }?.let { name ->
+            intent.removeExtra("open_screen")
+            pendingOpenScreen.value = name
+            return
+        }
         val orderIdFromExtra = intent.getStringExtra("order_id")
             ?: intent.getStringExtra("orderId")
             ?: intent.getStringExtra("id")
