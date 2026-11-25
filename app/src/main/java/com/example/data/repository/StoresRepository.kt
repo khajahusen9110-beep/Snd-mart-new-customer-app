@@ -42,6 +42,16 @@ object StoresRepository {
             api.storesList(buildMap { put("p_city_id", cityId); putAll(locArgs(loc)); if (categoryId != null) put("p_category_id", categoryId) })
         }) { StoreListItem.listFrom(JSONArray(it)) }
 
+    /** Rating and free-delivery note for the shops on the screen; empty on any problem (the card then shows less, never wrong). */
+    suspend fun cardInfo(cityId: String, stores: List<StoreListItem>): Map<String, StoreCardInfo> {
+        if (stores.isEmpty()) return emptyMap()
+        val body = mapOf<String, Any?>(
+            "p_city_id" to cityId,
+            "p_stores" to stores.map { mapOf("id" to it.storeId, "distance_km" to it.distanceKm) }
+        )
+        return call("Could not load shop details", { api.storesCardInfo(body) }) { StoreCardInfo.mapFrom(JSONArray(it)) }.getOrDefault(emptyMap())
+    }
+
     suspend fun search(cityId: String, loc: StoreLoc?, query: String, sort: String, categoryId: String? = null): Result<List<StoreProductHit>> =
         call("Search failed", {
             api.storesSearch(buildMap {

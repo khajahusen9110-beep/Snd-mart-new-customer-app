@@ -8,6 +8,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.TwoWheeler
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -26,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.model.StoreCardInfo
 import com.example.data.model.StoreListItem
 import com.example.data.model.StoreProductHit
 import com.example.ui.theme.*
@@ -58,27 +63,68 @@ internal fun StorePhoto(url: String?, size: Int, modifier: Modifier = Modifier) 
     }
 }
 
-/** A shop: photo, name, category and distance, with "Nearest" / "Open" / "Closed" badges. */
+/**
+ * A shop in the new look: big photo, name with a verified tick, category and distance, rating and free-delivery note
+ * (only when there is real data), Nearest / Nearby / Open chips and a "View Store" button.
+ */
 @Composable
-fun StoreCard(s: StoreListItem, onClick: () -> Unit) {
+fun StoreCard(s: StoreListItem, info: StoreCardInfo? = null, onClick: () -> Unit) {
+    val green = Color(0xFF1A9A49)
+    val hasRating = info?.avgRating != null && info.reviewCount > 0
+    val free = info?.freeDelivery == true
+    val nearby = !s.isNearest && s.distanceKm != null && s.distanceKm <= 2.0
     Surface(
-        shape = RoundedCornerShape(16.dp), color = SurfaceLight, border = BorderStroke(1.dp, OutlineSoft),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).testTag("store_card")
+        shape = RoundedCornerShape(20.dp), color = SurfaceLight, border = BorderStroke(1.dp, OutlineSoft), shadowElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).clickable(onClick = onClick).testTag("store_card")
     ) {
-        Row(Modifier.alpha(if (s.isOpen) 1f else 0.6f).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StorePhoto(s.bannerUrl, 56)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(s.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    s.categoryName + if (s.distanceKm != null) " · ${kmLabel(s.distanceKm)}" else "",
-                    fontSize = 12.sp, color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 2.dp)) {
+        Row(Modifier.alpha(if (s.isOpen) 1f else 0.7f).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(92.dp).clip(RoundedCornerShape(16.dp)).background(NaturalPrimaryContainer), contentAlignment = Alignment.Center) {
+                if (s.bannerUrl != null) AsyncImage(model = s.bannerUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                else Icon(Icons.Filled.Storefront, contentDescription = null, tint = NaturalPrimary, modifier = Modifier.size(34.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(s.name, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.width(5.dp))
+                    Icon(Icons.Filled.Verified, contentDescription = "Verified shop", tint = green, modifier = Modifier.size(20.dp))
+                }
+                Text(s.categoryName + if (s.distanceKm != null) " · ${kmLabel(s.distanceKm)}" else "", fontSize = 13.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (hasRating || free) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (hasRating) Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFF7BC043), modifier = Modifier.size(15.dp))
+                        Text(" %.1f".format(info!!.avgRating!!), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary)
+                        Text(" (${info.reviewCount})", fontSize = 13.sp, color = TextSecondary)
+                    }
+                    if (hasRating && free) Box(Modifier.size(width = 1.dp, height = 14.dp).background(OutlineSoft))
+                    if (free) Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.TwoWheeler, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+                        Text(" Free Delivery" + (info!!.freeOver?.let { " ₹${it.toInt()}+" } ?: ""), fontSize = 13.sp, color = TextSecondary, maxLines = 1)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 2.dp)) {
                     if (s.isNearest) StoreBadge("Nearest", Color(0xFFFFF3D6), Color(0xFF9A5B00))
-                    if (s.isOpen) StoreBadge("Open", Color(0xFFDCFCE7), Color(0xFF166534)) else StoreBadge("Closed", Color(0xFFFEE2E2), Color(0xFF991B1B))
+                    if (nearby) StoreBadge("Nearby", Color(0xFFE0ECFF), Color(0xFF1D4ED8))
+                    if (s.isOpen) StoreBadge("● Open", Color(0xFFDCFCE7), Color(0xFF166534)) else StoreBadge("Closed", Color(0xFFFEE2E2), Color(0xFF991B1B))
+                }
+                Surface(shape = RoundedCornerShape(22.dp), color = Color(0xFFF2FBF5), border = BorderStroke(2.dp, green), modifier = Modifier.padding(top = 2.dp)) {
+                    Row(Modifier.padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("View Store", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = Color(0xFF0E7A37))
+                        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color(0xFF0E7A37), modifier = Modifier.size(18.dp))
+                    }
                 }
             }
-            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = TextMuted)
+        }
+    }
+}
+
+/** The grey pill under the shop list: "Open shops first · nearest first · within 5 km". */
+@Composable
+fun StoresFootnote(text: String) {
+    Surface(shape = RoundedCornerShape(16.dp), color = SurfaceVariantLight, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.AccessTime, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
         }
     }
 }

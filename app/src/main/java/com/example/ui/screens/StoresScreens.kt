@@ -150,6 +150,9 @@ fun StoresScreen(
             dismissButton = { TextButton(onClick = { conflict = null }) { Text("Cancel") } }
         )
     }
+    val shopsRaw = stores.orEmpty()
+    var cardInfo by remember { mutableStateOf<Map<String, StoreCardInfo>>(emptyMap()) }
+    LaunchedEffect(stores) { val id = cityId; cardInfo = if (id != null && stores != null) StoresRepository.cardInfo(id, shopsRaw) else emptyMap() }
     val shops = remember(stores) { stores.orEmpty().sortedWith(compareBy<StoreListItem>({ !it.isOpen }, { it.distanceKm ?: 999.0 }, { it.name })) }
     val searching = query.length >= 2
 
@@ -257,9 +260,9 @@ fun StoresScreen(
                 item { Text(title + if (shops.isNotEmpty()) " · ${shops.size}" else "", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp) }
                 if (stores == null && error == null) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
                 if (stores != null && shops.isEmpty()) item { StoresEmpty("No shops here yet", "We show shops within ${(cfg?.radiusKm ?: 5.0).toInt()} km of you. Please check again soon.") }
-                items(shops, key = { it.storeId }) { s -> StoreCard(s) { onOpenStore(s.storeId) } }
+                items(shops, key = { it.storeId }) { s -> StoreCard(s, cardInfo[s.storeId]) { onOpenStore(s.storeId) } }
                 if (shops.isNotEmpty()) item {
-                    Text("Open shops first" + (if (loc != null) " · nearest first" else "") + " · within ${(cfg?.radiusKm ?: 5.0).toInt()} km", fontSize = 12.sp, color = TextMuted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    StoresFootnote("Open shops first" + (if (loc != null) " · nearest first" else "") + " · within ${(cfg?.radiusKm ?: 5.0).toInt()} km")
                 }
             }
         }
@@ -327,6 +330,8 @@ fun StoreCategoryScreen(
         StoresRepository.listStores(id, loc, categoryId).onSuccess { stores = it }.onFailure { error = it.message }
     }
     val cat = cfg?.categories?.firstOrNull { it.id == categoryId }
+    var catInfo by remember { mutableStateOf<Map<String, StoreCardInfo>>(emptyMap()) }
+    LaunchedEffect(stores) { val id = cityId; val list = stores; catInfo = if (id != null && list != null) StoresRepository.cardInfo(id, list) else emptyMap() }
     Scaffold(topBar = {
         TopAppBar(
             title = { Column { Text(cat?.name ?: "Shops", fontWeight = FontWeight.Bold); if (cat?.nameKn != null) Text(cat.nameKn, fontSize = 12.sp, color = TextMuted) } },
@@ -337,7 +342,7 @@ fun StoreCategoryScreen(
             error?.let { msg -> item { Text("$msg  (tap to retry)", color = ErrorRed, modifier = Modifier.clickable { retry++ }) } }
             if (stores == null && error == null) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if (stores != null && stores!!.isEmpty()) item { StoresEmpty("No shops here yet", "We show shops within ${(cfg?.radiusKm ?: 5.0).toInt()} km of you.") }
-            items(stores.orEmpty(), key = { it.storeId }) { s -> StoreCard(s) { onOpenStore(s.storeId) } }
+            items(stores.orEmpty(), key = { it.storeId }) { s -> StoreCard(s, catInfo[s.storeId]) { onOpenStore(s.storeId) } }
         }
     }
 }
