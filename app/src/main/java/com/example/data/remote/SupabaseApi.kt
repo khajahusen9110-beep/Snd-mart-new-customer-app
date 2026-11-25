@@ -808,6 +808,9 @@ interface SupabaseApi {
     @POST("rest/v1/rpc/stores_list")
     suspend fun storesList(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
+    @POST("rest/v1/rpc/record_order_location")
+    suspend fun recordOrderLocation(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
     @POST("rest/v1/rpc/stores_card_info")
     suspend fun storesCardInfo(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 

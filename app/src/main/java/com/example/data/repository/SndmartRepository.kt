@@ -3467,6 +3467,18 @@ class SndmartRepository(
      * Executes the checkout RPC function (checkout_food_order or checkout_grocery_order)
      * with transient network retry. Real errors (e.g. stock, invalid address) return immediately.
      */
+    /** Adds the customer's exact position (with its accuracy) to a placed order for the City Admin. Best effort; never throws. */
+    suspend fun recordOrderLocation(orderId: String, lat: Double, lng: Double, accuracyM: Double?) {
+        try {
+            val body = mapOf<String, Any?>("p_order_id" to orderId, "p_lat" to lat, "p_lng" to lng, "p_accuracy_m" to accuracyM)
+            val res = api.recordOrderLocation(body)
+            if (!res.isSuccessful) Log.w(TAG, "Order location not saved: HTTP ${res.code()}")
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.w(TAG, "Order location not saved: ${e.message}")
+        }
+    }
+
     private suspend fun callCheckoutRpcWithRetry(
         isHotel: Boolean,
         requestBody: okhttp3.RequestBody,
