@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.model.MIN_REVIEWS_FOR_STARS
 import com.example.data.model.StoreCardInfo
 import com.example.data.model.StoreListItem
 import com.example.data.model.StoreProductHit
@@ -70,7 +71,8 @@ internal fun StorePhoto(url: String?, size: Int, modifier: Modifier = Modifier) 
 @Composable
 fun StoreCard(s: StoreListItem, info: StoreCardInfo? = null, onClick: () -> Unit) {
     val green = Color(0xFF1A9A49)
-    val hasRating = info?.avgRating != null && info.reviewCount > 0
+    val hasRating = info?.avgRating != null && info.reviewCount >= MIN_REVIEWS_FOR_STARS
+    val isNew = info != null && !hasRating
     val free = info?.freeDelivery == true
     val nearby = !s.isNearest && s.distanceKm != null && s.distanceKm <= 2.0
     Surface(
@@ -89,13 +91,14 @@ fun StoreCard(s: StoreListItem, info: StoreCardInfo? = null, onClick: () -> Unit
                     Icon(Icons.Filled.Verified, contentDescription = "Verified shop", tint = green, modifier = Modifier.size(20.dp))
                 }
                 Text(s.categoryName + if (s.distanceKm != null) " · ${kmLabel(s.distanceKm)}" else "", fontSize = 13.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (hasRating || free) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (hasRating || isNew || free) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (hasRating) Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFF7BC043), modifier = Modifier.size(15.dp))
                         Text(" %.1f".format(info!!.avgRating!!), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary)
                         Text(" (${info.reviewCount})", fontSize = 13.sp, color = TextSecondary)
                     }
-                    if (hasRating && free) Box(Modifier.size(width = 1.dp, height = 14.dp).background(OutlineSoft))
+                    if (isNew) StoreBadge("✨ New", Color(0xFFEDE9FE), Color(0xFF5B21B6))
+                    if ((hasRating || isNew) && free) Box(Modifier.size(width = 1.dp, height = 14.dp).background(OutlineSoft))
                     if (free) Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.TwoWheeler, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
                         Text(" Free Delivery" + (info!!.freeOver?.let { " ₹${it.toInt()}+" } ?: ""), fontSize = 13.sp, color = TextSecondary, maxLines = 1)

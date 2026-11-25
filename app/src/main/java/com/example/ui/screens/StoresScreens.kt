@@ -430,6 +430,7 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
                         if (m.address != null) Text("📍 " + m.address, fontSize = 12.sp, color = TextMuted)
                     }
                 }
+                item { StoreRatingSection(storeId) }
                 item {
                     OutlinedTextField(
                         value = find, onValueChange = { find = it }, singleLine = true, shape = RoundedCornerShape(24.dp),

@@ -106,6 +106,30 @@ data class StoreListItem(
     }
 }
 
+/** Stars, how many people gave each, and the latest written reviews of one shop. */
+data class StoreRatingSummary(val avg: Double?, val count: Int, val distribution: Map<Int, Int>, val recent: List<RatingComment>) {
+    data class RatingComment(val name: String, val rating: Int, val comment: String)
+    companion object {
+        fun from(o: JSONObject): StoreRatingSummary {
+            val d = o.optJSONObject("distribution")
+            val r = o.optJSONArray("recent")
+            return StoreRatingSummary(
+                o.dOrNull("avg_rating"), o.optInt("review_count", 0),
+                (1..5).associateWith { d?.optInt(it.toString(), 0) ?: 0 },
+                (0 until (r?.length() ?: 0)).map { i -> r!!.getJSONObject(i).let { RatingComment(it.optString("name", "Customer"), it.optInt("rating", 5), it.optString("comment", "")) } }
+            )
+        }
+    }
+}
+
+/** A delivered order still waiting for the customer's rating. */
+data class PendingReview(val orderId: String, val vendorName: String, val orderNumber: String?) {
+    companion object { fun from(o: JSONObject) = PendingReview(o.getString("order_id"), o.optString("vendor_name", "your order"), o.optString("order_number").takeIf { it.isNotBlank() && it != "null" }) }
+}
+
+/** A shop with fewer ratings than this shows "New" instead of stars, so one 5-star review cannot outrank an established shop. */
+const val MIN_REVIEWS_FOR_STARS = 3
+
 /** Rating, review count and the free-delivery note of a shop card; nothing is invented (the server sends none when there is none). */
 data class StoreCardInfo(val storeId: String, val avgRating: Double?, val reviewCount: Int, val freeDelivery: Boolean, val freeOver: Double?) {
     companion object {
