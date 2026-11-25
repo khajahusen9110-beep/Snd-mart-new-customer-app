@@ -41,7 +41,7 @@ fun GroceryCategoryList(
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(
-            text = "Shop by Category",
+            text = "Shop Categories",
             fontSize = 18.sp,
             fontWeight = FontWeight.ExtraBold,
             color = TextPrimary,

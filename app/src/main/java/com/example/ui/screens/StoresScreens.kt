@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.ShoppingBasket
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -81,7 +83,12 @@ fun StoresScreen(
     onOpenHelper: () -> Unit,
     onOpenAddresses: () -> Unit,
     onNotAvailable: () -> Unit,
-    onOpenQuotes: () -> Unit = {}
+    onOpenQuotes: () -> Unit = {},
+    onChangeCity: () -> Unit = {},
+    onOpenNotifications: () -> Unit = {},
+    onOpenWallet: () -> Unit = {},
+    onOpenReferEarn: () -> Unit = {},
+    onOpenHelp: () -> Unit = {}
 ) {
     val cfg by produceState<StoresConfig?>(null, cityId) { value = StoresRepository.getConfig(cityId, force = true) }
     var loc by remember { mutableStateOf<StoreLoc?>(null) }
@@ -146,29 +153,41 @@ fun StoresScreen(
     val shops = remember(stores) { stores.orEmpty().sortedWith(compareBy<StoreListItem>({ !it.isOpen }, { it.distanceKm ?: 999.0 }, { it.name })) }
     val searching = query.length >= 2
 
-    Scaffold(topBar = {
-        Surface(color = androidx.compose.ui.graphics.Color.White, shadowElevation = 2.dp) {
-            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape).background(androidx.compose.ui.graphics.Color(0xFFDCFCE7)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Storefront, contentDescription = null, tint = androidx.compose.ui.graphics.Color(0xFF15803D), modifier = Modifier.size(22.dp))
-                }
-                Column {
-                    Text("Grocery", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, lineHeight = 22.sp)
-                    if (!cityName.isNullOrBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.LocationOn, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
-                        Spacer(Modifier.width(2.dp))
-                        Text(cityName, fontSize = 13.sp, color = TextMuted, fontWeight = FontWeight.Medium)
-                    }
+    val unread by repository.sessionManager.unreadNotificationCount.collectAsState()
+    var menuOpen by remember { mutableStateOf(false) }
+    var allCategoriesOpen by remember { mutableStateOf(false) }
+    val homeCtx = androidx.compose.ui.platform.LocalContext.current
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    var banners by remember(cityId) { mutableStateOf(repository.getCachedPromoBanners(cityId, "grocery") ?: emptyList()) }
+    LaunchedEffect(cityId) { val id = cityId ?: return@LaunchedEffect; banners = repository.getPromoBanners(id, "grocery") }
+    if (menuOpen) HomeMenuSheet(
+        items = listOf("My price quotes" to onOpenQuotes, "Wallet" to onOpenWallet, "Refer & Earn" to onOpenReferEarn, "Help & Support" to onOpenHelp, "Chat on WhatsApp" to { openSupportWhatsApp(homeCtx) }),
+        onDismiss = { menuOpen = false }
+    )
+    if (allCategoriesOpen) ModalBottomSheet(onDismissRequest = { allCategoriesOpen = false }, containerColor = androidx.compose.ui.graphics.Color.White) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).testTag("all_categories_sheet"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("All categories", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+            val all = cfg?.categories.orEmpty()
+            all.chunked(4).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { c -> Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { RoundCat(c.name, c.imageUrl, catId == c.id) { catId = c.id; allCategoriesOpen = false } } }
+                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
+    }
+    Scaffold(topBar = {
+        HomeBrandHeader(
+            cityName = cityName, unreadCount = unread, onMenu = { menuOpen = true }, onCity = onChangeCity,
+            onBell = onOpenNotifications, onWhatsApp = { openSupportWhatsApp(homeCtx) }
+        )
     }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).testTag("stores_screen"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
         ) {
-            item { StoresModeTabs(helperOn, onOpenFood, onOpenHelper) }
+            item { HomeModeTabs(foodSelected = false, groceryTitle = "Grocery", grocerySub = "Daily Needs", helperOn = helperOn, onGrocery = {}, onFood = onOpenFood, onHelper = onOpenHelper) }
             item { com.example.remote.RemoteBlocksStrip("stores", onScreen = { com.example.remote.RemoteActions.open(it) }, modifier = Modifier.offset(x = (-16).dp)) }
             item {
                 Surface(shape = RoundedCornerShape(14.dp), color = SurfaceLight, border = BorderStroke(1.dp, OutlineSoft), modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenQuotes).testTag("my_quotes_entry")) {
@@ -181,14 +200,9 @@ fun StoresScreen(
                     }
                 }
             }
-            item {
-                OutlinedTextField(
-                    value = text, onValueChange = { text = it }, singleLine = true, shape = RoundedCornerShape(24.dp),
-                    placeholder = { Text("Search products in all shops") },
-                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                    trailingIcon = { if (text.isNotEmpty()) IconButton(onClick = { text = "" }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") } },
-                    modifier = Modifier.fillMaxWidth().testTag("stores_search")
-                )
+            item { HomePillSearch(value = text, onChange = { text = it }, hint = "Search products, stores or food", tag = "stores_search") }
+            if (!searching && banners.isNotEmpty()) item {
+                com.example.ui.components.PromoBannerCarousel(banners = banners, onOpen = { b -> val t = b.linkValue; if (b.linkType == "url" && t != null && t.startsWith("https://")) runCatching { uriHandler.openUri(t) } else if (b.linkType == "category" && t != null) catId = t }, modifier = Modifier)
             }
             if (locDone && loc == null) item {
                 Surface(shape = RoundedCornerShape(14.dp), color = SurfaceLight, border = BorderStroke(1.dp, OutlineSoft), modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenAddresses)) {
@@ -209,10 +223,12 @@ fun StoresScreen(
                     }
                 }
             }
+            if (!searching && cfg?.categories.orEmpty().isNotEmpty()) item { HomeSectionHeader("Shop Categories", "See All") { allCategoriesOpen = true } }
             if (!searching && cfg?.categories.orEmpty().isNotEmpty()) item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.testTag("store_category_row")) {
-                    item { RoundCat("Recommended", null, catId == null) { catId = null } }
+                    item { RoundCat("All Categories", null, catId == null) { catId = null } }
                     items(cfg?.categories.orEmpty(), key = { it.id }) { c -> RoundCat(c.name, c.imageUrl, catId == c.id) { catId = c.id } }
+                    item { RoundCat("More", null, false) { allCategoriesOpen = true } }
                 }
             }
             if (searching) {
@@ -260,7 +276,8 @@ private fun RoundCat(name: String, imageUrl: String?, selected: Boolean, onClick
             contentAlignment = Alignment.Center
         ) {
             if (imageUrl != null) AsyncImage(imageUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            else if (name == "Recommended") Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = NaturalPrimary, modifier = Modifier.size(28.dp))
+            else if (name == "All Categories") Icon(Icons.Filled.ShoppingBasket, contentDescription = null, tint = NaturalPrimary, modifier = Modifier.size(28.dp))
+            else if (name == "More") Icon(Icons.Filled.MoreHoriz, contentDescription = null, tint = NaturalPrimary, modifier = Modifier.size(28.dp))
             else Text(name.take(1), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = NaturalPrimary)
         }
         Text(name, fontSize = 12.sp, fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium, color = if (selected) NaturalPrimary else TextSecondary, maxLines = 2, textAlign = TextAlign.Center, lineHeight = 14.sp)

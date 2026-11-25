@@ -89,7 +89,9 @@ fun HomeScreen(
     onProceedToCheckout: (isHotel: Boolean) -> Unit = {},
     onNavigateToWallet: (() -> Unit)? = null,
     onNavigateToHelper: (() -> Unit)? = null,
-    onNavigateToStores: (() -> Unit)? = null
+    onNavigateToStores: (() -> Unit)? = null,
+    onNavigateToHelp: () -> Unit = {},
+    onNavigateToReferEarn: () -> Unit = {}
 ) {
     // One null-safe read of the city id, reused everywhere below (dozens of repeated safe calls made the
     // Kotlin compiler run out of memory on this very large function).
@@ -908,15 +910,41 @@ fun HomeScreen(
         runCatching { uriHandler.openUri(target) }
     }
 
+    var homeMenuOpen by remember { mutableStateOf(false) }
+    val homeContext = androidx.compose.ui.platform.LocalContext.current
+    if (homeMenuOpen) HomeMenuSheet(
+        items = buildList {
+            if (onNavigateToWallet != null) add("Wallet" to { onNavigateToWallet() })
+            add("Cart" to onNavigateToCart)
+            add("Refer & Earn" to onNavigateToReferEarn)
+            add("Help & Support" to onNavigateToHelp)
+            add("Chat on WhatsApp" to { openSupportWhatsApp(homeContext) })
+            add("Refresh" to {
+                val cityId = homeCityId
+                bannerRefreshTick += 1
+                if (cityId != null) {
+                    if (browsingMode == BrowsingMode.GROCERY) {
+                        loadGroceryCategories(forceRefresh = true)
+                        loadGroceryProducts(cityId, searchQuery, selectedCategoryId, reset = true, forceRefresh = true)
+                    } else {
+                        loadHotelsData(cityId, searchQuery, reset = true, forceRefresh = true)
+                    }
+                }
+            })
+        },
+        onDismiss = { homeMenuOpen = false }
+    )
     CompositionLocalProvider(LocalCityTheme provides cityTheme) {
     Scaffold(
         topBar = {
-            SndmartTopBar(
-                currentCity = selectedCity,
-                cartCount = totalCartCount,
-                deliveryAddressLabel = deliveryAddressLabel,
-                unreadNotificationCount = unreadNotificationCount,
-                navigationIcon = if (browsingMode == BrowsingMode.HOTELS &&
+            HomeBrandHeader(
+                cityName = selectedCity?.name,
+                unreadCount = unreadNotificationCount,
+                onMenu = { homeMenuOpen = true },
+                onCity = onCityChangeRequested,
+                onBell = { onNavigateToNotifications?.invoke() },
+                onWhatsApp = { openSupportWhatsApp(homeContext) },
+                leading = if (browsingMode == BrowsingMode.HOTELS &&
                     (serviceMode != "food_only" || tierUi.open || !selectedFoodCategoryName.isNullOrEmpty())
                 ) {
                     {
@@ -926,33 +954,16 @@ fun HomeScreen(
                                 else if (!selectedFoodCategoryName.isNullOrEmpty()) selectedFoodCategoryName = null
                                 else browsingMode = BrowsingMode.GROCERY
                             },
-                            modifier = Modifier.testTag("hotels_back_button")
+                            modifier = Modifier.size(42.dp).testTag("hotels_back_button")
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = if (tierUi.open || !selectedFoodCategoryName.isNullOrEmpty()) "Back to food home" else "Back to Groceries"
+                                contentDescription = if (tierUi.open || !selectedFoodCategoryName.isNullOrEmpty()) "Back to food home" else "Back to Groceries",
+                                tint = Color.White
                             )
                         }
                     }
-                } else null,
-                onCityClick = onCityChangeRequested,
-                onCartClick = onNavigateToCart,
-                onNotificationsClick = onNavigateToNotifications,
-                onSettingsClick = onOpenSettings,
-                walletBalance = walletBalance,
-                onWalletClick = onNavigateToWallet,
-                onRefresh = {
-                    val cityId = homeCityId
-                    bannerRefreshTick += 1
-                    if (cityId != null) {
-                        if (browsingMode == BrowsingMode.GROCERY) {
-                            loadGroceryCategories(forceRefresh = true)
-                            loadGroceryProducts(cityId, searchQuery, selectedCategoryId, reset = true, forceRefresh = true)
-                        } else {
-                            loadHotelsData(cityId, searchQuery, reset = true, forceRefresh = true)
-                        }
-                    }
-                }
+                } else null
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -978,53 +989,24 @@ fun HomeScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Natural Tones Search Bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .testTag("home_search_input"),
-                placeholder = {
-                    val hints = if (browsingMode == BrowsingMode.GROCERY)
-                        listOf("tomato", "onion", "fruits", "vegetables")
-                    else listOf("biryani", "dosa", "roti", "fried rice")
-                    Text(
-                        "Search \"${hints[searchHintIndex % hints.size]}\"",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
-                    )
-                },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = "Search", tint = TextSecondary)
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear search", tint = TextSecondary)
-                        }
-                    }
-                },
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = SurfaceVariantLight,
-                    focusedBorderColor = NaturalPrimary,
-                    unfocusedBorderColor = Color.Transparent
-                ),
-                singleLine = true
-            )
-
-            HomeModeToggle(
-                browsingMode = browsingMode,
-                serviceMode = serviceMode,
+            HomeModeTabs(
+                foodSelected = browsingMode == BrowsingMode.HOTELS,
+                groceryTitle = "Grocery",
+                grocerySub = "Daily Needs",
+                groceryEnabled = serviceMode != "food_only",
+                foodEnabled = serviceMode != "grocery_only",
                 helperOn = helperOn,
-                onSelect = { browsingMode = it },
-                onHelper = { onNavigateToHelper?.invoke() },
-                storesOn = storesOn,
-                storesReplace = storesOn,
-                onStores = { onNavigateToStores?.invoke() }
+                onGrocery = { if (storesOn) onNavigateToStores?.invoke() else browsingMode = BrowsingMode.GROCERY },
+                onFood = { browsingMode = BrowsingMode.HOTELS },
+                onHelper = { onNavigateToHelper?.invoke() }
+            )
+            HomePillSearch(
+                value = searchQuery,
+                onChange = { searchQuery = it },
+                hint = "Search products, stores or food",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                filterActive = showFoodFilters,
+                onFilter = if (browsingMode == BrowsingMode.HOTELS) ({ showFoodFilters = !showFoodFilters }) else null
             )
 
             Spacer(modifier = Modifier.height(6.dp))

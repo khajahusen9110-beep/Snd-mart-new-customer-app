@@ -825,7 +825,9 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                     onNavigateToHelper = { navController.navigate(Screen.Helper.route) },
                                     onNavigateToStores = {
                                         navController.navigate(Screen.Stores.route) { popUpTo(Screen.Home.route) { inclusive = true } }
-                                    }
+                                    },
+                                    onNavigateToHelp = { navController.navigate(Screen.HelpSupport.createRoute()) },
+                                    onNavigateToReferEarn = { navController.navigate(Screen.ReferEarn.route) }
                                 )
                             }
 
@@ -990,7 +992,12 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                     onNotAvailable = {
                                         navController.navigate(Screen.Home.route) { popUpTo(Screen.Stores.route) { inclusive = true } }
                                     },
-                                    onOpenQuotes = { navController.navigate(Screen.Quotes.route) }
+                                    onOpenQuotes = { navController.navigate(Screen.Quotes.route) },
+                                    onChangeCity = { showCityPicker = true },
+                                    onOpenNotifications = { navController.navigate(Screen.Notifications.route) },
+                                    onOpenWallet = { navController.navigate(Screen.Wallet.route) },
+                                    onOpenReferEarn = { navController.navigate(Screen.ReferEarn.route) },
+                                    onOpenHelp = { navController.navigate(Screen.HelpSupport.createRoute()) }
                                 )
                             }
 
