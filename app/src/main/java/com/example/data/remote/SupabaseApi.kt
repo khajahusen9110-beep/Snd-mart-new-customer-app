@@ -830,7 +830,8 @@ interface SupabaseApi {
     @POST("rest/v1/rpc/helper_get_config")
     suspend fun helperGetConfig(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
-    @POST("rest/v1/rpc/helper_create_booking")
+    // same booking, plus the customer's real position and its accuracy (the nearest matching helper is chosen from it)
+    @POST("rest/v1/rpc/helper_create_booking_v2")
     suspend fun helperCreate(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
     @POST("rest/v1/rpc/helper_my_bookings")

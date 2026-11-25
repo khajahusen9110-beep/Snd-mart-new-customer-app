@@ -170,6 +170,8 @@ fun HelperScreen(repository: SndmartRepository, cityId: String?, userPhone: Stri
 @Composable
 private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, c: HelperCategory, minutes: Int, onMinutes: (Int) -> Unit, cityId: String, userPhone: String?, onBooked: (HelperBooking) -> Unit) {
     val context = LocalContext.current
+    // the customer's real position is searched while the form is filled, so it is ready when they tap Book
+    val liveFix = remember { com.example.util.OrderLocationCapture.start(context) }
     val scope = rememberCoroutineScope()
     val sm = repository.sessionManager
     val userId = sm.getUserId().orEmpty()
@@ -316,7 +318,11 @@ private fun HelperBookForm(repository: SndmartRepository, cfg: HelperConfig, c: 
                         scope.launch {
                             val isoTime = if (later) whenMillis?.let { iso(it) } else null
                             val method = if (cfg.paymentMode == "both") pay else cfg.paymentMode
-                            HelperRepository.create(cityId, aid, c.id, desc.trim(), photos, minutes, isoTime, method, ack)
+                            val fix = kotlinx.coroutines.withTimeoutOrNull(5_000L) { try { liveFix.await() } catch (e: Exception) { null } }
+                            HelperRepository.create(
+                                cityId, aid, c.id, desc.trim(), photos, minutes, isoTime, method, ack,
+                                liveLat = fix?.latitude, liveLng = fix?.longitude, liveAccuracyM = fix?.takeIf { it.hasAccuracy() }?.accuracy?.toDouble()
+                            )
                                 .onSuccess { onBooked(it) }.onFailure { error = it.message ?: "Could not book" }
                             busy = false
                         }
