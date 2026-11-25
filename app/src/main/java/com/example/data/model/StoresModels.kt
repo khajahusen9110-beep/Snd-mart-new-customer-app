@@ -131,11 +131,11 @@ data class PendingReview(val orderId: String, val vendorName: String, val orderN
 const val MIN_REVIEWS_FOR_STARS = 3
 
 /** Rating, review count and the free-delivery note of a shop card; nothing is invented (the server sends none when there is none). */
-data class StoreCardInfo(val storeId: String, val avgRating: Double?, val reviewCount: Int, val freeDelivery: Boolean, val freeOver: Double?) {
+data class StoreCardInfo(val storeId: String, val avgRating: Double?, val reviewCount: Int, val freeDelivery: Boolean, val freeOver: Double?, val popular: Boolean = false) {
     companion object {
         fun mapFrom(a: JSONArray): Map<String, StoreCardInfo> = (0 until a.length()).map { i ->
             val o = a.getJSONObject(i)
-            StoreCardInfo(o.getString("store_id"), o.dOrNull("avg_rating"), o.optInt("review_count", 0), o.optBoolean("free_delivery", false), o.dOrNull("free_over"))
+            StoreCardInfo(o.getString("store_id"), o.dOrNull("avg_rating"), o.optInt("review_count", 0), o.optBoolean("free_delivery", false), o.dOrNull("free_over"), o.optBoolean("popular", false))
         }.associateBy { it.storeId }
     }
 }
