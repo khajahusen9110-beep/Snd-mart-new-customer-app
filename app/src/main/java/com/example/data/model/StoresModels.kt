@@ -177,7 +177,7 @@ data class StoreVariant(val id: String, val label: String, val price: Double, va
 
 data class StoreMenu(
     val id: String, val name: String, val bannerUrl: String?, val address: String?, val categoryName: String?, val isOpen: Boolean, val prepMinutes: Int?,
-    val categories: List<Pair<String, String>>, val products: List<StoreMenuProduct>
+    val categories: List<Pair<String, String>>, val products: List<StoreMenuProduct>, val phone: String? = null
 ) {
     companion object {
         fun from(o: JSONObject): StoreMenu {
@@ -185,7 +185,7 @@ data class StoreMenu(
             val cats = o.optJSONArray("categories") ?: JSONArray()
             val prods = o.optJSONArray("products") ?: JSONArray()
             return StoreMenu(
-                id = s.getString("id"), name = s.optString("name"), bannerUrl = s.sOrNull("banner_url"), address = s.sOrNull("address"),
+                id = s.getString("id"), name = s.optString("name"), bannerUrl = s.sOrNull("banner_url"), address = s.sOrNull("address"), phone = s.sOrNull("phone"),
                 categoryName = s.sOrNull("category_name"), isOpen = s.optBoolean("is_open", false), prepMinutes = if (s.isNull("prep_minutes")) null else s.optInt("prep_minutes"),
                 categories = (0 until cats.length()).map { cats.getJSONObject(it).let { c -> c.getString("id") to c.optString("name") } },
                 products = (0 until prods.length()).map { i ->
