@@ -106,6 +106,16 @@ data class StoreListItem(
     }
 }
 
+/** Rating, review count and the free-delivery note of a shop card; nothing is invented (the server sends none when there is none). */
+data class StoreCardInfo(val storeId: String, val avgRating: Double?, val reviewCount: Int, val freeDelivery: Boolean, val freeOver: Double?) {
+    companion object {
+        fun mapFrom(a: JSONArray): Map<String, StoreCardInfo> = (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            StoreCardInfo(o.getString("store_id"), o.dOrNull("avg_rating"), o.optInt("review_count", 0), o.optBoolean("free_delivery", false), o.dOrNull("free_over"))
+        }.associateBy { it.storeId }
+    }
+}
+
 data class StoreProductHit(
     val productId: String, val name: String, val price: Double, val mrp: Double?, val unit: String?, val unitPrice: Double?, val unitLabel: String?,
     val imageUrl: String?, val storeId: String, val storeName: String, val distanceKm: Double?
