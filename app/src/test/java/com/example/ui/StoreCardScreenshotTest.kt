@@ -35,7 +35,7 @@ class StoreCardScreenshotTest {
       SndmartTheme {
         Column(Modifier.fillMaxWidth().background(Color(0xFFF5F5F8)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
           StoreCard(item("1", "new bakery", 0.0, true, true)) {}
-          StoreCard(item("2", "HKGN Fruit marchant", 1.4, true, false), StoreCardInfo("2", 4.3, 18, true, 99.0)) {}
+          StoreCard(item("2", "HKGN Fruit marchant", 1.4, true, false), StoreCardInfo("2", 4.3, 18, true, 99.0, popular = true)) {}
           StoreCard(item("3", "Sri Venkatesh Veg", 4.4, false, false), StoreCardInfo("3", null, 0, false, null)) {}
           StoresFootnote("Open shops first · nearest first · within 5 km")
         }

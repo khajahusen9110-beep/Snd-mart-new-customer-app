@@ -52,6 +52,13 @@ object StoresRepository {
         return call("Could not load shop details", { api.storesCardInfo(body) }) { StoreCardInfo.mapFrom(JSONArray(it)) }.getOrDefault(emptyMap())
     }
 
+    suspend fun ratingSummary(storeId: String): StoreRatingSummary? =
+        call("Could not load ratings", { api.storeRatingSummary(mapOf("p_vendor_id" to storeId)) }) { StoreRatingSummary.from(JSONObject(it)) }.getOrNull()
+
+    /** The latest delivered order the customer has not rated yet (3 days, after a 20 minute wait); null when none. */
+    suspend fun pendingReview(): PendingReview? =
+        call("Could not check reviews", { api.myPendingReview() }) { raw -> raw.trim().takeIf { it.startsWith("{") }?.let { PendingReview.from(JSONObject(it)) } }.getOrNull()
+
     suspend fun search(cityId: String, loc: StoreLoc?, query: String, sort: String, categoryId: String? = null): Result<List<StoreProductHit>> =
         call("Search failed", {
             api.storesSearch(buildMap {

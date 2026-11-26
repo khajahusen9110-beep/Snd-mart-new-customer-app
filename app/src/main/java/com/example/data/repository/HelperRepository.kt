@@ -38,13 +38,15 @@ object HelperRepository {
 
     suspend fun create(
         cityId: String, addressId: String, categoryId: String, description: String, photoPaths: List<String>, minutes: Int,
-        requestedForIso: String?, paymentMethod: String, rulesAccepted: Boolean
+        requestedForIso: String?, paymentMethod: String, rulesAccepted: Boolean,
+        liveLat: Double? = null, liveLng: Double? = null, liveAccuracyM: Double? = null
     ): Result<HelperBooking> =
         call("Could not book", {
             api.helperCreate(mapOf(
                 "p_city_id" to cityId, "p_address_id" to addressId, "p_category_id" to categoryId, "p_description" to description,
                 "p_photo_paths" to photoPaths, "p_minutes" to minutes, "p_requested_for" to requestedForIso,
-                "p_payment_method" to paymentMethod, "p_rules_accepted" to rulesAccepted
+                "p_payment_method" to paymentMethod, "p_rules_accepted" to rulesAccepted,
+                "p_live_lat" to liveLat, "p_live_lng" to liveLng, "p_live_accuracy" to liveAccuracyM
             ))
         }) { raw -> JSONObject(raw).let { HelperBooking.from(it) } }
 

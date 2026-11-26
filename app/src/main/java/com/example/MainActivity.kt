@@ -823,6 +823,7 @@ Box(Modifier.navIconScale(currentDestination == Screen.Profile.route)) {
                                     },
                                     onNavigateToWallet = { navController.navigate(Screen.Wallet.route) },
                                     onNavigateToHelper = { navController.navigate(Screen.Helper.route) },
+                                    onNavigateToOrder = { id -> navController.navigate(Screen.OrderDetail.createRoute(id)) },
                                     onNavigateToStores = {
                                         navController.navigate(Screen.Stores.route) { popUpTo(Screen.Home.route) { inclusive = true } }
                                     },

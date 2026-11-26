@@ -698,6 +698,8 @@ fun CheckoutScreen(
                                     null
                                 }
 
+                                // the exact position of the customer, searched while the order is created (never delays it)
+                                val locationCapture = com.example.util.OrderLocationCapture.start(context)
                                 val res = repository.placeOrder(
                                     userId = userId,
                                     isHotel = isHotel,
@@ -714,6 +716,7 @@ fun CheckoutScreen(
 
                                 if (res.isSuccess) {
                                     val order = res.getOrNull()
+                                    order?.id?.takeIf { it.isNotBlank() }?.let { com.example.util.OrderLocationCapture.attach(repository, it, locationCapture) }
                                     launch { repository.setOffersChoice(offersOn, "checkout_app") }
                                     if (order == null) {
                                         isPlacingOrder = false
@@ -835,6 +838,8 @@ fun CheckoutScreen(
                     }
                 }
             }
+
+            item { CheckoutLocationHint() }
 
             if (placementError != null) {
                 item {

@@ -106,12 +106,36 @@ data class StoreListItem(
     }
 }
 
+/** Stars, how many people gave each, and the latest written reviews of one shop. */
+data class StoreRatingSummary(val avg: Double?, val count: Int, val distribution: Map<Int, Int>, val recent: List<RatingComment>) {
+    data class RatingComment(val name: String, val rating: Int, val comment: String)
+    companion object {
+        fun from(o: JSONObject): StoreRatingSummary {
+            val d = o.optJSONObject("distribution")
+            val r = o.optJSONArray("recent")
+            return StoreRatingSummary(
+                o.dOrNull("avg_rating"), o.optInt("review_count", 0),
+                (1..5).associateWith { d?.optInt(it.toString(), 0) ?: 0 },
+                (0 until (r?.length() ?: 0)).map { i -> r!!.getJSONObject(i).let { RatingComment(it.optString("name", "Customer"), it.optInt("rating", 5), it.optString("comment", "")) } }
+            )
+        }
+    }
+}
+
+/** A delivered order still waiting for the customer's rating. */
+data class PendingReview(val orderId: String, val vendorName: String, val orderNumber: String?) {
+    companion object { fun from(o: JSONObject) = PendingReview(o.getString("order_id"), o.optString("vendor_name", "your order"), o.optString("order_number").takeIf { it.isNotBlank() && it != "null" }) }
+}
+
+/** A shop with fewer ratings than this shows "New" instead of stars, so one 5-star review cannot outrank an established shop. */
+const val MIN_REVIEWS_FOR_STARS = 3
+
 /** Rating, review count and the free-delivery note of a shop card; nothing is invented (the server sends none when there is none). */
-data class StoreCardInfo(val storeId: String, val avgRating: Double?, val reviewCount: Int, val freeDelivery: Boolean, val freeOver: Double?) {
+data class StoreCardInfo(val storeId: String, val avgRating: Double?, val reviewCount: Int, val freeDelivery: Boolean, val freeOver: Double?, val popular: Boolean = false) {
     companion object {
         fun mapFrom(a: JSONArray): Map<String, StoreCardInfo> = (0 until a.length()).map { i ->
             val o = a.getJSONObject(i)
-            StoreCardInfo(o.getString("store_id"), o.dOrNull("avg_rating"), o.optInt("review_count", 0), o.optBoolean("free_delivery", false), o.dOrNull("free_over"))
+            StoreCardInfo(o.getString("store_id"), o.dOrNull("avg_rating"), o.optInt("review_count", 0), o.optBoolean("free_delivery", false), o.dOrNull("free_over"), o.optBoolean("popular", false))
         }.associateBy { it.storeId }
     }
 }
@@ -153,7 +177,7 @@ data class StoreVariant(val id: String, val label: String, val price: Double, va
 
 data class StoreMenu(
     val id: String, val name: String, val bannerUrl: String?, val address: String?, val categoryName: String?, val isOpen: Boolean, val prepMinutes: Int?,
-    val categories: List<Pair<String, String>>, val products: List<StoreMenuProduct>
+    val categories: List<Pair<String, String>>, val products: List<StoreMenuProduct>, val phone: String? = null
 ) {
     companion object {
         fun from(o: JSONObject): StoreMenu {
@@ -161,7 +185,7 @@ data class StoreMenu(
             val cats = o.optJSONArray("categories") ?: JSONArray()
             val prods = o.optJSONArray("products") ?: JSONArray()
             return StoreMenu(
-                id = s.getString("id"), name = s.optString("name"), bannerUrl = s.sOrNull("banner_url"), address = s.sOrNull("address"),
+                id = s.getString("id"), name = s.optString("name"), bannerUrl = s.sOrNull("banner_url"), address = s.sOrNull("address"), phone = s.sOrNull("phone"),
                 categoryName = s.sOrNull("category_name"), isOpen = s.optBoolean("is_open", false), prepMinutes = if (s.isNull("prep_minutes")) null else s.optInt("prep_minutes"),
                 categories = (0 until cats.length()).map { cats.getJSONObject(it).let { c -> c.getString("id") to c.optString("name") } },
                 products = (0 until prods.length()).map { i ->

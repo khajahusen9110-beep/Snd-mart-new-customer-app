@@ -90,6 +90,7 @@ fun HomeScreen(
     onNavigateToWallet: (() -> Unit)? = null,
     onNavigateToHelper: (() -> Unit)? = null,
     onNavigateToStores: (() -> Unit)? = null,
+    onNavigateToOrder: ((String) -> Unit)? = null,
     onNavigateToHelp: () -> Unit = {},
     onNavigateToReferEarn: () -> Unit = {}
 ) {
@@ -1009,6 +1010,7 @@ fun HomeScreen(
                 onFilter = if (browsingMode == BrowsingMode.HOTELS) ({ showFoodFilters = !showFoodFilters }) else null
             )
 
+            if (onNavigateToOrder != null) ReviewPromptCard(onOpenOrder = onNavigateToOrder, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             Spacer(modifier = Modifier.height(6.dp))
             com.example.remote.RemoteBlocksStrip("home", onScreen = { com.example.remote.RemoteActions.open(it) })
 

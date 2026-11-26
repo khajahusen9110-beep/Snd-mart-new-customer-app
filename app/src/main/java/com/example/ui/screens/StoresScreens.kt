@@ -366,6 +366,7 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
         StoresRepository.getMenu(storeId).onSuccess { menu = it; StoresRepository.rememberStore(storeId) }.onFailure { error = it.message }
     }
     val m = menu
+    val rating by produceState<com.example.data.model.StoreRatingSummary?>(null, storeId) { value = StoresRepository.ratingSummary(storeId) }
     LaunchedEffect(m) {
         val want = PendingStoreAdd.productId
         if (m != null && want != null) { PendingStoreAdd.productId = null; m.products.firstOrNull { it.id == want && it.isAvailable }?.takeIf { m.isOpen }?.let { customising = it } }
@@ -405,31 +406,16 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } }
             )
         },
-        bottomBar = {
-            if (cartCount > 0) Surface(color = NaturalPrimary, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(12.dp).clickable(onClick = onCheckout).testTag("store_checkout_bar")) {
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("$cartCount item${if (cartCount > 1) "s" else ""} • ${rupee(cartTotal)}", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    Text("Checkout", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.ExtraBold)
-                    Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = androidx.compose.ui.graphics.Color.White)
-                }
-            }
-        }
+        bottomBar = { StoreBottomBar(m?.phone, cartCount, cartTotal, onCheckout) }
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).testTag("store_detail_screen"), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
             error?.let { msg -> item { Text("$msg  (tap to retry)", color = ErrorRed, modifier = Modifier.clickable { retry++ }) } }
             if (m == null && error == null) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if (m != null) {
-                if (m.bannerUrl != null) item { AsyncImage(m.bannerUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(16.dp))) }
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (m.isOpen) StoreBadge("Open now", androidx.compose.ui.graphics.Color(0xFFDCFCE7), androidx.compose.ui.graphics.Color(0xFF166534))
-                            else StoreBadge("Closed now", androidx.compose.ui.graphics.Color(0xFFFEE2E2), androidx.compose.ui.graphics.Color(0xFF991B1B))
-                            if (m.prepMinutes != null) Text("packs in about ${m.prepMinutes} min", fontSize = 12.sp, color = TextMuted)
-                        }
-                        if (m.address != null) Text("📍 " + m.address, fontSize = 12.sp, color = TextMuted)
-                    }
-                }
+                item { StoreHero(m) }
+                item { StoreInfoCard(m, rating) }
+                item { StoreInfoStrip(m) }
+                rating?.takeIf { it.count > 0 }?.let { r -> item { StoreRatingContent(r) } }
                 item {
                     OutlinedTextField(
                         value = find, onValueChange = { find = it }, singleLine = true, shape = RoundedCornerShape(24.dp),
@@ -440,12 +426,7 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
                     )
                 }
                 if (find.isBlank()) stickyHeader {
-                    Surface(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.fillMaxWidth()) {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 6.dp).testTag("store_product_chips")) {
-                            item { StoreChip("Recommended", cat == null) { cat = null } }
-                            items(m.categories) { (id, name) -> StoreChip(name, cat == id) { cat = id } }
-                        }
-                    }
+                    Surface(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.fillMaxWidth()) { StoreCategoryTiles(m, cat) { cat = it } }
                 }
                 // Recommended = the shop's best picks: products on offer first, then the rest in the shop's own order
                 val shown = when {
