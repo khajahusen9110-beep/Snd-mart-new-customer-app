@@ -2890,14 +2890,21 @@ class SndmartRepository(
         address: CustomerAddress?,
         cityId: String?,
         vendorId: String?,
-        isHotel: Boolean
+        isHotel: Boolean,
+        live: android.location.Location? = null
     ): Double {
         if (address == null || address.lat == null || address.lng == null) {
             return 0.0
         }
-        val addrLat = address.lat
-        val addrLng = address.lng
+        var addrLat = address.lat
+        var addrLng = address.lng
         if (addrLat == 0.0 && addrLng == 0.0) return 0.0
+        // The real position (accurate to 100 m and within 2 km of the chosen address) is the better starting point than a hand-placed pin; the server does the same
+        if (live != null && live.hasAccuracy() && live.accuracy <= 100f) {
+            val near = FloatArray(1)
+            android.location.Location.distanceBetween(addrLat, addrLng, live.latitude, live.longitude, near)
+            if (near[0] <= 2000f) { addrLat = live.latitude; addrLng = live.longitude }
+        }
 
         val cleanCityId = cityId?.removePrefix("eq.")?.trim()
         val cleanVendorId = vendorId?.removePrefix("eq.")?.trim()
@@ -3467,6 +3474,16 @@ class SndmartRepository(
      * Executes the checkout RPC function (checkout_food_order or checkout_grocery_order)
      * with transient network retry. Real errors (e.g. stock, invalid address) return immediately.
      */
+    /** Tells the server where the customer is now, so the delivery distance and fee at checkout use it. Best effort; never throws. */
+    suspend fun recordCheckoutLocation(lat: Double, lng: Double, accuracyM: Double?) {
+        try {
+            api.recordCheckoutLocation(mapOf<String, Any?>("p_lat" to lat, "p_lng" to lng, "p_accuracy" to accuracyM))
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.w(TAG, "Checkout location not saved: ${e.message}")
+        }
+    }
+
     /** Adds the customer's exact position (with its accuracy) to a placed order for the City Admin. Best effort; never throws. */
     suspend fun recordOrderLocation(orderId: String, lat: Double, lng: Double, accuracyM: Double?) {
         try {

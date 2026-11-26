@@ -427,6 +427,16 @@ fun CheckoutScreen(
     val promoDiscount = cartPromoDiscount(subtotal, checkoutPromo)
     val subtotalAfterDiscount = (subtotal - authoritativeDiscount - promoDiscount).coerceAtLeast(0.0)
 
+    // The phone's position is searched when checkout opens; the server keeps it for the fee and the fee is shown again from it
+    var liveFix by remember { mutableStateOf<android.location.Location?>(null) }
+    LaunchedEffect(Unit) {
+        val fix = try { com.example.util.OrderLocationCapture.start(context).await() } catch (e: Exception) { null }
+        if (fix != null && fix.latitude != 0.0 && fix.longitude != 0.0) {
+            repository.recordCheckoutLocation(fix.latitude, fix.longitude, if (fix.hasAccuracy()) fix.accuracy.toDouble() else null)
+            liveFix = fix
+        }
+    }
+
     fun calculateFees() {
         val cid = effectiveCityId ?: return
         val addr = selectedAddress ?: return
@@ -452,7 +462,8 @@ fun CheckoutScreen(
                 address = addr,
                 cityId = cid,
                 vendorId = hotelVendorId,
-                isHotel = isHotel
+                isHotel = isHotel,
+                live = liveFix
             )
             addressDistanceKm = dist
 
@@ -482,7 +493,7 @@ fun CheckoutScreen(
         }
     }
 
-    LaunchedEffect(selectedAddressId, freshItems, authoritativeDiscount, effectiveCityId, isHotel, isDeliveryAvailable) {
+    LaunchedEffect(selectedAddressId, freshItems, authoritativeDiscount, effectiveCityId, isHotel, isDeliveryAvailable, liveFix) {
         if (isDeliveryAvailable && selectedAddress != null && !effectiveCityId.isNullOrBlank()) {
             calculateFees()
         } else {

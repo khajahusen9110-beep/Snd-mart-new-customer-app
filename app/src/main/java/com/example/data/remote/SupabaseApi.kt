@@ -817,6 +817,10 @@ interface SupabaseApi {
     @POST("rest/v1/rpc/my_pending_review")
     suspend fun myPendingReview(@Body body: Map<String, @JvmSuppressWildcards Any?> = emptyMap()): Response<ResponseBody>
 
+    // the phone's position when checkout opens: the delivery distance (and fee) is measured from it
+    @POST("rest/v1/rpc/record_checkout_location")
+    suspend fun recordCheckoutLocation(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
     @POST("rest/v1/rpc/stores_card_info")
     suspend fun storesCardInfo(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
