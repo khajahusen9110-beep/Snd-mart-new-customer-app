@@ -787,7 +787,7 @@ fun HomeScreen(
             onDismissRequest = { pendingHotelConflict = null },
             title = { Text("Replace Hotel Cart Items?", fontWeight = FontWeight.Bold) },
             text = {
-                Text("Your cart already contains items from another hotel. Sndmart orders items from one hotel at a time. Would you like to clear the existing hotel cart and add this item?")
+                Text("Your cart already has the most shops you can order from at once (3). Would you like to clear the cart and add this item?")
             },
             confirmButton = {
                 Button(

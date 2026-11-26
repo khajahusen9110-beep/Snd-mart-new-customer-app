@@ -524,6 +524,15 @@ interface SupabaseApi {
         @Body body: RequestBody
     ): Response<ResponseBody>
 
+    // Up to 3 shops in one cart: one order per shop, one rider for all of them (cash on delivery for now)
+    @POST("rest/v1/rpc/checkout_multi_order")
+    suspend fun checkoutMultiOrder(
+        @Body body: RequestBody
+    ): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/get_delivery_eta_config")
+    suspend fun getDeliveryEtaConfig(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
     @POST("rest/v1/rpc/is_store_vendor")
     suspend fun isStoreVendor(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 

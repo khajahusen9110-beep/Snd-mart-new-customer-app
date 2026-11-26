@@ -48,6 +48,8 @@ class SndmartRepository(
 
     companion object {
         const val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes short-lived cache
+        /** Most different shops one cart may hold (the server checks the city's own limit again). */
+        const val MAX_SHOPS_PER_CART = 3
     }
 
     val unreadNotificationCount: StateFlow<Int>
@@ -2507,8 +2509,10 @@ class SndmartRepository(
         if (isHotel) {
             val currentList = _hotelCart.value
             val existingVendor = currentList.firstOrNull { it.vendorId != null }?.vendorId
-            if (existingVendor != null && vendorId != null && existingVendor != vendorId) {
-                // Single-hotel rule conflict!
+            val vendorsInCart = currentList.mapNotNull { it.vendorId }.toSet()
+            // up to MAX_SHOPS_PER_CART different shops can share a cart (the server checks the city's own limit)
+            if (existingVendor != null && vendorId != null && vendorId !in vendorsInCart && vendorsInCart.size >= MAX_SHOPS_PER_CART) {
+                // Too many shops in one cart!
                 val pending = CartItem(
                     id = UUID.randomUUID().toString(),
                     userId = currentUserId,
@@ -3402,6 +3406,48 @@ class SndmartRepository(
                 itemsArray.put(itemObj)
             }
 
+            // Several shops in the cart: one order per shop, placed together (cash on delivery for now)
+            val shopIds = rawCart.mapNotNull { it.vendorId?.takeIf { v -> v.isNotBlank() } }.distinct()
+            if (isHotel && shopIds.size > 1) {
+                if (mappedPaymentMethod != "cash") return Result.failure(Exception("Orders from more than one shop are cash on delivery for now."))
+                val stores = JSONArray()
+                for (vid in shopIds) {
+                    val its = JSONArray()
+                    for (item in rawCart.filter { it.vendorId == vid }) {
+                        its.put(JSONObject().apply {
+                            put("product_id", item.productId)
+                            put("variant_id", if (!item.variantId.isNullOrBlank()) item.variantId else JSONObject.NULL)
+                            put("quantity", item.quantity)
+                            if (!item.customNote.isNullOrBlank()) put("custom_note", item.customNote)
+                            if (!item.customPhotoPath.isNullOrBlank()) put("custom_photo_path", item.customPhotoPath)
+                            if (!item.quoteId.isNullOrBlank()) put("quote_id", item.quoteId)
+                        })
+                    }
+                    stores.put(JSONObject().apply { put("vendor_id", vid); put("items", its) })
+                }
+                val multiBody = JSONObject().apply {
+                    put("p_address_id", cleanAddressId)
+                    put("p_payment_method", mappedPaymentMethod)
+                    put("p_stores", stores)
+                    val cc = coupon?.code?.trim()?.uppercase()
+                    put("p_coupon_code", if (!cc.isNullOrBlank()) cc else JSONObject.NULL)
+                    put("p_use_wallet", useWallet)
+                }
+                val mt = "application/json; charset=utf-8".toMediaTypeOrNull()
+                val res = try { api.checkoutMultiOrder(multiBody.toString().toRequestBody(mt)) } catch (e: Exception) { if (e is CancellationException) throw e; return Result.failure(e) }
+                if (!res.isSuccessful) {
+                    return Result.failure(Exception(extractCleanErrorMessage(res.errorBody()?.string().orEmpty(), res.code())))
+                }
+                val j = JSONObject(res.body()?.string().orEmpty().ifBlank { "{}" })
+                val arr = j.optJSONArray("orders") ?: JSONArray()
+                val first = if (arr.length() > 0) arr.getJSONObject(0) else null
+                for (i in 0 until arr.length()) setOrderInstructions(arr.getJSONObject(i).optString("id"), cookingInstructions, deliveryInstructions)
+                clearCartDirectly(isHotel)
+                cachedWallet = null
+                lastMultiOrderEtaMinutes = j.optInt("eta_minutes", 0).takeIf { it > 0 }
+                return Result.success(Order(id = first?.optString("id"), orderNumber = first?.optString("order_number").orEmpty(), totalAmount = j.optDouble("total", 0.0), status = "pending", paymentMethod = "cash"))
+            }
+
             val payloadJson = JSONObject().apply {
                 if (isHotel) {
                     val effectiveVendorId = vendorId?.takeIf { it.isNotBlank() }
@@ -3474,6 +3520,23 @@ class SndmartRepository(
      * Executes the checkout RPC function (checkout_food_order or checkout_grocery_order)
      * with transient network retry. Real errors (e.g. stock, invalid address) return immediately.
      */
+    /** Delivery time of the last several-shop order (shown on the success screen); null for a one-shop order. */
+    @Volatile var lastMultiOrderEtaMinutes: Int? = null
+
+    /** The city's delivery-time rule: minutes = base + perShop x shops, and the most shops in one cart. */
+    suspend fun getDeliveryEtaConfig(cityId: String): Triple<Int, Int, Int> {
+        return try {
+            val res = api.getDeliveryEtaConfig(mapOf("p_city_id" to cityId))
+            if (res.isSuccessful) {
+                val o = JSONObject(res.body()?.string().orEmpty().ifBlank { "{}" })
+                Triple(o.optInt("base_eta_minutes", 20), o.optInt("per_store_eta_minutes", 10), o.optInt("max_stores", MAX_SHOPS_PER_CART))
+            } else Triple(20, 10, MAX_SHOPS_PER_CART)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Triple(20, 10, MAX_SHOPS_PER_CART)
+        }
+    }
+
     /** Tells the server where the customer is now, so the delivery distance and fee at checkout use it. Best effort; never throws. */
     suspend fun recordCheckoutLocation(lat: Double, lng: Double, accuracyM: Double?) {
         try {

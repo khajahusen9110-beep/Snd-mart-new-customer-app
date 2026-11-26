@@ -150,7 +150,7 @@ fun MyQuotesScreen(repository: SndmartRepository, cityId: String?, onBack: () ->
     conflict?.let { c ->
         AlertDialog(
             onDismissRequest = { conflict = null }, title = { Text("Replace your cart?") },
-            text = { Text("Your cart already has items from another shop or hotel. Clear it and add this quoted item?") },
+            text = { Text("Your cart already has the most shops you can order from at once (3). Clear it and add this quoted item?") },
             confirmButton = { TextButton(onClick = { repository.forceClearHotelCartAndAdd(c.pendingItem); conflict = null; onOpenCart() }) { Text("Clear & Add") } },
             dismissButton = { TextButton(onClick = { conflict = null }) { Text("Cancel") } }
         )
