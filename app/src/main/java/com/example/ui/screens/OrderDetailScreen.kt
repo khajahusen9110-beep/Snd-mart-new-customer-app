@@ -846,7 +846,7 @@ fun OrderDetailScreen(
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    "Items Ordered (${orderItems.size})",
+                                    "Items Ordered (${orderItems.count { !it.isRejected }})",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -868,7 +868,8 @@ fun OrderDetailScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Column(modifier = Modifier.weight(1f)) {
-                                                Text(item.productName, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                                Text(item.productName, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = if (item.isRejected) TextSecondary else Color.Unspecified, textDecoration = if (item.isRejected) androidx.compose.ui.text.style.TextDecoration.LineThrough else null)
+                                                if (item.isRejected) Text("Not available at the store. Removed from your bill.", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB91C1C))
                                                 if (!item.customNote.isNullOrBlank() || !item.customPhotoPath.isNullOrBlank()) {
                                                     Text(listOfNotNull(item.customNote?.takeIf { it.isNotBlank() }?.let { "✏️ $it" }, item.customPhotoPath?.takeIf { it.isNotBlank() }?.let { "📷 Photo sent to the shop" }).joinToString(" · "), fontSize = 12.sp)
                                                 }
@@ -881,7 +882,9 @@ fun OrderDetailScreen(
                                             Text(
                                                 "₹${"%.0f".format(item.totalPrice)}",
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 14.sp
+                                                fontSize = 14.sp,
+                                                color = if (item.isRejected) TextSecondary else Color.Unspecified,
+                                                textDecoration = if (item.isRejected) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
                                             )
                                         }
                                     }
