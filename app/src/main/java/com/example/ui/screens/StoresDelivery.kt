@@ -38,12 +38,12 @@ fun StoreDeliveryCard(
                 if (cfg.expressEnabled) FilterChip(
                     selected = !choice.scheduled, enabled = canExpress,
                     onClick = { onChange(StoreDeliveryChoice(false, null)) },
-                    label = { Text("Express" + if (cfg.expressExtraFee > 0) " (+₹${"%.0f".format(cfg.expressExtraFee)})" else "") }
+                    label = { Text("Express") }
                 )
                 if (cfg.scheduledEnabled) FilterChip(
                     selected = choice.scheduled, enabled = canSchedule,
                     onClick = { onChange(StoreDeliveryChoice(true, choice.scheduledFor)) },
-                    label = { Text("Scheduled" + if (cfg.scheduledDiscount > 0) " (₹${"%.0f".format(cfg.scheduledDiscount)} off)" else "") }
+                    label = { Text("Scheduled") }
                 )
             }
             if (leadHours > 0) Text("A made-to-order item in your cart needs $leadHours hour${if (leadHours > 1) "s" else ""} notice, so only Scheduled delivery is available. · ಆರ್ಡರ್‌ಗೆ ತಯಾರಿಸುವ ವಸ್ತು, ಸಮಯ ಆಯ್ಕೆಮಾಡಿ.", style = MaterialTheme.typography.bodySmall)
