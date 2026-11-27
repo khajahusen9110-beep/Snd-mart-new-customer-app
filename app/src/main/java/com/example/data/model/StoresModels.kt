@@ -131,11 +131,11 @@ data class PendingReview(val orderId: String, val vendorName: String, val orderN
 const val MIN_REVIEWS_FOR_STARS = 3
 
 /** Rating, review count and the free-delivery note of a shop card; nothing is invented (the server sends none when there is none). */
-data class StoreCardInfo(val storeId: String, val avgRating: Double?, val reviewCount: Int, val freeDelivery: Boolean, val freeOver: Double?, val popular: Boolean = false) {
+data class StoreCardInfo(val storeId: String, val avgRating: Double?, val reviewCount: Int, val freeDelivery: Boolean, val freeOver: Double?, val popular: Boolean = false, val logoUrl: String? = null) {
     companion object {
         fun mapFrom(a: JSONArray): Map<String, StoreCardInfo> = (0 until a.length()).map { i ->
             val o = a.getJSONObject(i)
-            StoreCardInfo(o.getString("store_id"), o.dOrNull("avg_rating"), o.optInt("review_count", 0), o.optBoolean("free_delivery", false), o.dOrNull("free_over"), o.optBoolean("popular", false))
+            StoreCardInfo(o.getString("store_id"), o.dOrNull("avg_rating"), o.optInt("review_count", 0), o.optBoolean("free_delivery", false), o.dOrNull("free_over"), o.optBoolean("popular", false), o.sOrNull("logo_url"))
         }.associateBy { it.storeId }
     }
 }
@@ -177,7 +177,7 @@ data class StoreVariant(val id: String, val label: String, val price: Double, va
 
 data class StoreMenu(
     val id: String, val name: String, val bannerUrl: String?, val address: String?, val categoryName: String?, val isOpen: Boolean, val prepMinutes: Int?,
-    val categories: List<Pair<String, String>>, val products: List<StoreMenuProduct>, val phone: String? = null
+    val categories: List<Pair<String, String>>, val products: List<StoreMenuProduct>, val phone: String? = null, val logoUrl: String? = null
 ) {
     companion object {
         fun from(o: JSONObject): StoreMenu {
@@ -185,7 +185,7 @@ data class StoreMenu(
             val cats = o.optJSONArray("categories") ?: JSONArray()
             val prods = o.optJSONArray("products") ?: JSONArray()
             return StoreMenu(
-                id = s.getString("id"), name = s.optString("name"), bannerUrl = s.sOrNull("banner_url"), address = s.sOrNull("address"), phone = s.sOrNull("phone"),
+                id = s.getString("id"), name = s.optString("name"), bannerUrl = s.sOrNull("banner_url"), address = s.sOrNull("address"), phone = s.sOrNull("phone"), logoUrl = s.sOrNull("logo_url"),
                 categoryName = s.sOrNull("category_name"), isOpen = s.optBoolean("is_open", false), prepMinutes = if (s.isNull("prep_minutes")) null else s.optInt("prep_minutes"),
                 categories = (0 until cats.length()).map { cats.getJSONObject(it).let { c -> c.getString("id") to c.optString("name") } },
                 products = (0 until prods.length()).map { i ->

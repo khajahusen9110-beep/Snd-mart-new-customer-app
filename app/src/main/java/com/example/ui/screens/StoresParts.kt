@@ -122,6 +122,10 @@ fun StoreCard(s: StoreListItem, info: StoreCardInfo? = null, onClick: () -> Unit
             }
             Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!info?.logoUrl.isNullOrBlank()) {
+                        AsyncImage(model = info!!.logoUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(NaturalPrimaryContainer))
+                        Spacer(Modifier.width(10.dp))
+                    }
                     Text(s.name, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.width(6.dp))
                     Icon(Icons.Filled.Verified, contentDescription = "Verified shop", tint = green, modifier = Modifier.size(21.dp))

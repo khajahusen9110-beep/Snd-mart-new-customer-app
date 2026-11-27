@@ -62,6 +62,10 @@ fun StoreInfoCard(m: StoreMenu, rating: StoreRatingSummary?) {
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!m.logoUrl.isNullOrBlank()) {
+                    AsyncImage(m.logoUrl, null, contentScale = ContentScale.Crop, modifier = Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(NaturalPrimaryContainer))
+                    Spacer(Modifier.width(10.dp))
+                }
                 Text(m.name, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.width(6.dp))
                 Icon(Icons.Filled.Verified, "Verified shop", tint = Green, modifier = Modifier.size(22.dp))
