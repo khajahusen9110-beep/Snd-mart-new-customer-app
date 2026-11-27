@@ -145,7 +145,7 @@ fun StoresScreen(
     conflict?.let { c ->
         AlertDialog(
             onDismissRequest = { conflict = null }, title = { Text("Replace your cart?") },
-            text = { Text("Your cart already has items from another shop or hotel. Clear it and add from $conflictShop?") },
+            text = { Text("Your cart already has the most shops you can order from at once (3). Clear it and add from $conflictShop?") },
             confirmButton = { TextButton(onClick = { repository.forceClearHotelCartAndAdd(c.pendingItem); conflict = null }) { Text("Clear & Add") } },
             dismissButton = { TextButton(onClick = { conflict = null }) { Text("Cancel") } }
         )
@@ -455,7 +455,7 @@ fun StoreDetailScreen(repository: SndmartRepository, cityId: String?, storeId: S
         AlertDialog(
             onDismissRequest = { conflict = null },
             title = { Text("Replace your cart?") },
-            text = { Text("Your cart already has items from another shop or hotel. Clear it and add from ${m?.name ?: "this shop"}?") },
+            text = { Text("Your cart already has the most shops you can order from at once (3). Clear it and add from ${m?.name ?: "this shop"}?") },
             confirmButton = { TextButton(onClick = { repository.forceClearHotelCartAndAdd(c.pendingItem); conflict = null }) { Text("Clear & Add") } },
             dismissButton = { TextButton(onClick = { conflict = null }) { Text("Cancel") } }
         )

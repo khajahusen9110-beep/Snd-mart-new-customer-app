@@ -172,7 +172,14 @@ fun CheckoutScreen(
         codAllowed = ok
         if (!ok && selectedPaymentMethod == "cod") selectedPaymentMethod = "upi"
     }
-    val visiblePaymentMethods = if (codAllowed) paymentMethods else paymentMethods.filter { it.first != "cod" }
+    // Several shops in the cart: one order per shop, one rider for all; cash on delivery for now
+    val cartForShops by repository.hotelCart.collectAsState()
+    val shopCount = if (isHotel) cartForShops.mapNotNull { it.vendorId?.takeIf { v -> v.isNotBlank() } }.distinct().size else 0
+    val multiShop = shopCount > 1
+    LaunchedEffect(multiShop) { if (multiShop) selectedPaymentMethod = "cod" }
+    var etaCfg by remember { mutableStateOf(Triple(20, 10, 3)) }
+    LaunchedEffect(effectiveCityId) { effectiveCityId?.let { etaCfg = repository.getDeliveryEtaConfig(it) } }
+    val visiblePaymentMethods = (if (codAllowed) paymentMethods else paymentMethods.filter { it.first != "cod" }).let { l -> if (multiShop) l.filter { it.first == "cod" } else l }
     // Cooking (shown to the vendor) + delivery (shown to the partner) instructions.
     var cookingInstructions by remember { mutableStateOf("") }
     var deliveryInstructions by remember { mutableStateOf("") }
@@ -427,6 +434,16 @@ fun CheckoutScreen(
     val promoDiscount = cartPromoDiscount(subtotal, checkoutPromo)
     val subtotalAfterDiscount = (subtotal - authoritativeDiscount - promoDiscount).coerceAtLeast(0.0)
 
+    // The phone's position is searched when checkout opens; the server keeps it for the fee and the fee is shown again from it
+    var liveFix by remember { mutableStateOf<android.location.Location?>(null) }
+    LaunchedEffect(Unit) {
+        val fix = try { com.example.util.OrderLocationCapture.start(context).await() } catch (e: Exception) { null }
+        if (fix != null && fix.latitude != 0.0 && fix.longitude != 0.0) {
+            repository.recordCheckoutLocation(fix.latitude, fix.longitude, if (fix.hasAccuracy()) fix.accuracy.toDouble() else null)
+            liveFix = fix
+        }
+    }
+
     fun calculateFees() {
         val cid = effectiveCityId ?: return
         val addr = selectedAddress ?: return
@@ -452,7 +469,8 @@ fun CheckoutScreen(
                 address = addr,
                 cityId = cid,
                 vendorId = hotelVendorId,
-                isHotel = isHotel
+                isHotel = isHotel,
+                live = liveFix
             )
             addressDistanceKm = dist
 
@@ -482,7 +500,7 @@ fun CheckoutScreen(
         }
     }
 
-    LaunchedEffect(selectedAddressId, freshItems, authoritativeDiscount, effectiveCityId, isHotel, isDeliveryAvailable) {
+    LaunchedEffect(selectedAddressId, freshItems, authoritativeDiscount, effectiveCityId, isHotel, isDeliveryAvailable, liveFix) {
         if (isDeliveryAvailable && selectedAddress != null && !effectiveCityId.isNullOrBlank()) {
             calculateFees()
         } else {
@@ -739,6 +757,8 @@ fun CheckoutScreen(
                                     } else {
                                         isPlacingOrder = false
                                         com.example.util.OrderCelebration.show()
+                                        repository.lastMultiOrderEtaMinutes?.let { m -> android.widget.Toast.makeText(context, "$shopCount shops: delivery in about $m min", android.widget.Toast.LENGTH_LONG).show() }
+                                        repository.lastMultiOrderEtaMinutes = null
                                         onOrderPlacedSuccess(order.id ?: "", order.totalAmount)
                                     }
                                 } else {
@@ -1442,6 +1462,15 @@ fun CheckoutScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(10.dp))
+                        if (multiShop) {
+                            Surface(shape = RoundedCornerShape(12.dp), color = androidx.compose.ui.graphics.Color(0xFFEDE9FE), modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text("$shopCount shops · one delivery", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                                    Text("Delivery in about ${etaCfg.first + etaCfg.second * shopCount} min. One rider brings everything once every shop has accepted. Cash on delivery for now. Delivery and handling are charged once.", fontSize = 12.sp)
+                                    if (!codAllowed) Text("Cash on delivery is not available for your account, so please order from one shop at a time.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
                         visiblePaymentMethods.forEach { (methodKey, label) ->
                             Row(
                                 modifier = Modifier

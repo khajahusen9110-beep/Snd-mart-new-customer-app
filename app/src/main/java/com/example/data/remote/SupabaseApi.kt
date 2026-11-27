@@ -524,6 +524,15 @@ interface SupabaseApi {
         @Body body: RequestBody
     ): Response<ResponseBody>
 
+    // Up to 3 shops in one cart: one order per shop, one rider for all of them (cash on delivery for now)
+    @POST("rest/v1/rpc/checkout_multi_order")
+    suspend fun checkoutMultiOrder(
+        @Body body: RequestBody
+    ): Response<ResponseBody>
+
+    @POST("rest/v1/rpc/get_delivery_eta_config")
+    suspend fun getDeliveryEtaConfig(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
     @POST("rest/v1/rpc/is_store_vendor")
     suspend fun isStoreVendor(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
@@ -816,6 +825,10 @@ interface SupabaseApi {
 
     @POST("rest/v1/rpc/my_pending_review")
     suspend fun myPendingReview(@Body body: Map<String, @JvmSuppressWildcards Any?> = emptyMap()): Response<ResponseBody>
+
+    // the phone's position when checkout opens: the delivery distance (and fee) is measured from it
+    @POST("rest/v1/rpc/record_checkout_location")
+    suspend fun recordCheckoutLocation(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
     @POST("rest/v1/rpc/stores_card_info")
     suspend fun storesCardInfo(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>

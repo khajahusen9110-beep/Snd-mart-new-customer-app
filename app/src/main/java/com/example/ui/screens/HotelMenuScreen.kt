@@ -311,7 +311,7 @@ fun HotelMenuScreen(
             onDismissRequest = { pendingConflict = null },
             title = { Text("Replace Hotel Cart Items?", fontWeight = FontWeight.Bold) },
             text = {
-                Text("Your cart already contains items from another hotel. Clear existing items and add from $vendorName?")
+                Text("Your cart already has the most shops you can order from at once (3). Clear existing items and add from $vendorName?")
             },
             confirmButton = {
                 Button(

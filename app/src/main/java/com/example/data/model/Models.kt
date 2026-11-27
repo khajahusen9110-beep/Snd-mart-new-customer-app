@@ -552,8 +552,12 @@ data class OrderItem(
     @Json(name = "total_price") val totalPrice: Double = 0.0,
     @Json(name = "vendor_id") val vendorId: String? = null,
     @Json(name = "custom_note") val customNote: String? = null,
-    @Json(name = "custom_photo_path") val customPhotoPath: String? = null
-)
+    @Json(name = "custom_photo_path") val customPhotoPath: String? = null,
+    /** 'rejected' when the store could not give this item (null = a normal item; not sent when placing an order) */
+    @Json(name = "item_status") val itemStatus: String? = null
+) {
+    val isRejected: Boolean get() = itemStatus == "rejected"
+}
 
 @JsonClass(generateAdapter = true)
 data class OrderStatusHistory(
