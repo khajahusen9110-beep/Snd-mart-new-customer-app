@@ -830,6 +830,10 @@ interface SupabaseApi {
     @POST("rest/v1/rpc/record_checkout_location")
     suspend fun recordCheckoutLocation(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 
+    // The cart's fees by kind: 'food' (a hotel) or 'store' (shops, Kirana, Grocery), the shops in the cart and whether a hotel is among them
+    @POST("rest/v1/rpc/get_checkout_fees_v2")
+    suspend fun getCheckoutFeesV2(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
+
     @POST("rest/v1/rpc/stores_card_info")
     suspend fun storesCardInfo(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<ResponseBody>
 

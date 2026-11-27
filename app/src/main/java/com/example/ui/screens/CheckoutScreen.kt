@@ -125,8 +125,8 @@ fun CheckoutScreen(
 
     // ONE Delivery System: "Express Delivery" Only
     var baseDeliveryFee by remember { mutableStateOf<Double?>(null) }
-    // Shops: the city's Express extra fee / Scheduled discount on top of the normal fee (the server charges the same).
-    val storeFeeAdj = if (isStore) storeCfg?.let { if (storeChoice.scheduled) -it.scheduledDiscount else it.expressExtraFee } ?: 0.0 else 0.0
+    // The delivery fee is one rule per kind (Food, or Stores: Rs per shop); no extra Express / Scheduled adjustment any more.
+    val storeFeeAdj = 0.0
     val calculatedDeliveryFee: Double? = baseDeliveryFee?.let { (it + storeFeeAdj).coerceAtLeast(0.0) }
     var isLoadingDeliveryFee by remember { mutableStateOf(false) }
     var deliveryFeeError by remember { mutableStateOf<String?>(null) }
@@ -465,7 +465,11 @@ fun CheckoutScreen(
                 null
             }
 
-            val dist = repository.resolveServerDistanceKm(
+            // Several shops: the distance is to the farthest shop; Food rule for one hotel, Stores rule for shops (Rs per shop)
+            val cartVendors = if (isHotel) repository.hotelCart.value.mapNotNull { it.vendorId?.takeIf { v -> v.isNotBlank() } }.distinct().ifEmpty { listOfNotNull(hotelVendorId) } else emptyList()
+            val dist = if (cartVendors.size > 1) {
+                cartVendors.maxOf { v -> repository.resolveServerDistanceKm(address = addr, cityId = cid, vendorId = v, isHotel = true, live = liveFix) }
+            } else repository.resolveServerDistanceKm(
                 address = addr,
                 cityId = cid,
                 vendorId = hotelVendorId,
@@ -473,6 +477,8 @@ fun CheckoutScreen(
                 live = liveFix
             )
             addressDistanceKm = dist
+            val hasFoodShop = cartVendors.any { !com.example.data.repository.StoresRepository.isStoreVendor(it) }
+            val feeKind = if (cartVendors.size == 1 && hasFoodShop) "food" else "store"
 
             val settingsRes = repository.getCityDeliverySettings(cid)
             cityDeliverySettings = settingsRes.getOrNull()
@@ -482,14 +488,18 @@ fun CheckoutScreen(
                 handlingFeeBase = handlingRes.getOrNull() ?: 5.0
             }
             platformFeeBase = repository.getPlatformFee(cid)
-            feeInfo = com.example.data.repository.StoresRepository.getCheckoutFees(cid, dist, subtotalAfterDiscount)
+            feeInfo = com.example.data.repository.StoresRepository.getCheckoutFees(cid, dist, subtotalAfterDiscount, feeKind, cartVendors.size.coerceAtLeast(1), hasFoodShop)
 
             val feeRes = repository.calculateDeliveryFee(
                 cityId = cid,
                 distanceKm = dist,
                 subtotalAfterDiscount = subtotalAfterDiscount
             )
-            if (feeRes.isSuccess) {
+            val rules = feeInfo
+            if (rules?.rulesEnabled == true) {
+                baseDeliveryFee = rules.deliveryFee
+                deliveryFeeError = null
+            } else if (feeRes.isSuccess) {
                 baseDeliveryFee = feeRes.getOrNull()
                 deliveryFeeError = null
             } else {

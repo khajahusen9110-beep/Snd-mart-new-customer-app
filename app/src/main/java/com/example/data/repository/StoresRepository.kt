@@ -80,8 +80,8 @@ object StoresRepository {
     } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
 
     /** The fees of a cart (City Admin fee rules) and the "add Rs X more" nudges. null on any problem: the old flat fees then apply. */
-    suspend fun getCheckoutFees(cityId: String, distanceKm: Double?, amount: Double): CheckoutFees? =
-        call("Fees", { api.getCheckoutFees(mapOf("p_city_id" to cityId, "p_distance_km" to (distanceKm ?: 0.0), "p_amount" to amount.coerceAtLeast(0.0))) }) { CheckoutFees.from(JSONObject(it)) }.getOrNull()
+    suspend fun getCheckoutFees(cityId: String, distanceKm: Double?, amount: Double, kind: String = "store", shops: Int = 1, hasFood: Boolean = false): CheckoutFees? =
+        call("Fees", { api.getCheckoutFeesV2(mapOf("p_city_id" to cityId, "p_distance_km" to (distanceKm ?: 0.0), "p_amount" to amount.coerceAtLeast(0.0), "p_kind" to kind, "p_shops" to shops, "p_has_food" to hasFood)) }) { CheckoutFees.from(JSONObject(it)) }.getOrNull()
 
     suspend fun requestQuote(vendorId: String, productId: String, variantId: String?, quantity: Int, note: String?, photoPath: String?): Result<Unit> =
         call("Could not send the request", { api.storeQuoteRequest(mapOf("p_vendor_id" to vendorId, "p_product_id" to productId, "p_variant_id" to variantId, "p_quantity" to quantity, "p_note" to note, "p_photo_path" to photoPath)) }) { }
